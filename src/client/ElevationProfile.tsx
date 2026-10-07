@@ -184,7 +184,9 @@ export function ElevationProfile({
           move(((chartX - LEFT) / (RIGHT - LEFT)) * total);
         }}
         onPointerLeave={() => move(null)}
-        onFocus={() => move(0)}
+        onFocus={() => {
+          if (cursor === null) move(0);
+        }}
         onBlur={() => move(null)}
         onKeyDown={(event) => {
           if (event.key === "Home") move(0);

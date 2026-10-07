@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useMemo,
   lazy,
   Suspense,
   type FormEvent,
@@ -17,6 +18,7 @@ import type {
   JobSnapshot,
   JobResults,
   RouteLocation,
+  Position,
 } from "../model.js";
 import { DEFAULT_ROAD_LIMITS } from "../model.js";
 import type {
@@ -36,6 +38,8 @@ import {
 
 import { RegionPicker, regionLabel } from "./RegionPicker.js";
 import { SettingsDialog } from "./SettingsDialog.js";
+import { locationsInView } from "./clusters.js";
+import { ElevationProfile } from "./ElevationProfile.js";
 
 const HikeMap = lazy(async () => ({
   default: (await import("./Map.js")).HikeMap,
@@ -168,35 +172,30 @@ function RouteDetails({
   jobId,
   resultsRevision,
   onBack,
-  backDisabled,
   children,
   onReverse,
   reversing,
   reversed,
   directionError,
   onRetry,
+  onProfileHover,
 }: {
-  route: RouteChoice;
+  route: SelectedRoute;
   jobId: string;
   resultsRevision: number;
   onBack: () => void;
-  backDisabled: boolean;
   children: ReactNode;
   onReverse: () => void;
   reversing: boolean;
   reversed: boolean;
   directionError: string;
   onRetry: () => void;
+  onProfileHover: (position: Position | null) => void;
 }) {
   return (
     <section className="route-detail" aria-label="Route details">
-      <button
-        type="button"
-        className="text-button"
-        onClick={onBack}
-        disabled={backDisabled}
-      >
-        Close
+      <button type="button" className="text-button" onClick={onBack}>
+        ← Hikes
       </button>
       <h2 id="route-detail-heading" tabIndex={-1}>
         {routeName(route)}
@@ -257,6 +256,13 @@ function RouteDetails({
               </dd>
             </div>
           </dl>
+          {route.geometry && (
+            <ElevationProfile
+              key={route.id}
+              route={{ ...route, geometry: route.geometry }}
+              onHover={onProfileHover}
+            />
+          )}
           <div className="road-detail">
             <p>
               <strong>Road connections: </strong>
@@ -327,6 +333,7 @@ const resultQuery = (
   return `?${parameters}`;
 };
 type ChoiceKind = "versions" | "starts";
+type SelectedRoute = RouteChoice & { geometry?: Position[] };
 
 export function App() {
   const [dataset, setDataset] = useState<CatalogView>();
@@ -334,6 +341,7 @@ export function App() {
   const [regions, setRegions] = useState<string[]>([]);
   const [showSearchArea, setShowSearchArea] = useState(true);
   const [searchCollapsed, setSearchCollapsed] = useState(false);
+  const [resultsCollapsed, setResultsCollapsed] = useState(false);
   const [distance, setDistance] = useState<[string, string]>(["5", "12"]);
   const [gain, setGain] = useState<[string, string]>(["0", "4000"]);
   const [repetition, setRepetition] = useState("20");
@@ -363,7 +371,12 @@ export function App() {
   } | null>(null);
   const [viewedJob, setViewedJob] = useState<JobSnapshot>();
   const [locations, setLocations] = useState<RouteLocation[]>([]);
-  const [selected, setSelected] = useState<RouteChoice | null>(null);
+  const [mapBounds, setMapBounds] = useState<Bounds>();
+  const [resultMode, setResultMode] = useState<"view" | "all">("view");
+  const [resultLimit, setResultLimit] = useState(50);
+  const resultList = useRef<HTMLDivElement>(null);
+  const [selected, setSelected] = useState<SelectedRoute | null>(null);
+  const [profilePosition, setProfilePosition] = useState<Position | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [geometry, setGeometry] = useState<RouteView | null>(null);
@@ -395,7 +408,40 @@ export function App() {
   const downloading = download?.status === "running";
   const choosingDownload = !!pendingDownload;
   const activeId = hoveredId ?? selectedId;
-  const activeRoute = geometry?.id === activeId ? geometry : null;
+  const activeRoute = useMemo(
+    () =>
+      geometry?.id === activeId
+        ? geometry
+        : selected?.id === activeId && selected.geometry
+          ? { ...selected, geometry: selected.geometry }
+          : null,
+    [geometry, activeId, selected],
+  );
+  useEffect(
+    () => setProfilePosition(null),
+    [selectedId, resultsCollapsed, viewedJob?.id],
+  );
+  const sortedLocations = useMemo(
+    () =>
+      [...locations].sort(
+        (a, b) => a.distance - b.distance || a.id.localeCompare(b.id),
+      ),
+    [locations],
+  );
+  const visibleLocations = useMemo(
+    () =>
+      resultMode === "all"
+        ? sortedLocations
+        : mapBounds
+          ? locationsInView(sortedLocations, mapBounds)
+          : [],
+    [sortedLocations, resultMode, mapBounds],
+  );
+  useEffect(() => {
+    setResultLimit(50);
+    setHoveredId(null);
+    if (resultList.current) resultList.current.scrollTop = 0;
+  }, [visibleLocations]);
   const mapDataset =
     !showSearchArea && viewedJob ? (savedMap(viewedJob) ?? dataset) : dataset;
   const regionName = (id: string) =>
@@ -428,6 +474,18 @@ export function App() {
     else url.searchParams.delete("job");
     window.history.replaceState(null, "", url);
   };
+  const closeResults = () => {
+    viewOperation.current?.abort();
+    setPendingJob(null);
+    clearSelection();
+    setViewedJob(undefined);
+    setResultsCollapsed(true);
+    setLocations([]);
+    setGeometry(null);
+    setRouteError("");
+    setShowSearchArea(true);
+    localURL();
+  };
   const openResults = async (job: JobSnapshot) => {
     if (!hasSavedResults(job)) {
       setHighlightedJob(job.id);
@@ -451,7 +509,9 @@ export function App() {
       );
       if (controller.signal.aborted) return;
       setViewedJob(fullJob);
+      setResultsCollapsed(false);
       setLocations(positions);
+      setResultMode("view");
       clearSelection();
       setShowSearchArea(false);
       setJobsOpen(false);
@@ -534,6 +594,11 @@ export function App() {
       setGeometry(null);
       return;
     }
+    if (selected?.id === activeId && selected.geometry) {
+      setGeometry({ ...selected, geometry: selected.geometry });
+      setRouteError("");
+      return;
+    }
     const controller = new AbortController();
     setRouteError("");
     setGeometry(null);
@@ -592,6 +657,7 @@ export function App() {
     setIncludeUnknown(query.includeUnknown);
     setShowSearchArea(true);
     setJobsOpen(false);
+    setSearchCollapsed(false);
     clearSelection();
     setError("");
     const sections = dataset?.sections.filter((section) =>
@@ -613,11 +679,7 @@ export function App() {
       const next = await request<JobSnapshot[]>("/api/jobs", controller.signal);
       setJobs(next);
       if (action === "delete" && viewedJob?.id === job.id) {
-        setViewedJob(undefined);
-        setLocations([]);
-        setShowSearchArea(true);
-        clearSelection();
-        localURL();
+        closeResults();
       }
     } catch (failure) {
       setJobActionError(
@@ -873,7 +935,13 @@ export function App() {
     };
   }, [pendingDownload]);
   const pickRoute = (id: string) => {
+    setResultsCollapsed(false);
     setShowSearchArea(false);
+    if (id === selectedId) {
+      closeChoices();
+      if (!selected?.geometry) setRouteRetry((value) => value + 1);
+      return;
+    }
     openedRouteId.current = null;
     setSelected(choices?.routes.find((route) => route.id === id) ?? null);
     setSelectedId(id);
@@ -969,8 +1037,15 @@ export function App() {
           </button>
         </nav>
       </header>
-      <main className={`workspace${searchCollapsed ? " is-collapsed" : ""}`}>
-        <aside className="sidebar" aria-label="Search" hidden={searchCollapsed}>
+      <main
+        className={`workspace${searchCollapsed ? " is-collapsed" : ""}${resultsCollapsed || !viewedJob ? " is-results-collapsed" : ""}`}
+      >
+        <aside
+          id="search-panel"
+          className="sidebar"
+          aria-label="Search"
+          hidden={searchCollapsed}
+        >
           <div className="sidebar-content">
             {error && (
               <div className="error-banner" role="alert">
@@ -1187,27 +1262,110 @@ export function App() {
           <span aria-hidden="true">{searchCollapsed ? "›" : "‹"}</span>
         </button>
         <section className="browser-panel" aria-label="Browse hikes">
-          <header className="browser-toolbar">
-            <div>
-              <h2>
-                {viewedJob
-                  ? `${viewedJob.groupCount?.toLocaleString() ?? "Saved"} ${viewedJob.groupCount === 1 ? "hike" : "hikes"}`
-                  : "Map"}
-              </h2>
+          {mapDataset && camera ? (
+            <Suspense
+              fallback={
+                <div className="map-placeholder" aria-label="Loading map" />
+              }
+            >
+              <HikeMap
+                sections={mapDataset.sections}
+                selectedSections={
+                  showSearchArea
+                    ? regions
+                    : (viewedJob?.query.sections ?? regions)
+                }
+                routes={locations}
+                profilePosition={profilePosition}
+                activeRoute={activeRoute}
+                selectedId={selectedId}
+                selectedGroupId={selected?.groupId}
+                routeNotice={
+                  activeId
+                    ? routeError || (!activeRoute ? "Loading route…" : "")
+                    : ""
+                }
+                onRetryRoute={
+                  routeError
+                    ? () => setRouteRetry((value) => value + 1)
+                    : undefined
+                }
+                camera={camera}
+                onSelect={pickRoute}
+                onPreview={setHoveredId}
+                onBoundsChange={(bounds) =>
+                  setMapBounds((current) =>
+                    current?.every((value, index) => value === bounds[index])
+                      ? current
+                      : bounds,
+                  )
+                }
+                onBrowse={(bounds) => {
+                  clearSelection();
+                  setResultsCollapsed(false);
+                  setResultMode("view");
+                  moveTo(bounds);
+                  requestAnimationFrame(() =>
+                    document.getElementById("results-heading")?.focus(),
+                  );
+                }}
+              />
+            </Suspense>
+          ) : (
+            <div className="map-placeholder" />
+          )}
+        </section>
+        {viewedJob && (
+          <button
+            className="collapse-results"
+            type="button"
+            aria-controls="results-panel"
+            aria-label={
+              resultsCollapsed
+                ? "Expand results panel"
+                : "Collapse results panel"
+            }
+            aria-expanded={!resultsCollapsed}
+            onClick={() => setResultsCollapsed((value) => !value)}
+          >
+            <span aria-hidden="true">{resultsCollapsed ? "‹" : "›"}</span>
+          </button>
+        )}
+        {viewedJob && (
+          <aside
+            id="results-panel"
+            className="results-panel"
+            aria-label="Hike results"
+            hidden={resultsCollapsed}
+          >
+            <header className="results-header">
+              <div>
+                <h2 id="results-heading" tabIndex={-1}>
+                  Results
+                </h2>
+                {viewedJob && (
+                  <div className="results-actions">
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => copySettings(viewedJob)}
+                    >
+                      Copy settings
+                    </button>
+                    <button
+                      type="button"
+                      className="close-results"
+                      aria-label="Close results"
+                      onClick={closeResults}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
               {viewedJob && <p>{requestSummary(viewedJob.query)}</p>}
-            </div>
-            {viewedJob && (
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => copySettings(viewedJob)}
-              >
-                Copy settings
-              </button>
-            )}
-          </header>
-          <div className="results-workspace">
-            {viewedJob && selectedId && (
+            </header>
+            {viewedJob && selectedId ? (
               <div className="route-inspector" aria-label="Selected hike">
                 {selectedId &&
                   (selected ? (
@@ -1215,10 +1373,7 @@ export function App() {
                       route={selected}
                       jobId={viewedJob.id}
                       resultsRevision={viewedJob.resultsRevision ?? 0}
-                      onBack={() => {
-                        clearSelection();
-                      }}
-                      backDisabled={false}
+                      onBack={clearSelection}
                       onReverse={() => {
                         const otherId =
                           selected.reverseId ?? selected.oppositeId;
@@ -1231,6 +1386,7 @@ export function App() {
                       reversed={selected.id !== originalDirectionId.current}
                       directionError={hoveredId ? "" : routeError}
                       onRetry={() => setRouteRetry((value) => value + 1)}
+                      onProfileHover={setProfilePosition}
                     >
                       {(selected.variantCount > 1 ||
                         selected.groupSize > 1) && (
@@ -1379,7 +1535,7 @@ export function App() {
                         className="text-button"
                         onClick={clearSelection}
                       >
-                        Close
+                        ← Hikes
                       </button>
                       <p role={routeError ? "alert" : "status"}>
                         {routeError || "Loading hike details…"}
@@ -1395,44 +1551,92 @@ export function App() {
                     </div>
                   ))}
               </div>
-            )}
-            {mapDataset && camera ? (
-              <Suspense
-                fallback={
-                  <div className="map-placeholder" aria-label="Loading map" />
-                }
-              >
-                <HikeMap
-                  sections={mapDataset.sections}
-                  selectedSections={
-                    showSearchArea
-                      ? regions
-                      : (viewedJob?.query.sections ?? regions)
-                  }
-                  routes={locations}
-                  activeRoute={activeRoute}
-                  selectedId={selectedId}
-                  selectedGroupId={selected?.groupId}
-                  routeNotice={
-                    activeId
-                      ? routeError || (!activeRoute ? "Loading route…" : "")
-                      : ""
-                  }
-                  onRetryRoute={
-                    routeError
-                      ? () => setRouteRetry((value) => value + 1)
-                      : undefined
-                  }
-                  camera={camera}
-                  onSelect={pickRoute}
-                  onPreview={setHoveredId}
-                />
-              </Suspense>
             ) : (
-              <div className="map-placeholder" />
+              <>
+                {viewedJob && (
+                  <div className="results-filter">
+                    <div
+                      className="view-toggle"
+                      role="group"
+                      aria-label="Result scope"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={resultMode === "view"}
+                        title="Hikes with a starting point in the map view"
+                        onClick={() => setResultMode("view")}
+                      >
+                        In view
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={resultMode === "all"}
+                        title="All hikes in this search"
+                        onClick={() => setResultMode("all")}
+                      >
+                        All
+                      </button>
+                    </div>
+                    <span role="status">
+                      {visibleLocations.length.toLocaleString()}
+                      {resultMode === "view" &&
+                        ` / ${locations.length.toLocaleString()}`}{" "}
+                      hikes
+                    </span>
+                  </div>
+                )}
+                <div
+                  className="results-list"
+                  ref={resultList}
+                  onScroll={(event) => {
+                    const list = event.currentTarget;
+                    if (
+                      list.scrollHeight - list.scrollTop - list.clientHeight <
+                      80
+                    )
+                      setResultLimit((limit) =>
+                        Math.min(visibleLocations.length, limit + 50),
+                      );
+                  }}
+                >
+                  <ul className="hike-list">
+                    {visibleLocations.slice(0, resultLimit).map((route) => (
+                      <li key={route.id}>
+                        <button
+                          type="button"
+                          onPointerEnter={() => setHoveredId(route.id)}
+                          onPointerLeave={() => setHoveredId(null)}
+                          onFocus={() => setHoveredId(route.id)}
+                          onBlur={() => setHoveredId(null)}
+                          onClick={() => pickRoute(route.id)}
+                        >
+                          <strong>
+                            {route.trailNames.slice(0, 2).join(" / ") ||
+                              route.startName ||
+                              "Unnamed trails"}
+                          </strong>
+                          <span>
+                            {miles(route.distance)} mi ·{" "}
+                            {route.startName || "Unnamed start"}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {!visibleLocations.length && (
+                    <p className="empty-state">
+                      {!locations.length
+                        ? "No hikes found."
+                        : !mapBounds && resultMode === "view"
+                          ? "Loading map…"
+                          : "No hikes in view."}
+                    </p>
+                  )}
+                </div>
+              </>
             )}
-          </div>
-        </section>
+          </aside>
+        )}
       </main>
       <SettingsDialog
         open={settingsOpen}

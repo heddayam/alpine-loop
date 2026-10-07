@@ -13,7 +13,7 @@
       "exact prepared-region selection, shared by search, map and downloads",
       "distance/gain/repetition",
       "loops and lollipops",
-      "route inspection",
+      "route inspection with a distance/elevation profile and map tracking",
       "GPX",
       "adjustable maximum road distance and share; trails remain the main experience",
       "hikes remain within reviewed hard highway partitions; disclose that crossings of selected dividers, including bridges and underpasses, are excluded",
@@ -61,7 +61,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "The updated local app is running at http://127.0.0.1:3000/. Each route version is grouped against a fixed displayed main loop; hidden versions cannot keep similar displayed hikes apart. The same north-region 14\u201318 mi / 3000\u20135000 ft request completed in 35.9 seconds with 46 displayed groups, 840 versions and 44,238 independently verified saved walks. Both reviewed Big Sandy/Frog Pond and Corral Creek/Sasse pairs now share groups. All version-to-display checks pass, and none of the 1,035 displayed pairs meets the similarity rule. The retained walks, versions, starts, directions and geometry are unchanged from the previous result. Four earlier completed files remain byte-for-byte unchanged. Offline checks, build and typecheck pass. Maintained source is 6,953 lines in 33 files. The Leaflet renderer has been replaced by a compact MapLibre module with a Vite-built worker and separately loaded map code. Region selection, stable clustering, saved route drawing and shared-start choosing are browser-verified; source and bundle measurements are in benchmarks/map-renderer-review.json. Maptoolkit Hiking now supplies vector trails, contours and shaded relief without an account or key. Its integration adds no dependency and 16 maintained lines; saved-hike drawing, region selection, pan/zoom and visible provider attribution are browser-verified. Map labels now use MapMaker's Blured preset (Averia Serif Libre), matching all 41 label font expressions and verified on a saved hike; this adds 24 maintained lines and no dependency. A trial USFS/NLCD 2025 tree-canopy WMS overlay adds 24 maintained lines and no dependency; the saved-job URL accepts canopy=off for comparison. OSM woodland fill and texture are excluded while canopy is enabled, so forest tint comes from one layer. Loading still depends on the live WMS service; a faster cached source was not confirmed by the quick check. User evaluation is pending. This single-query observation does not certify exhaustive discovery or replace the frozen benchmark corpus. The 2026-10-06 UI overhaul is implemented: collapsible search at left, main map at right, Settings/Jobs in the header, grouped place names, download management in Settings and contextual scrolling result lists. Build/typecheck and 17 focused offline checks pass; real saved searches and a separate disposable download fixture are browser-verified. Maintained source is 7,303 lines in 35 files; no dependencies or server interfaces changed.",
+  "state": "The updated local app is running at http://127.0.0.1:3000/. Each route version is grouped against a fixed displayed main loop; hidden versions cannot keep similar displayed hikes apart. The same north-region 14–18 mi / 3000–5000 ft request completed in 35.9 seconds with 46 displayed groups, 840 versions and 44,238 independently verified saved walks. Both reviewed Big Sandy/Frog Pond and Corral Creek/Sasse pairs now share groups. All version-to-display checks pass, and none of the 1,035 displayed pairs meets the similarity rule. The retained walks, versions, starts, directions and geometry are unchanged from the previous result. Four earlier completed files remain byte-for-byte unchanged. Offline checks, build and typecheck pass. Maintained source is 6,953 lines in 33 files. The Leaflet renderer has been replaced by a compact MapLibre module with a Vite-built worker and separately loaded map code. Region selection, stable clustering, saved route drawing and shared-start choosing are browser-verified; source and bundle measurements are in benchmarks/map-renderer-review.json. Maptoolkit Hiking now supplies vector trails, contours and shaded relief without an account or key. Its integration adds no dependency and 16 maintained lines; saved-hike drawing, region selection, pan/zoom and visible provider attribution are browser-verified. Map labels now use MapMaker's Blured preset (Averia Serif Libre), matching all 41 label font expressions and verified on a saved hike; this adds 24 maintained lines and no dependency. A trial USFS/NLCD 2025 tree-canopy WMS overlay adds 24 maintained lines and no dependency; the saved-job URL accepts canopy=off for comparison. OSM woodland fill and texture are excluded while canopy is enabled, so forest tint comes from one layer. Loading still depends on the live WMS service; a faster cached source was not confirmed by the quick check. User evaluation is pending. This single-query observation does not certify exhaustive discovery or replace the frozen benchmark corpus. The 2026-10-06 UI overhaul is implemented: collapsible search at left, main map at right, Settings/Jobs in the header, grouped place names, download management in Settings and contextual scrolling result lists. Build/typecheck and 17 focused offline checks pass; real saved searches and a separate disposable download fixture are browser-verified. Maintained source is 7,303 lines in 35 files; no dependencies or server interfaces changed. Desktop workspace refinement now uses a 244 px search panel, center map and collapsible fixed right results panel with automatic In view / All browsing. Closing results dismisses the panel and clears its map output, while retaining Jobs. Hike details include an accurate saved-sample elevation profile with pointer/keyboard map tracking. Build, typecheck, ten focused client checks and real saved-route browser flows pass. Maintained source is now 7,808 lines in 36 files, with no new dependencies.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -162,7 +162,7 @@
         "compilerMatchesCurrentSource": true,
         "sections": [
           {
-            "name": "Washington Cascades \u2014 south of I90, south of US12",
+            "name": "Washington Cascades — south of I90, south of US12",
             "id": "mountain-43069d2bc1ec7e5c1adadc37",
             "before": 1847,
             "after": 1609,
@@ -171,7 +171,7 @@
             "oldUnsupportedRemaining": []
           },
           {
-            "name": "Washington Cascades \u2014 south of I90, north of US12",
+            "name": "Washington Cascades — south of I90, north of US12",
             "id": "mountain-5eb288f06c4d713a80317882",
             "before": 2241,
             "after": 2098,
@@ -180,7 +180,7 @@
             "oldUnsupportedRemaining": []
           },
           {
-            "name": "Washington Cascades \u2014 north of I90, south of US2",
+            "name": "Washington Cascades — north of I90, south of US2",
             "id": "mountain-bdc595cbf8bd73d977872e38",
             "before": 2920,
             "after": 2669,
@@ -189,7 +189,7 @@
             "oldUnsupportedRemaining": []
           },
           {
-            "name": "Washington Cascades \u2014 north of I90, north of US2, south of WA20",
+            "name": "Washington Cascades — north of I90, north of US2, south of WA20",
             "id": "mountain-67fc323ad847dfc7fc74d474",
             "before": 2323,
             "after": 2156,
@@ -198,7 +198,7 @@
             "oldUnsupportedRemaining": []
           },
           {
-            "name": "Washington Cascades \u2014 north of I90, north of US2, north of WA20",
+            "name": "Washington Cascades — north of I90, north of US2, north of WA20",
             "id": "mountain-36500543cf317add4204f998",
             "before": 1818,
             "after": 1655,
@@ -245,7 +245,7 @@
         "hasFailures": false
       },
       "localEvidence": ".local-data/vehicle-start-review/",
-      "browser": "Corrected preview at http://127.0.0.1:3181/ restores the original 13\u201317 mile, 3000\u20136000 foot, 10% repetition, 1 mile/10% roads and uncertain-access constraints. All 1609 eligible starts are attempted, exploration continues, reload reconnects, and route detail/map/GPX work. Prior stopped results and route inspection remain available on port 3180 with preserved immutable files.",
+      "browser": "Corrected preview at http://127.0.0.1:3181/ restores the original 13–17 mile, 3000–6000 foot, 10% repetition, 1 mile/10% roads and uncertain-access constraints. All 1609 eligible starts are attempted, exploration continues, reload reconnects, and route detail/map/GPX work. Prior stopped results and route inspection remain available on port 3180 with preserved immutable files.",
       "liveSearch": {
         "searchId": "f9465f06-cc2b-4744-af2d-84a5e039d7d3",
         "snapshotId": "mountains-9945983146f58b01a859aa02e6e696a94f4b9b9c8a41b8a22cc6f985496f624e",
@@ -376,6 +376,30 @@
       "sourceFilesAfter": 35,
       "dependencyChanges": 0,
       "screenshot": ".local-data/ui-review/workspace.jpg"
+    }
+  },
+  "mapWorkspaceRefinement": {
+    "date": "2026-10-06",
+    "approved": [
+      "Narrow the desktop search panel from 306 to 244 pixels; retain the centered edge collapse tab.",
+      "Use a permanent results panel on the right and an unobstructed center map. Move saved-search mileage and climb into the results header.",
+      "Default to In view: automatically show hikes whose displayed starting points fall within the settled map viewport. All shows the complete immutable search regardless of panning or zooming. Neither mode changes search scope.",
+      "Keep continuous scrolling. Cluster clicks fit their starting points and return the panel to In view; selecting a hike replaces the list with its details.",
+      "Provide the matching right edge collapse tab. Collapse retains map results. Close dismisses the panel and its tab, clears map markers/drawing and the result URL, and retains the saved job. No empty results panel is shown.",
+      "Add a compact elevation profile to hike details, with distance in miles and elevation in feet. Pointer tracking and keyboard arrows/Home/End place a dot on the corresponding route position."
+    ],
+    "architecture": "Client-only refinement. Existing immutable saved geometry supplies every elevation sample. The profile computes cumulative horizontal haversine distance with the same Earth diameter as preparation, retains repeated passages and interpolates the hover location by traveled distance. One focused SVG module; no chart dependency, server/schema/config/lockfile changes. Selected geometry remains available during other map previews. Map camera changes share the existing camera interface and account for panel resizing.",
+    "validation": {
+      "buildAndTypecheck": "Passed",
+      "offline": "10 focused client checks pass, including viewport edges without mutating results, known horizontal distances, interpolation/clamping, repeated and reversed geometry, duplicate samples, missing elevation gaps and antimeridian segments.",
+      "realData": "The 1,353 saved Johnson-Medra/Koppen samples reproduce its 24,018.504298040032 m distance within 8.3e-9 m and its 1,501.4833505642027 m gain exactly.",
+      "browser": "Saved results restore; viewport filtering narrows 46 hikes to 10 after cluster zoom, All retains all 46 through zoom, and a 481-hike list appends from 50 to 100. Selected hike details stay in the right panel. Pointer and keyboard profile tracking moves the map dot; reversal changes the profile and clears tracking. Collapse retains hikes; Close removes the panel, tab, markers, profile dot and saved-result URL. At a 960 px desktop breakpoint the search panel remains 244 px, results are 280 px and the profile has no horizontal overflow. A shared-start cluster reopens a collapsed right panel and shows its three hikes. At the normal 656 px browser viewport, collapsing search leaves a 376 px map without overflow.",
+      "sourceBefore": 7303,
+      "sourceAfter": 7808,
+      "sourceFilesBefore": 35,
+      "sourceFilesAfter": 36,
+      "dependencyChanges": 0,
+      "screenshot": ".local-data/ui-review/profile.jpg"
     }
   }
 }

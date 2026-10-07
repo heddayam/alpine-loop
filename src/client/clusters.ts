@@ -1,4 +1,15 @@
-import type { RouteLocation } from "../model.js";
+import type { Bounds, RouteLocation } from "../model.js";
+
+export function locationsInView(locations: RouteLocation[], bounds: Bounds) {
+  const [west, south, east, north] = bounds;
+  return locations.filter(
+    ({ startPosition: [longitude, latitude] }) =>
+      longitude >= west &&
+      longitude <= east &&
+      latitude >= south &&
+      latitude <= north,
+  );
+}
 
 /** World-pixel cells make grouping independent of input order and map panning. */
 export function clusterLocations(
