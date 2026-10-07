@@ -10,7 +10,6 @@ import {
 } from "react";
 import type {
   Bounds,
-  HikeRoute,
   RouteChoice,
   RouteSummary,
   RouteView,
@@ -104,16 +103,6 @@ async function request<T>(
     );
   return data as T;
 }
-const routeBounds = (route: HikeRoute): Bounds => {
-  const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const [longitude, latitude] of route.geometry) {
-    bounds[0] = Math.min(bounds[0], longitude);
-    bounds[1] = Math.min(bounds[1], latitude);
-    bounds[2] = Math.max(bounds[2], longitude);
-    bounds[3] = Math.max(bounds[3], latitude);
-  }
-  return bounds;
-};
 
 function Range({
   name,
@@ -372,7 +361,9 @@ export function App() {
   const [viewedJob, setViewedJob] = useState<JobSnapshot>();
   const [locations, setLocations] = useState<RouteLocation[]>([]);
   const [mapBounds, setMapBounds] = useState<Bounds>();
-  const [resultMode, setResultMode] = useState<"view" | "all">("view");
+  const [resultScope, setResultScope] = useState<
+    "view" | "all" | ReadonlySet<string>
+  >("view");
   const [resultLimit, setResultLimit] = useState(50);
   const resultList = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<SelectedRoute | null>(null);
@@ -383,7 +374,7 @@ export function App() {
   const [routeError, setRouteError] = useState("");
   const [routeRetry, setRouteRetry] = useState(0);
   const originalDirectionId = useRef<string | null>(null);
-  const openedRouteId = useRef<string | null>(null);
+  const focusedRouteId = useRef<string | null>(null);
   const [choiceKind, setChoiceKind] = useState<ChoiceKind | null>(null);
   const [choices, setChoices] = useState<JobResults>();
   const [loadingChoices, setLoadingChoices] = useState(false);
@@ -430,12 +421,14 @@ export function App() {
   );
   const visibleLocations = useMemo(
     () =>
-      resultMode === "all"
-        ? sortedLocations
-        : mapBounds
-          ? locationsInView(sortedLocations, mapBounds)
-          : [],
-    [sortedLocations, resultMode, mapBounds],
+      typeof resultScope !== "string"
+        ? sortedLocations.filter((route) => resultScope.has(route.id))
+        : resultScope === "all"
+          ? sortedLocations
+          : mapBounds
+            ? locationsInView(sortedLocations, mapBounds)
+            : [],
+    [sortedLocations, resultScope, mapBounds],
   );
   useEffect(() => {
     setResultLimit(50);
@@ -466,7 +459,7 @@ export function App() {
     closeChoices();
     setSelected(null);
     setSelectedId(null);
-    openedRouteId.current = null;
+    focusedRouteId.current = null;
   };
   const localURL = (id?: string) => {
     const url = new URL(window.location.href);
@@ -511,7 +504,7 @@ export function App() {
       setViewedJob(fullJob);
       setResultsCollapsed(false);
       setLocations(positions);
-      setResultMode("view");
+      setResultScope("view");
       clearSelection();
       setShowSearchArea(false);
       setJobsOpen(false);
@@ -611,9 +604,8 @@ export function App() {
         setGeometry(route);
         if (selectedId === route.id) {
           setSelected(route);
-          if (openedRouteId.current !== route.id) {
-            openedRouteId.current = route.id;
-            moveTo(routeBounds(route));
+          if (focusedRouteId.current !== route.id) {
+            focusedRouteId.current = route.id;
             requestAnimationFrame(() =>
               document.getElementById("route-detail-heading")?.focus(),
             );
@@ -942,7 +934,7 @@ export function App() {
       if (!selected?.geometry) setRouteRetry((value) => value + 1);
       return;
     }
-    openedRouteId.current = null;
+    focusedRouteId.current = null;
     setSelected(choices?.routes.find((route) => route.id === id) ?? null);
     setSelectedId(id);
     originalDirectionId.current = id;
@@ -1280,6 +1272,11 @@ export function App() {
                 activeRoute={activeRoute}
                 selectedId={selectedId}
                 selectedGroupId={selected?.groupId}
+                selectedLocationIds={
+                  !selectedId && typeof resultScope !== "string"
+                    ? resultScope
+                    : undefined
+                }
                 routeNotice={
                   activeId
                     ? routeError || (!activeRoute ? "Loading route…" : "")
@@ -1291,20 +1288,31 @@ export function App() {
                     : undefined
                 }
                 camera={camera}
-                onSelect={pickRoute}
+                onSelect={(id) => {
+                  if (
+                    typeof resultScope !== "string" &&
+                    !resultScope.has(id) &&
+                    id !== selectedId
+                  )
+                    setResultScope("view");
+                  pickRoute(id);
+                }}
                 onPreview={setHoveredId}
-                onBoundsChange={(bounds) =>
+                onBoundsChange={(bounds, userMoved) => {
                   setMapBounds((current) =>
                     current?.every((value, index) => value === bounds[index])
                       ? current
                       : bounds,
-                  )
-                }
-                onBrowse={(bounds) => {
+                  );
+                  if (userMoved)
+                    setResultScope((current) =>
+                      typeof current === "string" ? current : "view",
+                    );
+                }}
+                onBrowse={(ids) => {
                   clearSelection();
                   setResultsCollapsed(false);
-                  setResultMode("view");
-                  moveTo(bounds);
+                  setResultScope(new Set(ids));
                   requestAnimationFrame(() =>
                     document.getElementById("results-heading")?.focus(),
                   );
@@ -1562,26 +1570,26 @@ export function App() {
                     >
                       <button
                         type="button"
-                        aria-pressed={resultMode === "view"}
+                        aria-pressed={resultScope === "view"}
                         title="Hikes with a starting point in the map view"
-                        onClick={() => setResultMode("view")}
+                        onClick={() => setResultScope("view")}
                       >
                         In view
                       </button>
                       <button
                         type="button"
-                        aria-pressed={resultMode === "all"}
+                        aria-pressed={resultScope === "all"}
                         title="All hikes in this search"
-                        onClick={() => setResultMode("all")}
+                        onClick={() => setResultScope("all")}
                       >
                         All
                       </button>
                     </div>
                     <span role="status">
                       {visibleLocations.length.toLocaleString()}
-                      {resultMode === "view" &&
+                      {resultScope === "view" &&
                         ` / ${locations.length.toLocaleString()}`}{" "}
-                      hikes
+                      hikes{typeof resultScope !== "string" && " at marker"}
                     </span>
                   </div>
                 )}
@@ -1627,7 +1635,7 @@ export function App() {
                     <p className="empty-state">
                       {!locations.length
                         ? "No hikes found."
-                        : !mapBounds && resultMode === "view"
+                        : !mapBounds && resultScope === "view"
                           ? "Loading map…"
                           : "No hikes in view."}
                     </p>

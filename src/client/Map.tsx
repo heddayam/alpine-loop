@@ -41,6 +41,7 @@ export function HikeMap({
   activeRoute,
   selectedId,
   selectedGroupId,
+  selectedLocationIds,
   routeNotice,
   onRetryRoute,
   camera,
@@ -56,13 +57,14 @@ export function HikeMap({
   activeRoute: HikeRoute | null;
   selectedId: string | null;
   selectedGroupId?: string;
+  selectedLocationIds?: ReadonlySet<string>;
   routeNotice: string;
   onRetryRoute?: () => void;
   camera: { bounds: Bounds; revision: number; padding?: number };
   onSelect: (id: string) => void;
   onPreview: (id: string | null) => void;
-  onBoundsChange: (bounds: Bounds) => void;
-  onBrowse: (bounds: Bounds) => void;
+  onBoundsChange: (bounds: Bounds, userMoved: boolean) => void;
+  onBrowse: (ids: string[]) => void;
   profilePosition: Position | null;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ export function HikeMap({
     onPreview,
     selectedId,
     selectedGroupId,
+    selectedLocationIds,
     onBoundsChange,
     onBrowse,
   });
@@ -83,6 +86,7 @@ export function HikeMap({
     onPreview,
     selectedId,
     selectedGroupId,
+    selectedLocationIds,
     onBoundsChange,
     onBrowse,
   };
@@ -109,17 +113,20 @@ export function HikeMap({
     }
     instance.touchZoomRotate.disableRotation();
     instance.keyboard.disableRotation();
-    const publishBounds = () => {
+    const publishBounds = (userMoved = false) => {
       const bounds = instance.getBounds();
-      callbacks.current.onBoundsChange([
-        bounds.getWest(),
-        bounds.getSouth(),
-        bounds.getEast(),
-        bounds.getNorth(),
-      ]);
+      callbacks.current.onBoundsChange(
+        [
+          bounds.getWest(),
+          bounds.getSouth(),
+          bounds.getEast(),
+          bounds.getNorth(),
+        ],
+        userMoved,
+      );
     };
-    instance.on("moveend", publishBounds);
-    instance.on("resize", publishBounds);
+    instance.on("moveend", (event) => publishBounds(!!event.originalEvent));
+    instance.on("resize", () => publishBounds());
     publishBounds();
     instance.addControl(
       new NavigationControl({ showCompass: false }),
@@ -267,20 +274,23 @@ export function HikeMap({
   }, [map, profilePosition, activeRoute]);
 
   const highlightStarts = () => {
-    const { selectedId, selectedGroupId } = callbacks.current;
+    const { selectedId, selectedGroupId, selectedLocationIds } =
+      callbacks.current;
     for (const start of starts.current) {
       start.marker.getElement().classList.toggle(
         "selected",
         start.routes.some(
           (route) =>
-            route.id === selectedId || route.groupId === selectedGroupId,
+            route.id === selectedId ||
+            route.groupId === selectedGroupId ||
+            selectedLocationIds?.has(route.id),
         ),
       );
     }
   };
   useEffect(() => {
     highlightStarts();
-  }, [map, selectedId, selectedGroupId]);
+  }, [map, selectedId, selectedGroupId, selectedLocationIds]);
   useEffect(() => {
     if (!map) return;
     const clear = () => {
@@ -303,7 +313,7 @@ export function HikeMap({
         button.className = `hike-marker${multiple ? " hike-cluster" : ""}`;
         button.textContent = multiple ? choices.length.toLocaleString() : "";
         button.title = multiple
-          ? `${choices.length} hikes · zoom to browse`
+          ? `${choices.length} hikes · browse`
           : choices[0]!.startName || "Unnamed start";
         button.setAttribute("aria-label", button.title);
         if (!multiple) {
@@ -322,17 +332,14 @@ export function HikeMap({
           if (!multiple) {
             callbacks.current.onSelect(choices[0]!.id);
           } else {
-            const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
-            for (const {
-              startPosition: [longitude, latitude],
-            } of choices) {
-              bounds[0] = Math.min(bounds[0], longitude);
-              bounds[1] = Math.min(bounds[1], latitude);
-              bounds[2] = Math.max(bounds[2], longitude);
-              bounds[3] = Math.max(bounds[3], latitude);
-            }
-            callbacks.current.onBrowse(bounds);
+            callbacks.current.onBrowse(choices.map((route) => route.id));
           }
+          // Keep surrounding trails visible; preserve a closer manual zoom.
+          map.easeTo({
+            center: cluster.position,
+            zoom: Math.max(map.getZoom(), Math.min(map.getZoom() + 1, 13)),
+            duration: 350,
+          });
         });
         starts.current.push({
           marker: new Marker({ element: button })
