@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { CatalogView, DownloadSnapshot } from "../data-format.js";
-import { groupedCatalog, regionLabel, sectionLabel } from "./RegionPicker.js";
+import { boundaryLabel, groupedCatalog, regionLabel, sectionLabel } from "./RegionPicker.js";
 
 const size = (bytes: number) => {
   const unit = bytes >= 1_000_000_000 ? "GB" : bytes >= 1_000_000 ? "MB" : "KB";
@@ -107,7 +107,7 @@ export function SettingsDialog({
           </section>
         )}
         <section aria-labelledby="trail-downloads-title">
-          <h3 id="trail-downloads-title">Trail downloads</h3>
+          <h3 id="trail-downloads-title">Manage areas</h3>
           {!dataset && <p role="status">Opening trail data…</p>}
           {groups.map((group) => {
             const ids = group.sections.filter((section) => !section.installed).map((section) => section.id);
@@ -123,13 +123,13 @@ export function SettingsDialog({
                   )}
                 </header>
                 {group.sections.map((section) => section.installed ? (
-                  <div className="area-row area-ready" key={section.id}>
+                  <div className="area-row area-ready" key={section.id} title={boundaryLabel(section.name)}>
                     <span aria-hidden="true">✓</span>
                     <span>{sectionLabel(section.name)}</span>
                     <span className="area-status">Ready</span>
                   </div>
                 ) : (
-                  <label className="area-row" key={section.id}>
+                  <label className="area-row" key={section.id} title={boundaryLabel(section.name)}>
                     <input
                       type="checkbox"
                       checked={selected.includes(section.id)}
@@ -171,6 +171,7 @@ export function SettingsDialog({
             <summary>About trail data</summary>
             <p>{dataset.name} · {dataset.sourceDate}</p>
             <p>Regions follow exact prepared GMBA mountain boundaries split at highways. Routes stay within each region.</p>
+            <ul>{dataset.sections.map((section) => <li key={section.id}>{sectionLabel(section.name)}: {boundaryLabel(section.name)}</li>)}</ul>
             {!!dataset.limitations.length && <ul>{dataset.limitations.map((note) => <li key={note}>{note}</li>)}</ul>}
             {dataset.attribution.map((source) => (
               <p key={source.url}>

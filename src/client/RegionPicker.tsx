@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import type { CatalogView, SectionView, UnavailableSection } from "../data-format.js";
 
-export const regionLabel = (name: string) =>
+const formatBoundary = (name: string) =>
   name
     .replace(/\bI(\d+)\b/g, "I-$1")
     .replace(/\bUS(\d+)\b/g, "US $1")
@@ -9,8 +9,28 @@ export const regionLabel = (name: string) =>
     .replace(/,\s*/g, " · ")
     .replace(/^[a-z]/, (letter) => letter.toUpperCase());
 
-export const sectionLabel = (name: string) =>
-  regionLabel(name.includes(" — ") ? name.slice(name.indexOf(" — ") + 3) : name);
+export const boundaryLabel = (name: string) =>
+  formatBoundary(name.includes(" — ") ? name.slice(name.indexOf(" — ") + 3) : name);
+
+const washingtonAreas: Record<string, string> = {
+  "north of i-90 · south of us 2": "Alpine Lakes",
+  "north of i-90 · north of us 2 · south of sr 20": "Glacier Peak & Mountain Loop",
+  "north of i-90 · north of us 2 · north of sr 20": "Mount Baker & North Cascades",
+  "south of i-90 · north of us 12": "Mount Rainier & Central Cascades",
+  "south of i-90 · south of us 12": "Mount St. Helens & Mount Adams",
+};
+
+export const sectionLabel = (name: string) => {
+  const boundary = boundaryLabel(name);
+  return name.startsWith("Washington Cascades — ")
+    ? washingtonAreas[boundary.toLowerCase().trim().replace(/\s+/g, " ")] ?? boundary
+    : boundary;
+};
+
+export const regionLabel = (name: string) => {
+  const label = sectionLabel(name);
+  return label === boundaryLabel(name) ? formatBoundary(name) : `${name.split(" — ")[0]} — ${label}`;
+};
 
 type RegionGroup = {
   id: string;
@@ -128,7 +148,7 @@ export function RegionPicker({
                 )}
               </header>
               {group.sections.map((section) => (
-                <label className="region-option" key={section.id}>
+                <label className="region-option" key={section.id} title={boundaryLabel(section.name)}>
                   <input
                     type="checkbox"
                     checked={value.includes(section.id)}
