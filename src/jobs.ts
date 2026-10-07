@@ -33,11 +33,11 @@ import { mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
-import type { JobInputs, JobProgress, JobSnapshot, ResultSort, SortOrder } from './model.js';
+import type { JobHistoryPage, JobInputs, JobProgress, JobSnapshot, ResultSort, SortOrder } from './model.js';
 import { createRouteStore } from './route-store.js';
 
 export type JobWorkerEvent = { type: 'progress'; progress: JobProgress; inputs?: JobInputs }
-  | { type: 'done'; progress: JobProgress };
+  | { type: 'done'; progress: JobProgress; counts: { routeCount: number; groupCount: number } };
 const terminal = (job: JobSnapshot) => job.status !== 'running' && job.status !== 'queued';
 
 /** Metadata has one owner. A result file is published only after its worker exits successfully. */
@@ -58,20 +58,27 @@ export async function createJobs(dataDirectory: string, directory: string) {
   catch (error) { await release(); throw error; }
   try {
   db.exec(`PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;
-    CREATE TABLE IF NOT EXISTS jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL, status TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS job_inputs (id TEXT PRIMARY KEY, facts TEXT NOT NULL);`);
-  const insert = db.prepare('INSERT INTO jobs(id, snapshot) VALUES (?, ?)');
-  const update = db.prepare('UPDATE jobs SET snapshot = ? WHERE id = ?');
+  if (!db.prepare('PRAGMA table_info(jobs)').all().some(column => column.name === 'status')) db.exec("ALTER TABLE jobs ADD COLUMN status TEXT NOT NULL DEFAULT ''");
+  db.exec('CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status, position)');
+  const insert = db.prepare('INSERT INTO jobs(id, snapshot, status) VALUES (?, ?, ?)');
+  const update = db.prepare('UPDATE jobs SET snapshot = ?, status = ? WHERE id = ?');
   const saveInputs = db.prepare('INSERT OR REPLACE INTO job_inputs VALUES (?, ?)');
   const loadInputs = db.prepare('SELECT facts FROM job_inputs WHERE id = ?');
   const rows = () => db.prepare('SELECT snapshot FROM jobs ORDER BY position').all()
     .map(row => JSON.parse(row.snapshot as string) as JobSnapshot);
+  let currentProgress: JobSnapshot | undefined;
   const find = (id: string): JobSnapshot => {
+    if (currentProgress?.id === id) return structuredClone(currentProgress);
     const row = db.prepare('SELECT snapshot FROM jobs WHERE id = ?').get(id);
     if (!row) throw new RequestError('This search job is not available.', 404);
     return JSON.parse(row.snapshot as string) as JobSnapshot;
   };
-  const save = (job: JobSnapshot) => update.run(JSON.stringify(job), job.id);
+  const save = (job: JobSnapshot) => {
+    update.run(JSON.stringify(job), job.status, job.id);
+    if (currentProgress?.id === job.id) currentProgress = structuredClone(job);
+  };
   const resultPath = (id: string, staging = false, revision = 0) => join(directory,
     `${id}${staging ? '.staging' : revision ? `.results-${revision}` : ''}.sqlite`);
   const published = (job: JobSnapshot) => job.resultsRevision !== undefined || job.status === 'completed';
@@ -89,7 +96,12 @@ export async function createJobs(dataDirectory: string, directory: string) {
     job.reason = published(job) ? `${reason} Existing results were kept.` : reason;
     save(job);
   };
-  const queued = () => rows().filter(job => job.status === 'queued');
+  const nextQueued = () => {
+    const row = db.prepare("SELECT snapshot FROM jobs WHERE status = 'queued' ORDER BY position LIMIT 1").get();
+    return row && JSON.parse(row.snapshot as string) as JobSnapshot | undefined;
+  };
+  // Reconcile old metadata once on startup; routine status reads touch only active rows.
+  db.exec("UPDATE jobs SET status = json_extract(snapshot, '$.status') WHERE status != json_extract(snapshot, '$.status')");
   // Inputs are separate from frequently polled compact status/history metadata.
   for (const job of rows()) if (job.inputs) {
     saveInputs.run(job.id, JSON.stringify(job.inputs));
@@ -111,7 +123,8 @@ export async function createJobs(dataDirectory: string, directory: string) {
   let pumping = false;
   function snapshot(id: string, includeInputs = true): JobSnapshot {
     const job = find(id);
-    if (job.status === 'queued') job.queuePosition = queued().findIndex(entry => entry.id === id) + 1;
+    if (job.status === 'queued') job.queuePosition = Number(db.prepare(`SELECT COUNT(*) AS count FROM jobs
+      WHERE status = 'queued' AND position <= (SELECT position FROM jobs WHERE id = ?)`).get(id)!.count);
     if (job.status === 'running' && job.startedAt) job.progress.elapsedMs = Date.now() - Date.parse(job.startedAt);
     if (includeInputs) {
       const inputs = loadInputs.get(id);
@@ -121,17 +134,19 @@ export async function createJobs(dataDirectory: string, directory: string) {
   }
   async function run(job: JobSnapshot) {
     job.status = 'running'; job.startedAt = new Date().toISOString(); delete job.queuePosition; save(job);
+    currentProgress = structuredClone(job);
+    let persistedAt = Date.now();
     let done: Extract<JobWorkerEvent, { type: 'done' }> | undefined, failure: string | undefined;
     let worker: Worker;
     const revision = 0;
     try {
       worker = new Worker(new URL('./search-worker.js', import.meta.url), {
         workerData: { directory: dataDirectory, query: job.query, resultPath: resultPath(job.id, true) },
-        resourceLimits: { maxOldGenerationSizeMb: 512 },
+        resourceLimits: { maxOldGenerationSizeMb: 256 },
       });
     } catch (error) {
       restore(job, 'failed', error instanceof Error ? error.message : 'Could not start this job.');
-      await discard(job.id, job); return;
+      await discard(job.id, job); currentProgress = undefined; return;
     }
     const finished = new Promise<void>(resolve => {
       worker.on('message', (event: JobWorkerEvent) => {
@@ -143,7 +158,10 @@ export async function createJobs(dataDirectory: string, directory: string) {
           saveInputs.run(job.id, JSON.stringify(event.inputs));
           current.regions = event.inputs.sections.map(({ id, name }) => ({ id, name }));
         }
-        save(current);
+        currentProgress = current;
+        if (event.inputs || Date.now() - persistedAt >= 1000) {
+          save(current); persistedAt = Date.now();
+        }
       });
       worker.on('error', error => { failure = error instanceof Error ? error.message : 'The search worker failed.'; });
       worker.on('exit', code => {
@@ -152,13 +170,17 @@ export async function createJobs(dataDirectory: string, directory: string) {
       });
     });
     active = { id: job.id, worker, finished };
-    await finished;
+    // Worker heap limits exclude native buffers and SQLite; RSS includes the whole backend.
+    const memoryGuard = setInterval(() => {
+      if (process.memoryUsage.rss() <= 768 * 1024 * 1024 || failure) return;
+      failure = 'This search exceeded the local app memory budget. Try fewer regions or a narrower distance range.';
+      void worker.terminate();
+    }, 250);
+    try { await finished; } finally { clearInterval(memoryGuard); }
     let current = find(job.id);
     if (current.status === 'running' && done && !failure && !closed) {
       try {
-        const store = createRouteStore(resultPath(job.id, true), false, revision);
-        let counts: { routeCount: number; groupCount: number };
-        try { counts = store.counts; } finally { store.close(); }
+        const counts = done.counts;
         await rename(resultPath(job.id, true), resultPath(job.id, false, revision));
         const folder = await open(directory, 'r');
         try { await folder.sync(); } finally { await folder.close(); }
@@ -182,13 +204,14 @@ export async function createJobs(dataDirectory: string, directory: string) {
     }
     await discard(job.id, current);
     if (active?.id === job.id) active = undefined;
+    currentProgress = undefined;
   }
   async function pump() {
     if (pumping || closed) return;
     pumping = true;
     try {
       for (;;) {
-        const next = queued()[0];
+        const next = nextQueued();
         if (!next || closed) break;
         const execution = run(next);
         if (active?.id === next.id) active.finished = execution;
@@ -205,36 +228,36 @@ export async function createJobs(dataDirectory: string, directory: string) {
     if (!Number.isSafeInteger(revision) || revision < 0 || revision > (job.resultsRevision ?? 0)) {
       throw new RequestError('Choose a published results revision.', 400);
     }
-    const store = createRouteStore(publishedPath(job), false, revision);
+    const store = createRouteStore(publishedPath(job), { revision, counts: revision === (job.resultsRevision ?? 0) && job.routeCount !== undefined && job.groupCount !== undefined
+      ? { routeCount: job.routeCount, groupCount: job.groupCount } : undefined });
     try { return read(store); } finally { store.close(); }
   }
   return {
     start(query: SearchQuery): JobSnapshot {
       const job: JobSnapshot = { id: randomUUID(), query: structuredClone(query), status: 'queued', createdAt: new Date().toISOString(),
         progress: { stage: 'preparing', completedRegions: [], totalRegions: query.sections.length, elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 }, storageBytes: 0 };
-      insert.run(job.id, JSON.stringify(job));
+      insert.run(job.id, JSON.stringify(job), job.status);
       startPump(); return snapshot(job.id, false);
     },
-    list: () => {
-      const entries = rows();
-      const positions = new Map(queued().map((job, index) => [job.id, index + 1]));
-      for (const job of entries) {
-        if (job.status === 'queued') job.queuePosition = positions.get(job.id);
-        if (job.status === 'running' && job.startedAt) job.progress.elapsedMs = Date.now() - Date.parse(job.startedAt);
+    active: () => db.prepare("SELECT id FROM jobs WHERE status IN ('queued', 'running') ORDER BY position DESC").all()
+      .map(row => snapshot(row.id as string, false)),
+    history(before?: string): JobHistoryPage {
+      let position = Number.MAX_SAFE_INTEGER;
+      if (before !== undefined) {
+        const row = db.prepare('SELECT position FROM jobs WHERE id = ?').get(before);
+        if (!row) throw new RequestError('This history page is no longer available.', 404);
+        position = Number(row.position);
       }
-      return entries.toReversed();
+      const entries = db.prepare('SELECT id FROM jobs WHERE position < ? ORDER BY position DESC LIMIT 51').all(position);
+      const jobs = entries.slice(0, 50).map(row => snapshot(row.id as string, false));
+      return { jobs, ...(entries.length > 50 ? { nextCursor: jobs.at(-1)!.id } : {}) };
     },
     get: snapshot,
-    page(id: string, offset = 0, groupId?: string, sort: ResultSort = 'distance', order: SortOrder = 'asc', revision?: number, variantId?: string) {
+    page(id: string, offset = 0, sort: ResultSort = 'distance', order: SortOrder = 'asc', revision?: number) {
       if (!Number.isSafeInteger(offset) || offset < 0 || !['distance', 'gain', 'repetition', 'roadDistance'].includes(sort) || !['asc', 'desc'].includes(order)) {
         throw new RequestError('Choose a valid results page and sort order.', 400);
       }
-      if (groupId !== undefined && variantId !== undefined) throw new RequestError('Choose route versions or starting points, not both.', 400);
-      return results(id, store => {
-        const page = store.page(offset, groupId, sort, order, variantId);
-        if (!page) throw new RequestError('This hike is not available.', 404);
-        return page;
-      }, revision);
+      return results(id, store => store.page(offset, sort, order), revision);
     },
     locations: (id: string, revision?: number) => results(id, store => store.locations(), revision),
     route: (id: string, routeId: string, revision?: number) => results(id, store => {

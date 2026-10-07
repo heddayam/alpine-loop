@@ -16,7 +16,7 @@ export async function createNetworkFixture({ dense = false, startCount = 1, rout
   dense?: boolean; startCount?: number; routeCount?: number; connectorSections?: number[]; directional?: boolean; sectionCount?: number;
 } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'alpine-sections-test-'));
-  const catalog: SectionCatalog = { version: 1, info: { id: 'fixture', name: 'Offline trails', bounds: [-122.01, 47.04, -121.98, 47.06],
+  const catalog: SectionCatalog = { version: 2, info: { id: 'fixture', name: 'Offline trails', bounds: [-122.01, 47.04, -121.98, 47.06],
     sourceDate: '2026-01-01', attribution: [], limitations: [], startCount: startCount * sectionCount }, sections: [] };
   let firstLoop: Position[] = [];
   for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
@@ -47,7 +47,7 @@ export async function createNetworkFixture({ dense = false, startCount = 1, rout
       startCount, bounds: [west, 47.04, east, 47.06], boundary: { type: 'MultiPolygon', coordinates: [[[[west,47.04],[east,47.04],[east,47.06],[west,47.06],[west,47.04]]]] }, files: {} as never };
     await mkdir(join(directory, 'sections', id), { recursive: true });
     for (const [family, value] of Object.entries({ graph: data, starts: starts.map(start => [start, positions[start.node]]), geometry })) {
-      const raw = Buffer.from(JSON.stringify(value)), compressed = gzipSync(raw), path = `sections/${id}/${family}.json.gz`;
+      const raw = Buffer.from(family === 'geometry' ? geometry.map(shape => JSON.stringify(shape.coordinates) + '\n').join('') : JSON.stringify(value)), compressed = gzipSync(raw), path = `sections/${id}/${family}.${family === 'geometry' ? 'jsonl' : 'json'}.gz`;
       await writeFile(join(directory, path), compressed);
       section.files[family as keyof typeof section.files] = { path, bytes: compressed.length, jsonBytes: raw.length, sha256: createHash('sha256').update(compressed).digest('hex') };
     }

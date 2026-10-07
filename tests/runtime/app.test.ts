@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -44,11 +44,11 @@ describe('completed jobs through the actual app and worker', () => {
   it.each(['missing', 'disconnected', 'shifted'] as const)('rejects %s drawing geometry before publication', async fault => {
     const { directory, jobDirectory, catalog } = await fixture();
     const file = catalog.sections[0]!.files.geometry;
-    const geometry = JSON.parse(gunzipSync(await readFile(join(directory, file.path))).toString()) as SectionGeometry;
+    const geometry: SectionGeometry = gunzipSync(await readFile(join(directory, file.path))).toString().trimEnd().split('\n').map(line => ({ id: '', name: null, coordinates: JSON.parse(line) }));
     if (fault === 'missing') geometry[0]!.coordinates = [];
     else if (fault === 'disconnected') geometry[0]!.coordinates[0]![0] += .01;
     else for (const shape of geometry) for (const point of shape.coordinates) point[0] += .01;
-    const raw = Buffer.from(JSON.stringify(geometry)), compressed = gzipSync(raw);
+    const raw = Buffer.from(geometry.map(shape => JSON.stringify(shape.coordinates) + '\n').join('')), compressed = gzipSync(raw);
     Object.assign(file, { bytes: compressed.length, jsonBytes: raw.length, sha256: createHash('sha256').update(compressed).digest('hex') });
     await writeFile(join(directory, file.path), compressed);
     await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
@@ -61,7 +61,7 @@ describe('completed jobs through the actual app and worker', () => {
     expect((await readdir(jobDirectory)).some(name => name.startsWith(snapshot.id))).toBe(false);
   });
 
-  it('publishes stable grouped pages, all locations, directions and GPX; retains them after source removal and restart', async () => {
+  it('publishes stable grouped pages, all locations and preferred GPX; retains them after source removal and restart', async () => {
     const count = ROUTES_PER_PAGE + 1;
     const { directory, jobDirectory, firstLoop } = await fixture({ startCount: count, routeCount: count,
       connectorSections: [0], directional: true });
@@ -84,39 +84,19 @@ describe('completed jobs through the actual app and worker', () => {
     expect(snapshot.progress.completedSearchPoints).toBe(snapshot.progress.totalSearchPoints);
     expect(snapshot.storageBytes).toBeGreaterThan(0);
     const results = (await app.inject(`/api/jobs/${snapshot.id}/results`)).json() as JobResults;
-    expect(results).toMatchObject({ routeCount: count * count * 2, groupCount: count, pageTotal: count, offset: 0, sort: 'distance', order: 'asc' });
+    expect(results).toMatchObject({ routeCount: count, groupCount: count, pageTotal: count, offset: 0, sort: 'distance', order: 'asc' });
     expect(results.routes).toHaveLength(ROUTES_PER_PAGE);
     const lastPage = (await app.inject(`/api/jobs/${snapshot.id}/results?offset=${ROUTES_PER_PAGE}`)).json() as JobResults;
     expect(lastPage.routes).toHaveLength(1);
     const locations = (await app.inject(`/api/jobs/${snapshot.id}/locations`)).json();
     expect(locations).toHaveLength(count);
     expect(locations.some((location: { id: string }) => location.id === lastPage.routes[0]!.id)).toBe(true);
-    const groupId = results.routes.find(route => route.roadDistance === 200)!.groupId;
-    const versions = (await app.inject(`/api/jobs/${snapshot.id}/results?group=${groupId}`)).json() as JobResults;
-    expect(versions).toMatchObject({ pageTotal: 1, groupId });
-    expect(versions.routes[0]).toMatchObject({ groupId, variantCount: 1, groupSize: count });
-    const variantId = versions.routes[0]!.variantId;
-    const members = (await app.inject(`/api/jobs/${snapshot.id}/results?variant=${variantId}`)).json() as JobResults;
-    const memberLastPage = (await app.inject(`/api/jobs/${snapshot.id}/results?variant=${variantId}&offset=${ROUTES_PER_PAGE}`)).json() as JobResults;
-    const options = [...members.routes, ...memberLastPage.routes];
-    expect(new Set(options.map(route => route.startId))).toEqual(new Set(Array.from({ length: count }, (_, i) => `fixture-0/start-${i}`)));
-    expect(options.every(route => route.groupSize === count)).toBe(true);
-    expect(options.every(route => route.variantId === variantId)).toBe(true);
-    expect((await app.inject(`/api/jobs/${snapshot.id}/results?variant=missing`)).statusCode).toBe(404);
-    expect((await app.inject(`/api/jobs/${snapshot.id}/results?variant=${variantId}&group=${groupId}`)).statusCode).toBe(400);
-    const summary = members.routes[0]!;
+    const summary = results.routes.find(route => route.roadDistance === 200)!;
     expect(summary).not.toHaveProperty('geometry');
+    for (const removed of ['variantId', 'variantCount', 'groupSize', 'reverseId', 'oppositeId']) expect(summary).not.toHaveProperty(removed);
     const route = (await app.inject(`/api/jobs/${snapshot.id}/routes/${summary.id}`)).json() as RouteView;
     expect(route.id).toHaveLength(32);
-    expect(route.reverseId).toBeTruthy();
-    const reverse = (await app.inject(`/api/jobs/${snapshot.id}/routes/${route.reverseId}`)).json() as RouteView;
-    expect(reverse.variantId).toBe(route.variantId);
-    expect(reverse.reverseId).toBe(route.id);
-    expect(reverse.geometry).toEqual(route.geometry.toReversed());
-    const publicDirection = [route, reverse].find(direction => !direction.uncertain)!;
-    const uncertainDirection = [route, reverse].find(direction => direction.uncertain)!;
-    expect(publicDirection).toMatchObject({ gain: 60, geometry: firstLoop });
-    expect(uncertainDirection.gain).toBe(80);
+    expect(route).toMatchObject({ gain: 60, geometry: firstLoop, uncertain: false });
     const exported = await app.inject(`/api/jobs/${snapshot.id}/routes/${route.id}.gpx`);
     expect(exported.headers['content-type']).toContain('application/gpx+xml');
     expect(exported.body).toContain('Creek &amp; Ridge &lt;loop&gt;');
@@ -162,6 +142,40 @@ describe('completed jobs through the actual app and worker', () => {
     expect(history.every(job => job.regions?.length === 2)).toBe(true);
     expect((await app.inject(`/api/jobs/${first.id}`)).json().inputs.sections).toHaveLength(2);
     expect(history.find(job => job.id === first.id)!.query).toEqual({ ...criteria, effort: 'deep', roads: { distance: 1609.344, fraction: .1 } });
+  });
+
+  it('pages retained history by a stable cursor and serves compact active status', async () => {
+    const { directory, jobDirectory } = await fixture();
+    const metadata = new DatabaseSync(join(jobDirectory, 'metadata.sqlite'));
+    metadata.exec('CREATE TABLE jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, snapshot TEXT, status TEXT)');
+    const ids: string[] = [];
+    for (let index = 0; index < 123; index++) {
+      const id = randomUUID(); ids.unshift(id);
+      const job: JobSnapshot = { id, query, status: 'failed', createdAt: new Date().toISOString(), storageBytes: 0,
+        progress: { stage: 'preparing', completedRegions: [], totalRegions: 1, elapsedMs: 0, expansions: 0, completedStarts: 0, totalStarts: 1 } };
+      metadata.prepare('INSERT INTO jobs(id,snapshot,status) VALUES (?,?,?)').run(id, JSON.stringify(job), job.status);
+    }
+    metadata.close();
+    const app = await openApp(directory, jobDirectory);
+    expect((await app.inject('/api/jobs/active')).json()).toEqual([]);
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = (await app.inject(`/api/jobs/history${cursor ? `?before=${cursor}` : ''}`)).json();
+      expect(page.jobs.length).toBeLessThanOrEqual(50);
+      expect(page.jobs.every((job: JobSnapshot) => !job.inputs)).toBe(true);
+      seen.push(...page.jobs.map((job: JobSnapshot) => job.id));
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(seen).toEqual(ids);
+    expect((await app.inject('/api/jobs/history?before=absent')).statusCode).toBe(404);
+    const running = (await submit(app)).json() as JobSnapshot;
+    expect((await app.inject('/api/jobs/active')).json()).toMatchObject([{ id: running.id, status: 'running' }]);
+    const completed = await finished(app, running);
+    expect(completed.status).toBe('completed');
+    expect((await app.inject('/api/jobs/active')).json()).toEqual([]);
+    expect((await app.inject(`/api/jobs/${completed.id}?inputs=false`)).json()).not.toHaveProperty('inputs');
+    expect((await app.inject(`/api/jobs/${completed.id}`)).json()).toHaveProperty('inputs');
   });
 
   it('cancels a running worker within one second, discards staging and continues its queue', async () => {

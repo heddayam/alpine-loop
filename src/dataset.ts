@@ -1,13 +1,14 @@
-import type { SectionGeometry, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
+import type { SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
 import type { HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import type { WorkBudget } from './work-budget.js';
 import { openSections } from './sections.js';
 
 /** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
-export async function readDataset(directory: string) {
-  const sections = await openSections(directory);
+export async function readDataset(directory: string, budget?: WorkBudget) {
+  const sections = await openSections(directory, budget);
   const { catalog } = sections;
   const byId = new Map(catalog.sections.map(section => [section.id, section]));
   const selected = (query: SearchQuery) => query.sections.map(id => {
@@ -68,7 +69,7 @@ export async function readDataset(directory: string) {
     }
   }
   return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, select, verifyInputs,
-    readGeometry: (id: string) => sections.read<SectionGeometry>(id, 'geometry'),
+    readGeometry: (id: string, trails: ReadonlySet<number>) => sections.geometry(id, trails),
     view: sections.view, downloads: sections.downloads };
 }
 

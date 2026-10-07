@@ -41,7 +41,7 @@ export async function installCatalog(directory, release, options = {}) {
     }), createWriteStream(temporary, { flags: 'wx' }), { signal });
     if (sha.digest('hex') !== release.catalogSha256) throw new Error('Mountain catalog checksum mismatch');
     const catalog = JSON.parse(await readFile(temporary, 'utf8'));
-    if (catalog.version !== 1 || !catalog.info || !Array.isArray(catalog.sections)
+    if (catalog.version !== 2 || !catalog.info || !Array.isArray(catalog.sections)
       || (!catalog.sections.length && (!Array.isArray(catalog.unavailable) || !catalog.unavailable.length))) {
       throw new Error('Invalid prepared mountain catalog format');
     }

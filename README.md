@@ -15,7 +15,8 @@ Requires Node.js 24 or newer:
 npm start
 ```
 
-Open the printed local URL. Launch installs dependencies and builds the app.
+Open the printed local URL. Launch installs dependencies and reuses the build until source, configuration,
+dependencies or required outputs change.
 It obtains the published mountain catalog automatically; missing trail sections
 are downloaded when you choose **Download and search**. Panning never downloads
 anything. Settings → Manage areas offers grouped downloads with actual sizes,
@@ -80,21 +81,31 @@ saved storage; history is otherwise retained.
 Distinct main circuits are proposed by deterministic weighted shortest-path
 forests and short local trail alternatives. A small set of sensible reversible
 connections evaluates every eligible start separately from the main circuit.
-Minor variants share a family only when their common physical core trail is at
-least 85% of their combined core footprint, the common cyclic order agrees, and
-no connected difference exceeds one kilometer. Approaches and directions do not
-create additional hikes. A qualifying minor variation is retained when needed to
-meet the limits; there is no variation selector.
+Similar main loops share a displayed hike when their common physical trails cover
+at least 60% of the longer main loop in the same cyclic order, including roads.
+Displayed representatives stay fixed; hidden discoveries cannot join two otherwise
+distinct hikes. Only one preferred qualifying walk is saved per displayed hike.
+Loop variations, alternative starts and reverse directions are discarded.
 
-Details retain qualifying starts and directions. The displayed start prefers an
-explicit mapped trailhead, then parking, then road contact; ties prefer certain
-access, less road walking, less repetition, shorter distance and stable IDs.
-Available directions each have their own exact metrics and GPX. The search
-panel stays on the left and collapses using its edge tab; the main map fills the
-right. The map shows all result locations. Clicking a cluster or shared starting
-point opens its hike list; **Hikes in view** lists starts in the current map view.
-Panning changes browsing only. Lists load more hikes, versions and starting
-points as you scroll. Route details and GPX open over the map. Search submission opens Jobs; closing it leaves the search running.
+The chosen start prefers an explicit mapped trailhead, then parking, then road
+contact; ties prefer certain access, less road walking, less repetition, shorter
+distance and stable IDs. Every eligible start is still evaluated. Details show
+that walk's exact metrics, elevation profile and GPX. The search panel stays on
+the left; results open on the right. The map shows all result locations. Clicking
+a cluster or shared start opens its hike list; **In view** filters by the current
+map viewport and **All** keeps the complete search. Continuous scrolling mounts
+only visible rows. Search submission opens Jobs; closing it leaves work running.
+History is retained until manual deletion and browsed in pages of 50 jobs.
+
+The search worker targets 40% of one core using measured CPU time and cooperative
+waits. It has a 256 MiB old-generation heap limit, and a backend RSS watchdog stops
+unfinished work above 768 MiB. These are resource safeguards, not strict operating
+system caps: native allocation and garbage collection can briefly exceed a target.
+Geometry is streamed one physical trail at a time and stored once per used trail;
+map tiles and hover drawings have bounded caches. The
+[local resource review](benchmarks/local-resource-improvements.json) records achieved
+usage and limitations. Existing completed files remain unchanged; deleting an old
+job reclaims its previously saved alternatives.
 
 For the same start and ordered trail itinerary, avoidable longer road substitutions
 are removed before minimum distance and climb are applied. A shorter legal road

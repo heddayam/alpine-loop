@@ -101,3 +101,9 @@ and snapshot-specific runners are preserved at
 this checkout, but their numeric trail IDs describe the explicitly pinned older
 source snapshot, rather than new mountain sections. A hike excluded by an applied hard highway boundary
 must be reported separately from a constraint failure or solver miss.
+
+The [local resource improvements](local-resource-improvements.json) compare the
+2026-10-07 CPU/memory audit with preferred-only results. The default still searches
+all five regions and every eligible start; it stores one walk per displayed hike.
+The report separates backend RSS from browser physical footprint, records CPU
+fractions relative to one core, and includes full completion and browser checks.

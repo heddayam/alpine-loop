@@ -3,12 +3,14 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { readDataset } from './dataset.js';
 import { solveSection } from './diversity.js';
 import { createRouteStore } from './route-store.js';
+import { createWorkBudget } from './work-budget.js';
 import type { JobInputs, JobProgress, Position, SearchQuery } from './model.js';
 
 const { directory, query, resultPath } = workerData as {
   directory: string; query: SearchQuery; resultPath: string };
 const started = performance.now();
-const dataset = await readDataset(directory);
+const budget = createWorkBudget();
+const dataset = await readDataset(directory, budget);
 const selected = dataset.selectedSections(query);
 const inputs: JobInputs = { version: dataset.catalog.info.id,
   sections: selected.map(({ id, name, bounds, boundary, files }) => ({ id, name, bounds, boundary, files })) };
@@ -20,7 +22,7 @@ send(true);
 await dataset.verifyInputs(inputs);
 const selections = await dataset.starts(query);
 progress.totalStarts = selections.reduce((sum, { eligible }) => sum + eligible.length, 0);
-const store = createRouteStore(resultPath, true);
+const store = createRouteStore(resultPath, { writable: true });
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
 let verification: Promise<void> | undefined;
 const verify = () => verification ??= dataset.verifyInputs(inputs).finally(() => { verification = undefined; });
@@ -33,14 +35,15 @@ async function saveRoutes(chosen: (typeof selections)[number]) {
   const previousExpansions = progress.expansions;
   progress.stage = 'searching'; send();
   store.begin();
-  await solveSection(graph, query, async measured => {
+  await solveSection(graph, query, { budget, onProgress: async measured => {
     if (Date.now() - lastVerified >= 1000) { await verify(); lastVerified = Date.now(); }
     progress.expansions = previousExpansions + measured.expansions;
     progress.totalSearchPoints = measured.totalSearchPoints;
     progress.completedSearchPoints = measured.completedSearchPoints;
     if (measured.totalSearchPoints !== undefined && measured.completedSearchPoints === measured.totalSearchPoints) progress.stage = 'saving';
     if (Date.now() - lastProgress >= 100) { send(); lastProgress = Date.now(); }
-  }, store.candidatePool, saved => {
+  }, onRoute: async saved => {
+    await budget.checkpoint();
     const start = graph.starts[saved.route.start]!.node;
     let previous = start;
     for (const edgeId of saved.route.edges) {
@@ -59,10 +62,8 @@ async function saveRoutes(chosen: (typeof selections)[number]) {
     if (!saved.route.edges.length || previous !== start) throw new Error(`Route drawing does not close in ${chosen.section.name}.`);
     const route = selection.describe(saved.route);
     route.summary.id = hash(`${chosen.section.id}/${saved.route.id}`);
-    store.add({ ...saved, route, groupId: hash(`${chosen.section.id}/${saved.groupId}`), variantId: hash(`${chosen.section.id}/${saved.variantId}`),
-      reverseId: saved.reverseId ? hash(`${chosen.section.id}/${saved.reverseId}`) : undefined,
-      oppositeId: saved.oppositeId ? hash(`${chosen.section.id}/${saved.oppositeId}`) : undefined });
-  });
+    store.add({ route, groupId: hash(`${chosen.section.id}/${saved.groupId}`) });
+  } });
   return used;
 }
 async function completeRegion(chosen: (typeof selections)[number]) {
@@ -75,15 +76,16 @@ async function completeRegion(chosen: (typeof selections)[number]) {
   await verify();
   progress.stage = 'saving'; send();
   if (used.size) {
-    const geometry = await dataset.readGeometry(chosen.section.id);
-    for (const [id, endpoints] of used) {
-      const shape = geometry[id];
-      if (!shape?.coordinates.length) throw new Error(`Route drawing is missing in ${chosen.section.name}.`);
-      if (!samePosition(shape.coordinates[0]!, endpoints[0]) || !samePosition(shape.coordinates.at(-1)!, endpoints[1])) {
+    for await (const { id, coordinates } of dataset.readGeometry(chosen.section.id, new Set(used.keys()))) {
+      const endpoints = used.get(id)!;
+      if (!samePosition(coordinates[0]!, endpoints[0]) || !samePosition(coordinates.at(-1)!, endpoints[1])) {
         throw new Error(`Route drawing has mismatched endpoints in ${chosen.section.name}.`);
       }
-      store.saveGeometry(chosen.section.id, id, shape.coordinates);
+      await budget.checkpoint();
+      store.saveGeometry(chosen.section.id, id, coordinates);
+      used.delete(id);
     }
+    if (used.size) throw new Error(`Route drawing is missing in ${chosen.section.name}.`);
   }
   await verify();
   store.commit();
@@ -96,9 +98,10 @@ try {
   progress.stage = 'saving'; delete progress.currentRegion; send();
   await verify();
   if (verification) await verification;
+  const counts = store.counts;
   store.close();
   await dataset.downloads.close();
-  parentPort!.postMessage({ type: 'done', progress: { ...progress, elapsedMs: performance.now() - started } });
+  parentPort!.postMessage({ type: 'done', counts, progress: { ...progress, elapsedMs: performance.now() - started } });
   parentPort!.close();
 } finally {
   store.close();

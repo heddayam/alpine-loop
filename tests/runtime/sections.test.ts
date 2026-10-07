@@ -19,12 +19,12 @@ async function fixture() {
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
   const files = {} as Record<typeof families[number], DataFile>, bodies = new Map<string, Buffer>();
   for (const family of families) {
-    const raw = Buffer.from(JSON.stringify({ family, content: 'independent prepared data' }));
-    const body = gzipSync(raw), path = `sections/one/${family}.json.gz`;
+    const raw = Buffer.from(family === 'geometry' ? '[[1,2],[3,4]]\n[[4,5],[6,7]]\n' : JSON.stringify({ family, content: 'independent prepared data' }));
+    const body = gzipSync(raw), path = `sections/one/${family}.${family === 'geometry' ? 'jsonl' : 'json'}.gz`;
     files[family] = { path, bytes: body.length, jsonBytes: raw.length, sha256: hash(body) };
     bodies.set(path, body);
   }
-  const catalog: SectionCatalog = { version: 1, info, sections: [{ id: 'one', regionId: '11202', name: 'One section',
+  const catalog: SectionCatalog = { version: 2, info, sections: [{ id: 'one', regionId: '11202', name: 'One section',
     bounds: info.bounds, boundary: { type: 'MultiPolygon', coordinates: [[[[-122, 47], [-121, 47], [-121, 48], [-122, 48], [-122, 47]]]] },
     sourceSegments: 3, startCount: 1, files }] };
   const save = () => writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
@@ -115,6 +115,21 @@ describe('independent section installation', () => {
     expect(calls.filter(path => path === files.starts.path)).toHaveLength(1);
     expect(calls.filter(path => path === files.geometry.path)).toHaveLength(2);
     expect(await sections.installed('one')).toBe(true);
+  });
+
+  it('streams only selected physical-trail drawing records and verifies the complete file', async () => {
+    const { directory, bodies, files, serve } = await fixture();
+    await serve((path, response) => response.end(bodies.get(path)));
+    const sections = await openSections(directory);
+    sections.downloads.start(['one']);
+    expect((await settled(sections)).status).toBe('complete');
+    const drawings = [];
+    for await (const shape of sections.geometry('one', new Set([1]))) drawings.push(shape);
+    expect(drawings).toEqual([{ id: 1, coordinates: [[4,5],[6,7]] }]);
+    await writeFile(join(directory, files.geometry.path), Buffer.alloc(files.geometry.bytes));
+    await expect(async () => {
+      for await (const _shape of sections.geometry('one', new Set([1]))) { /* Consumption must reject damaged data. */ }
+    }).rejects.toThrow(/checksum/);
   });
 
   it('rejects unsafe or duplicate catalog sections before any download', async () => {
