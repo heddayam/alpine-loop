@@ -15,16 +15,23 @@ export function parseQuery(value: unknown): SearchQuery {
     throw new RequestError('Choose at least one distinct search region.', 400);
   }
   if ([query.distance, query.gain].some(values => !range(values, 2) || values[0]! < 0 || values[0]! > values[1]!)
-    || query.distance[1] <= 0 || !Number.isFinite(query.repetition) || query.repetition < 0 || query.repetition > 1
+    || query.distance[1] <= 0
     || typeof query.includeUnknown !== 'boolean') {
-    throw new RequestError('Use ordered, nonnegative distance and gain ranges and a repeated-trail limit from 0% to 100%.', 400);
+    throw new RequestError('Use ordered, nonnegative distance and elevation-gain ranges.', 400);
   }
+  if ((query.stem === undefined) === (query.repetition === undefined)) throw new RequestError('Specify exactly one stem-distance limit.', 400);
+  if (query.stem !== undefined && (typeof query.stem !== 'number' || !Number.isFinite(query.stem) || query.stem < 0)) {
+    throw new RequestError('Use a finite, nonnegative stem distance.', 400);
+  }
+  if (query.repetition !== undefined && (typeof query.repetition !== 'number' || !Number.isFinite(query.repetition)
+    || query.repetition < 0 || query.repetition > 1)) throw new RequestError('This saved search has an invalid repeated-trail limit.', 400);
   const roads = query.roads === undefined ? DEFAULT_ROAD_LIMITS : query.roads;
   if (!roads || typeof roads.distance !== 'number' || !Number.isFinite(roads.distance) || roads.distance < 0
     || typeof roads.fraction !== 'number' || !Number.isFinite(roads.fraction) || roads.fraction < 0 || roads.fraction > 1) {
     throw new RequestError('Use a nonnegative road distance and a road percentage from 0% to 100%.', 400);
   }
-  return { sections: [...query.sections], effort: 'deep', distance: [...query.distance], gain: [...query.gain], repetition: query.repetition,
+  return { sections: [...query.sections], effort: 'deep', distance: [...query.distance], gain: [...query.gain],
+    ...(query.stem === undefined ? { repetition: query.repetition } : { stem: query.stem }),
     includeUnknown: query.includeUnknown, roads: { distance: roads.distance, fraction: roads.fraction } };
 }
 

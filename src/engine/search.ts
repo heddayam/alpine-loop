@@ -14,8 +14,10 @@ export function validateQuery(query: SearchQuery): void {
       throw new Error('Search distance and gain need ordered, finite, nonnegative ranges');
     }
   }
-  if (!Number.isFinite(query.repetition) || query.repetition < 0 || query.repetition > 1) {
-    throw new Error('Repeated trail must be a fraction between zero and one');
+  if ((query.stem === undefined) === (query.repetition === undefined)) throw new Error('Specify exactly one stem-distance limit');
+  if (query.stem !== undefined && (!Number.isFinite(query.stem) || query.stem < 0)) throw new Error('Stem distance must be finite and nonnegative');
+  if (query.repetition !== undefined && (!Number.isFinite(query.repetition) || query.repetition < 0 || query.repetition > 1)) {
+    throw new Error('Legacy repeated-trail limits must be a fraction between zero and one');
   }
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
   if (!Number.isFinite(roads.distance) || roads.distance < 0 || !Number.isFinite(roads.fraction)
@@ -98,7 +100,8 @@ function candidate(graph: TrailGraph, query: SearchQuery, start: number, edges: 
   const repetition = repeatedDistance / distance;
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
   if (distance < query.distance[0] || distance > query.distance[1] || gain < query.gain[0] || gain > query.gain[1]
-    || roadDistance > roads.distance || roadDistance / distance > roads.fraction || repetition > query.repetition) return;
+    || roadDistance > roads.distance || roadDistance / distance > roads.fraction
+    || (query.stem === undefined ? repetition > query.repetition! : repeatedDistance > query.stem)) return;
   const route: RouteCandidate = { id: '', start, edges, distance, gain, roadDistance, repetition,
     kind: back.length ? 'lollipop' : 'loop', uncertain: graph.starts[start]!.access === 'unknown'
       || edges.some(id => graph.edges[id]!.access === 'unknown') };
@@ -458,7 +461,9 @@ function* proposals(graph: TrailGraph, index: Index, query: SearchQuery, tree: T
   const component = new Int32Array(graph.nodes.length).fill(-1);
   groups.forEach((group, id) => { for (const node of group.nodes) component[node] = id; });
   const queues = new Map<string, { id: number; score: number }[]>(), roads = query.roads ?? DEFAULT_ROAD_LIMITS;
-  const denominator = 1 - (index.stemRatio + 1) * query.repetition - roads.fraction;
+  const denominator = 1 - (index.stemRatio + 1) * (query.repetition ?? 0) - roads.fraction;
+  const minimumTrails = query.stem === undefined ? query.distance[0] * denominator
+    : query.distance[0] * (1 - roads.fraction) - stemDistanceBudget(index, query, query.distance[1]);
   const desired = (query.distance[0] + query.distance[1]) / 2;
   for (const [id, edge] of index.physical.entries()) {
     if (component[edge.from]! < 0 || tree.edge[edge.from] === id || tree.edge[edge.to] === id) continue;
@@ -469,7 +474,7 @@ function* proposals(graph: TrailGraph, index: Index, query: SearchQuery, tree: T
     const trails = metric(tree.upper, edge.trailDistanceUpper);
     if (distance > query.distance[1] + index.rounding || road > roads.distance + index.rounding
       || gain > query.gain[1] + Math.abs(query.gain[1]) * Number.EPSILON * (16 * graph.nodes.length + 64)
-      || (denominator > 0 && trails + index.rounding < query.distance[0] * denominator - index.rounding)) continue;
+      || (denominator > 0 && trails + index.rounding < minimumTrails - index.rounding)) continue;
     const band = Math.min(3, Math.max(0, Math.floor(distance / Math.max(desired, 1) * 3)));
     const key = `${component[edge.from]}:${band}`;
     const score = Math.abs(distance - desired) / Math.max(desired, 1) + road / Math.max(distance, 1)
@@ -513,9 +518,11 @@ function interest(graph: TrailGraph, query: SearchQuery, edges: number[], back: 
   const gain = edges.reduce((sum, id) => sum + graph.edges[id]!.gain, 0);
   const violation = (value: number, range: [number, number]) => Math.max(range[0] - value, value - range[1], 0) / Math.max(range[1], 1);
   const roads = edges.reduce((sum, id) => sum + (graph.edges[id]!.connector ? graph.edges[id]!.distance : 0), 0);
-  const repeated = back.reduce((sum, id) => sum + graph.edges[id]!.distance, 0) / distance;
+  const repeatedDistance = back.reduce((sum, id) => sum + graph.edges[id]!.distance, 0);
+  const stemViolation = query.stem === undefined ? Math.max(0, repeatedDistance / distance - query.repetition!)
+    : Math.max(0, repeatedDistance - query.stem) / Math.max(query.distance[1], 1);
   return violation(distance, query.distance) + violation(gain, query.gain)
-    + Math.max(0, repeated - query.repetition) + roads / Math.max(distance, 1) * 0.001;
+    + stemViolation + roads / Math.max(distance, 1) * 0.001;
 }
 function localCircuits(graph: TrailGraph, index: Index, query: SearchQuery, core: Circuit): Circuit[] {
   const nodes = [...core.nodes, core.nodes[0]!], variants = alternatives(index, core.physical, nodes, new Set(core.nodes));
@@ -559,13 +566,25 @@ function localCircuits(graph: TrailGraph, index: Index, query: SearchQuery, core
     .sort((a, b) => a.score - b.score || a.core.discoveryKey.localeCompare(b.core.discoveryKey)).slice(0, 4).map(item => item.core);
 }
 
+/** Both approach traversals satisfy F + B <= (k + 1) B. Absolute searches
+ * bound B directly; immutable legacy searches use their recorded B / D limit. */
+function stemDistanceBudget(index: Index, query: SearchQuery, ceiling: number): number {
+  if (query.stem === 0) return 0;
+  if (!Number.isFinite(index.stemRatio)) return Infinity;
+  return query.stem === undefined ? (index.stemRatio + 1) * query.repetition! * ceiling : (index.stemRatio + 1) * query.stem;
+}
+
 /** Integer upper core length plus a generous ordered-sum guard makes this
  * ceiling independent of start rotation. For a reversible stem F <= k B,
  * and B / D <= r gives D <= C / (1-(k+1)r). Infinite/unsafe bounds disable
  * the shortcut; they never change final feasibility. */
 function distanceCeiling(graph: TrailGraph, index: Index, query: SearchQuery, core: Circuit): number {
   const upper = core.upperDistance;
-  const denominator = 1 - (index.stemRatio + 1) * query.repetition - 16 * Number.EPSILON;
+  if (query.stem !== undefined) {
+    if (!Number.isSafeInteger(upper) || !Number.isFinite(index.rounding)) return query.distance[1];
+    return Math.min(query.distance[1], upper + stemDistanceBudget(index, query, query.distance[1]) + 2 * index.rounding);
+  }
+  const denominator = 1 - (index.stemRatio + 1) * query.repetition! - 16 * Number.EPSILON;
   if (!Number.isSafeInteger(upper) || !Number.isFinite(index.rounding) || denominator <= 0) return query.distance[1];
   return Math.min(query.distance[1], (upper + index.rounding) / denominator + index.rounding);
 }
@@ -575,11 +594,12 @@ function* connections(graph: TrailGraph, index: Index, query: SearchQuery, core:
   const coreNodes = new Set(core.nodes);
   const ceiling = distanceCeiling(graph, index, query, core);
   const distanceBudget = Math.max(0, Math.min(query.distance[1] - core.minDistance,
-    Number.isFinite(index.stemRatio) ? (index.stemRatio + 1) * query.repetition * ceiling : Infinity) + index.rounding);
+    stemDistanceBudget(index, query, ceiling)) + index.rounding);
   const gainBudget = Number.isSafeInteger(Math.floor(query.gain[1])) ? query.gain[1] - core.minGain : Infinity;
   const roadBudget = (query.roads ?? DEFAULT_ROAD_LIMITS).distance - core.minRoad;
-  const facts = new Map<number, [number, number, number]>();
-  for (const node of contact === undefined ? core.nodes : [contact]) { labels.set(node, 0); facts.set(node, [0, 0, 0]); heap.push(0, node); }
+  const returnBudget = query.stem === undefined ? Infinity : query.stem + index.rounding;
+  const facts = new Map<number, [number, number, number, number]>();
+  for (const node of contact === undefined ? core.nodes : [contact]) { labels.set(node, 0); facts.set(node, [0, 0, 0, 0]); heap.push(0, node); }
   while (heap.length) {
     const [cost, node] = heap.pop();
     if (labels.get(node) !== cost) continue;
@@ -590,7 +610,10 @@ function* connections(graph: TrailGraph, index: Index, query: SearchQuery, core:
       if (out === undefined || index.reverse[out]! < 0) continue;
       const parts = [graph.edges[out]!, graph.edges[index.reverse[out]!]!];
       if (knownOnly && parts.some(edge => edge.access === 'unknown')) continue;
-      const previous = facts.get(node)!, totals = [previous[0]!, previous[1]!, previous[2]!] as [number, number, number];
+      const previous = facts.get(node)!, totals = [...previous] as [number, number, number, number];
+      // The tree grows from the circuit toward the start, along the actual
+      // return direction. Flooring keeps this a conservative pruning bound.
+      totals[3] += Math.floor(graph.edges[out]!.distance);
       let weight = 0;
       for (const edge of parts) {
         totals[0] += Math.floor(edge.distance); totals[1] += Math.floor(edge.gain);
@@ -599,7 +622,7 @@ function* connections(graph: TrailGraph, index: Index, query: SearchQuery, core:
       }
       const following = cost + weight;
       if (totals[0] <= distanceBudget && totals[1] <= gainBudget && totals[2] <= roadBudget + index.rounding
-        && following < (labels.get(next) ?? Infinity)) {
+        && totals[3] <= returnBudget && following < (labels.get(next) ?? Infinity)) {
         labels.set(next, following); facts.set(next, totals); parents.set(next, index.reverse[out]!); heap.push(following, next);
       }
       yield undefined;
@@ -616,7 +639,7 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
     return { ring, direction: Number(graph.edges[ring.find(id => graph.edges[id]!.trail === anchor)!]!.reverse),
       positions: new Map(ring.map((id, at) => [graph.edges[id]!.from, at])) };
   });
-  const hasStems = query.repetition !== 0 || index.zeroRepetitionPossible;
+  const hasStems = query.stem === undefined ? query.repetition !== 0 || index.zeroRepetitionPossible : query.stem !== 0;
   if (!hasStems) modes = modes.slice(0, 1);
   const plans = modes.map(mode => ({ mode, contact: undefined as number | undefined }));
   // Different circuit contacts remain useful when the nearest one cannot

@@ -31,10 +31,12 @@ export function measure(graph: TrailGraph, query: SearchQuery, start: number, ed
   const distance = walk.reduce((sum, edge) => sum + edge!.distance, 0);
   const gain = walk.reduce((sum, edge) => sum + edge!.gain, 0);
   const roadDistance = walk.reduce((sum, edge) => sum + (edge!.connector ? edge!.distance : 0), 0);
-  const repetition = walk.slice(closure).reduce((sum, edge) => sum + edge!.distance, 0) / distance;
+  const repeatedDistance = walk.slice(closure).reduce((sum, edge) => sum + edge!.distance, 0);
+  const repetition = repeatedDistance / distance;
   const roads = query.roads ?? { distance: 1609.344, fraction: 0.1 };
   if (distance < query.distance[0] || distance > query.distance[1] || gain < query.gain[0] || gain > query.gain[1]
-    || repetition > query.repetition || roadDistance > roads.distance || roadDistance / distance > roads.fraction) return;
+    || (query.stem === undefined ? repetition > query.repetition! : repeatedDistance > query.stem)
+    || roadDistance > roads.distance || roadDistance / distance > roads.fraction) return;
   return { start, edges, distance, gain, roadDistance, repetition };
 }
 
@@ -57,9 +59,11 @@ export function enumerate(graph: TrailGraph, query: SearchQuery): OracleRoute[] 
             const distance = edges.reduce((total, id) => total + graph.edges[id]!.distance, 0);
             const gain = edges.reduce((total, id) => total + graph.edges[id]!.gain, 0);
             const roadDistance = edges.filter(id => graph.edges[id]!.connector).reduce((total, id) => total + graph.edges[id]!.distance, 0);
-            const repetition = back.reduce((total, id) => total + graph.edges[id]!.distance, 0) / distance;
+            const repeatedDistance = back.reduce((total, id) => total + graph.edges[id]!.distance, 0);
+            const repetition = repeatedDistance / distance;
             if (distance >= query.distance[0] && distance <= query.distance[1]
-              && gain >= query.gain[0] && gain <= query.gain[1] && repetition <= query.repetition
+              && gain >= query.gain[0] && gain <= query.gain[1]
+              && (query.stem === undefined ? repetition <= query.repetition! : repeatedDistance <= query.stem)
               && roadDistance <= roads.distance && roadDistance / distance <= roads.fraction) {
               results.push({ start, edges, distance, gain, roadDistance, repetition });
             }
