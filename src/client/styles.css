@@ -333,7 +333,6 @@ h4 {
 }
 .step-arrow.up { border-bottom: 4px solid currentColor; }
 .step-arrow.down { border-top: 4px solid currentColor; }
-.search-state { color: var(--muted); font-size: 11px; align-self: center; }
 .number-steppers button:first-child {
   border-bottom: 1px solid var(--line);
 }
@@ -1276,6 +1275,7 @@ dialog::backdrop {
   padding-left: 7px;
 }
 .grade-trigger.enabled { background: #e8ece9; border-color: #607366; }
+.grade-trigger:not(.enabled) { color: #7a817d; background: var(--surface); border-color: var(--line); }
 .grade-trigger button {
   display: flex;
   align-items: center;
@@ -1285,10 +1285,10 @@ dialog::backdrop {
   background: transparent;
   font-size: 12px;
 }
-.grade-trigger button:hover { background: #e8ece9; }
+.grade-trigger button:hover { background: transparent; }
 .grade-popover {
   position: absolute;
-  right: 0;
+  left: 0;
   top: calc(100% + 3px);
   z-index: 800;
   width: 379px;
@@ -1309,4 +1309,6 @@ dialog::backdrop {
 .grade-column .field-unit { margin-left: 1px; }
 .grade-direction { font-size: 12px; }
 .grade-grid input { width: 100%; }
-.grade-definition { margin-top: 9px; color: var(--muted); font-size: 11px; }
+.grade-definition { margin-top: 9px; color: var(--muted); font-size: 11px; text-align: right; }
+.grade-guide { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 4px; }
+.grade-guide > span { white-space: nowrap; }

@@ -665,9 +665,6 @@ export function App() {
       viewedRevisions.current.get(job.id) !== (job.resultsRevision ?? 0),
   ).length;
   const currentJob = jobs.find((job) => job.id === highlightedJob);
-  const savedDraft = viewedJob ? draftForQuery(viewedJob.query, units) : null;
-  const draftChanged =
-    savedDraft && JSON.stringify(draft) !== JSON.stringify(savedDraft);
   const viewedRegions = viewedJob?.query.boundary ? "Drawn boundary" : viewedJob?.query.sections
     .map((id) =>
       dataset?.sections.find((section) => section.id === id)?.name ??
@@ -718,7 +715,6 @@ export function App() {
             disabled={busy || downloading || choosingDownload || drawingBoundary}
             submitting={busy}
             units={units}
-            changed={!!draftChanged}
             onChange={changeDraft}
             onSubmit={(event) => void launch(event)}
             onDrawBoundary={() => {

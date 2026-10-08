@@ -1,7 +1,7 @@
 import { useRef, type FormEvent } from "react";
 import type { CatalogView } from "../data-format.js";
-import { DEFAULT_ROAD_LIMITS, type SearchBoundary, type SearchQuery } from "../model.js";
-import { GradeLimitsControl, type GradeDraft, type GradeLimits } from "./GradeLimits.js";
+import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type SearchQuery } from "../model.js";
+import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
 import { RegionPicker } from "./RegionPicker.js";
 import { stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
@@ -91,7 +91,7 @@ function withMeasurements(
 
 export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"): SearchDraft {
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
-  const savedGrades = (query as SearchQuery & { grades?: GradeLimits }).grades;
+  const savedGrades = query.grades;
   const grades = savedGrades ?? {
     uphill: { above: 15, total: 0.5 * MILE, longest: 0.2 * MILE },
     downhill: { above: 15, total: 0.25 * MILE, longest: 0.1 * MILE },
@@ -350,7 +350,6 @@ export function SearchControls({
   disabled,
   submitting,
   units = "imperial",
-  changed = false,
   onChange,
   onSubmit,
   onDrawBoundary,
@@ -361,7 +360,6 @@ export function SearchControls({
   disabled: boolean;
   submitting: boolean;
   units?: UnitSystem;
-  changed?: boolean;
   onChange: (draft: SearchDraft) => void;
   onSubmit: (event: FormEvent) => void;
   onDrawBoundary: () => void;
@@ -475,11 +473,6 @@ export function SearchControls({
         >
           {submitting ? "Submitting…" : "Search"}
         </button>
-        {changed && (
-          <span className="search-state" role="status" title="Search settings have changed; the map still shows the saved results.">
-            Settings changed
-          </span>
-        )}
       </fieldset>
     </form>
   );
