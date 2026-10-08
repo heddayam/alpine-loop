@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { routeName } from "../route-name.js";
 import type {
   JobSnapshot,
   Position,
@@ -16,10 +17,6 @@ import {
   type UnitSystem,
 } from "./units.js";
 
-const routeName = (route: Pick<RouteLocation, "trailNames" | "startName">) =>
-  route.trailNames.slice(0, 2).join(" / ") ||
-  route.startName ||
-  "Unnamed trails";
 const startName = (route: RouteView) => {
   const position = `${route.startPosition[1].toFixed(5)}, ${route.startPosition[0].toFixed(5)}`;
   return !route.startName
@@ -76,6 +73,7 @@ function RouteDetails({
           href={savedResultsURL(
             job,
             `routes/${encodeURIComponent(route.id)}.gpx`,
+            `units=${units}`,
           )}
           download
         >
@@ -119,7 +117,7 @@ export function RouteDock({
   onClose,
 }: {
   job: JobSnapshot;
-  regionNames: string;
+  regionNames: string[];
   units: UnitSystem;
   hidden: boolean;
   routes: RouteLocation[];
@@ -161,7 +159,14 @@ export function RouteDock({
       <header className="results-header">
         <div>
           <h2 id="results-heading" tabIndex={-1}>
-            {regionNames}
+            {regionNames.length > 1 ? <>
+              Results in <span className="results-areas-trigger" tabIndex={0} aria-describedby="results-areas">
+                {regionNames.length} areas <span aria-hidden="true">▾</span>
+                <span id="results-areas" className="results-areas" role="tooltip">
+                  {regionNames.map(name => <span key={name}>{name}</span>)}
+                </span>
+              </span>
+            </> : regionNames[0]}
           </h2>
           <span className="result-count">{total.toLocaleString()} routes</span>
           <button

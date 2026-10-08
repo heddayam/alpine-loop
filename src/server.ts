@@ -3,6 +3,7 @@ import fastifyStatic from '@fastify/static';
 import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gpx, readDataset } from './dataset.js';
+import { gpxFilename } from './route-name.js';
 import { createJobs, parseQuery, RequestError } from './jobs.js';
 import type { ResultSort, SortOrder } from './model.js';
 
@@ -78,9 +79,9 @@ export async function createApp(directory: string, clientDirectory?: string, job
     }
     return route;
   });
-  app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId.gpx', async (request, reply) => {
+  app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string; units?: string } }>('/api/jobs/:id/routes/:routeId.gpx', async (request, reply) => {
     const route = jobs.route(request.params.id, request.params.routeId, revision(request.query.revision));
-    return reply.type('application/gpx+xml').header('Content-Disposition', 'attachment; filename="alpine-loop.gpx"').send(gpx(route));
+    return reply.type('application/gpx+xml').header('Content-Disposition', `attachment; filename="${gpxFilename(route, request.query.units === 'metric' ? 'metric' : 'imperial')}"`).send(gpx(route));
   });
   if (clientDirectory) await app.register(fastifyStatic, {
     root: clientDirectory,

@@ -530,10 +530,36 @@ label.area-row:hover {
   gap: 7px;
 }
 .results-header h2 {
+  position: relative;
   font-size: 12px;
   flex: 1;
   min-width: 0;
 }
+.results-areas-trigger {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.results-areas-trigger:hover .results-areas,
+.results-areas-trigger:focus-visible .results-areas { display: block; }
+.results-areas {
+  display: none;
+  white-space: normal;
+  position: absolute;
+  z-index: 800;
+  top: 100%;
+  left: 0;
+  width: 280px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  box-shadow: 0 4px 14px #0002;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.results-areas > span { display: block; }
 .result-count { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .saved-request {
   font-size: 11px;

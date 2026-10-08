@@ -240,7 +240,11 @@ describe('completed jobs through the actual app and worker', () => {
     }
     const exported = await app.inject(`/api/jobs/${snapshot.id}/routes/${route.id}.gpx`);
     expect(exported.headers['content-type']).toContain('application/gpx+xml');
-    expect(exported.body).toContain('Creek &amp; Ridge &lt;loop&gt;');
+    expect(exported.body).toContain('<name>Creek &amp; Ridge</name>');
+    expect(exported.headers['content-disposition']).toBe(`attachment; filename="creek-ridge-${(route.distance / 1609.344).toFixed(1).replace('.', '_')}mi.gpx"`);
+    const metric = await app.inject(`/api/jobs/${snapshot.id}/routes/${route.id}.gpx?units=metric`);
+    expect(metric.headers['content-disposition']).toBe(`attachment; filename="creek-ridge-${(route.distance / 1000).toFixed(1).replace('.', '_')}km.gpx"`);
+    expect(metric.body).toBe(exported.body);
     const points = [...exported.body.matchAll(/<trkpt lat="([^"]+)" lon="([^"]+)"><ele>([^<]+)<\/ele><\/trkpt>/g)]
       .map(([, lat, lon, elevation]) => [Number(lon), Number(lat), Number(elevation)]);
     expect(points).toEqual(route.geometry);

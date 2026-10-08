@@ -665,12 +665,11 @@ export function App() {
       viewedRevisions.current.get(job.id) !== (job.resultsRevision ?? 0),
   ).length;
   const currentJob = jobs.find((job) => job.id === highlightedJob);
-  const viewedRegions = viewedJob?.query.boundary ? "Drawn boundary" : viewedJob?.query.sections
+  const viewedRegions = viewedJob?.query.boundary ? ["Drawn boundary"] : viewedJob?.query.sections
     .map((id) =>
       dataset?.sections.find((section) => section.id === id)?.name ??
         viewedJob.inputs?.sections.find((section) => section.id === id)?.name ?? id,
-    )
-    .join(", ");
+    );
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -750,7 +749,7 @@ export function App() {
           <RouteDock
             key={viewedJob.id}
             job={viewedJob}
-            regionNames={viewedRegions ?? "Saved search"}
+            regionNames={viewedRegions ?? ["Saved search"]}
             units={units}
             hidden={resultsCollapsed}
             routes={visibleLocations}

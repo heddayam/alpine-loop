@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { WorkBudget } from './work-budget.js';
 import { openSections } from './sections.js';
 import { boundarySections, pointInBoundary } from './boundary.js';
+import { routeName } from './route-name.js';
 
 /** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
 export async function readDataset(directory: string, budget?: WorkBudget) {
@@ -91,5 +92,5 @@ export function gpx(route: HikeRoute): string {
   const escape = (text: string) => text.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!);
   const points = route.geometry.map(([lon, lat, elevation]) =>
     `    <trkpt lat="${lat}" lon="${lon}">${elevation === undefined ? '' : `<ele>${elevation}</ele>`}</trkpt>`).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Alpine Loop" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk><name>${escape(route.startName)}</name><trkseg>\n${points}\n  </trkseg></trk>\n</gpx>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Alpine Loop" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk><name>${escape(routeName(route))}</name><trkseg>\n${points}\n  </trkseg></trk>\n</gpx>\n`;
 }
