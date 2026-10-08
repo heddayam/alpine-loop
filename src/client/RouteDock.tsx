@@ -161,7 +161,7 @@ export function RouteDock({
           <h2 id="results-heading" tabIndex={-1}>
             {regionNames.length > 1 ? <>
               Results in <span className="results-areas-trigger" tabIndex={0} aria-describedby="results-areas">
-                {regionNames.length} areas <span aria-hidden="true">▾</span>
+                {regionNames.length} regions <span aria-hidden="true">▾</span>
                 <span id="results-areas" className="results-areas" role="tooltip">
                   {regionNames.map(name => <span key={name}>{name}</span>)}
                 </span>

@@ -3,7 +3,6 @@ import {
   Map as MapLibreMap,
   Marker,
   NavigationControl,
-  MercatorCoordinate,
   setWorkerUrl,
   setWorkerCount,
   type GeoJSONSource,
@@ -14,13 +13,13 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Bounds, HikeRoute, RouteLocation, RoutePath, SearchBoundary } from "../model.js";
 import type { Boundary } from "../data-format.js";
 import type { ProfileCursor } from "./ElevationProfile.js";
-import { clusterLocations } from "./clusters.js";
+import { HikeMarkers } from "./HikeMarkers.js";
 import { request } from "./request.js";
 import { mergedRegionBoundary } from "./region-outline.js";
 import { boundaryGeometry } from "../boundary.js";
 import { BoundaryDrawing } from "./BoundaryDrawing.js";
 import { MapCoordinates } from "./MapCoordinates.js";
-import { dashedPaths } from "./path-dashes.js";
+import { routeDrawing } from "./route-drawing.js";
 import { unitsFor, type UnitSystem } from "./units.js";
 
 setWorkerUrl(workerUrl);
@@ -63,9 +62,10 @@ export function HikeMap({
   selectedSections,
   routes,
   pathsURL,
-  activeRoute,
+  selectedRoute,
+  previewRoute,
   selectedId,
-  focusedId,
+  previewId,
   routeNotice,
   onRetryRoute,
   camera,
@@ -84,9 +84,10 @@ export function HikeMap({
   selectedSections: string[];
   routes: RouteLocation[];
   pathsURL?: string;
-  activeRoute: HikeRoute | null;
+  selectedRoute: HikeRoute | null;
+  previewRoute: HikeRoute | null;
   selectedId: string | null;
-  focusedId: string | null;
+  previewId: string | null;
   routeNotice: string;
   onRetryRoute?: () => void;
   camera: { bounds: Bounds; revision: number; padding?: number };
@@ -107,17 +108,14 @@ export function HikeMap({
   const [pathsError, setPathsError] = useState("");
   const [pathsRetry, setPathsRetry] = useState(0);
   const [segmentLabel, setSegmentLabel] = useState<{ routeId: string; name: string } | null>(null);
+  const [startLabel, setStartLabel] = useState<string | null>(null);
   const clearSegmentHover = useRef<() => void>(() => {});
-  const starts = useRef(new Map<string, {
-    marker: Marker;
-    routes: RouteLocation[];
-  }>());
   const profileMarker = useRef<Marker | null>(null);
   const callbacks = useRef({
     onSelect,
     onPreview,
     selectedId,
-    focusedId,
+    previewId,
     onBoundsChange,
     onBrowse,
     drawingBoundary,
@@ -126,7 +124,7 @@ export function HikeMap({
     onSelect,
     onPreview,
     selectedId,
-    focusedId,
+    previewId,
     onBoundsChange,
     onBrowse,
     drawingBoundary,
@@ -218,7 +216,32 @@ export function HikeMap({
           "nature_natural_texture",
         );
       }
-      for (const layer of instance.getStyle().layers) {
+      const basemapLayers = instance.getStyle().layers;
+      const firstLabel = basemapLayers.find(
+        (layer) => layer.type === "symbol" && layer.layout?.["text-field"],
+      )?.id;
+      for (const layer of basemapLayers) {
+        // Reserve raspberry for the selected hike; keep the network's zoom and rank hierarchy.
+        if (layer.id === "road_hiking")
+          instance.setPaintProperty(layer.id, "line-color", [
+            "interpolate", ["linear"], ["zoom"], 6, "#8993a3", 12,
+            ["match", ["get", "walking_network"],
+              "iwn", "#667085", "nwn", "#727d90", "rwn", "#7e899a", "#8993a3"],
+          ]);
+        if (layer.id === "road_hiking_label")
+          instance.setPaintProperty(layer.id, "text-halo-color", "#667085");
+        if (layer.id === "road_hiking_shield" || layer.id === "road_hiking_node_shield") {
+          instance.setPaintProperty(layer.id, "icon-color", "#667085");
+          instance.setPaintProperty(layer.id, "icon-halo-color", "#ffffff");
+        }
+        if (layer.id === "road_path_label" || layer.id === "road_hiking_label")
+          instance.setLayoutProperty(layer.id, "text-offset", [0, -0.8]);
+        if (layer.id === "road_minor_label")
+          instance.setLayoutProperty(layer.id, "text-offset", [
+            "match", ["get", "type"],
+            "track", ["literal", [0, -0.8]],
+            "minor", ["literal", [0, -0.6]], ["literal", [0, 0]],
+          ]);
         if (layer.type === "symbol" && layer.id.startsWith("place_peak_label_"))
           peakLabels.current.set(
             layer.id,
@@ -239,6 +262,7 @@ export function HikeMap({
         data: empty,
       });
       instance.addSource("route", { type: "geojson", data: empty });
+      instance.addSource("preview-route", { type: "geojson", data: empty });
       instance.addSource("result-paths", { type: "geojson", data: empty });
       instance.addSource("search-boundary", { type: "geojson", data: empty });
       instance.addLayer({
@@ -256,52 +280,63 @@ export function HikeMap({
         paint: { "line-color": "#557f9b", "line-width": 2, "line-dasharray": [3, 2] },
       });
       instance.addLayer({
-        id: "result-paths-background",
-        type: "line",
-        source: "result-paths",
-        minzoom: PATHS_MIN_ZOOM,
-        filter: ["==", ["get", "hit"], true],
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": "#ffffff",
-          "line-width": 2,
-          "line-opacity": 1,
-        },
-      });
-      instance.addLayer({
         id: "result-paths",
         type: "line",
         source: "result-paths",
         minzoom: PATHS_MIN_ZOOM,
-        filter: ["==", ["get", "hit"], false],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#58615b",
+          "line-color": "#626d78",
           "line-width": 2,
           "line-opacity": 1,
         },
-      });
+      }, firstLabel);
       instance.addLayer({
         id: "result-paths-hit", type: "line", source: "result-paths", minzoom: PATHS_MIN_ZOOM,
-        filter: ["==", ["get", "hit"], true],
         paint: { "line-width": 8, "line-opacity": 0 },
-      });
+      }, firstLabel);
+      const routeColor = getComputedStyle(container.current!).getPropertyValue("--active-route").trim();
+      instance.addLayer({
+        id: "result-paths-preview", type: "line", source: "result-paths", minzoom: PATHS_MIN_ZOOM,
+        filter: ["==", ["get", "id"], ""],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": routeColor, "line-width": 3 },
+      }, firstLabel);
+      instance.addLayer({
+        id: "preview-route", type: "line", source: "preview-route",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": routeColor, "line-width": 3 },
+      }, firstLabel);
+      instance.addLayer({
+        id: "route-background",
+        type: "line",
+        source: "route",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": ["case", ["boolean", ["feature-state", "hover"], false], routeColor, "#ffffff"],
+          "line-width": 6,
+        },
+      }, firstLabel);
       instance.addLayer({
         id: "route",
         type: "line",
         source: "route",
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#b95b2c",
-          "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 6, 4],
+          "line-color": routeColor,
+          "line-width": 4,
           "line-opacity": 1,
         },
-      });
-      const pathAt = (point: { x: number; y: number }) =>
-        instance.queryRenderedFeatures(
+      }, firstLabel);
+      const pathAt = (point: { x: number; y: number }) => {
+        const features = instance.queryRenderedFeatures(
           [[point.x - 4, point.y - 4], [point.x + 4, point.y + 4]],
-          { layers: ["route", "result-paths-hit"] },
-        )[0];
+          { layers: ["route", "preview-route", "result-paths-hit"] },
+        );
+        // Shared overview paths must not steal the focused hike's segment hit.
+        return features.find(feature => feature.layer.id === "route"
+          && feature.properties.id === callbacks.current.selectedId) ?? features[0];
+      };
       let hoveredSegment: string | number | undefined;
       let hoverFrame = 0;
       const hoverSegment = (id?: string | number, routeId?: string, name?: string) => {
@@ -323,6 +358,12 @@ export function HikeMap({
       instance.on("mousemove", (event) => {
         if (callbacks.current.drawingBoundary) return;
         if (instance.isMoving()) return;
+        // Marker events bubble through the map; the trail beneath must not take their hover.
+        if (event.originalEvent.target instanceof Element
+            && event.originalEvent.target.closest(".hike-marker")) {
+          clearHover();
+          return;
+        }
         // Hit-test at most once per frame, using the latest pointer position.
         cancelAnimationFrame(hoverFrame);
         hoverFrame = requestAnimationFrame(() => {
@@ -330,7 +371,7 @@ export function HikeMap({
           const feature = pathAt(event.point);
           const id = feature?.properties.id;
           instance.getCanvas().style.cursor = typeof id === "string" ? "pointer" : "";
-          if (feature?.layer.id === "route" && id === callbacks.current.focusedId && feature.id !== undefined) {
+          if (feature?.layer.id === "route" && id === callbacks.current.selectedId && feature.id !== undefined) {
             hoverSegment(feature.id, id, feature.properties.name);
             callbacks.current.onPreview(null);
           } else {
@@ -339,7 +380,7 @@ export function HikeMap({
           }
         });
       });
-      instance.on("movestart", clearHover);
+      instance.on("movestart", () => { clearHover(); setStartLabel(null); callbacks.current.onPreview(null); });
       instance.on("mouseout", () => { clearHover(); callbacks.current.onPreview(null); });
       instance.on("click", (event) => {
         if (callbacks.current.drawingBoundary) return;
@@ -401,35 +442,20 @@ export function HikeMap({
     const source = map.getSource("result-paths") as GeoJSONSource;
     let controller: AbortController | undefined;
     let loadedBounds: Bounds | null = null;
-    let paths: RoutePath[] = [];
-    let drawnZoom = -1;
-    let drawnBounds: Bounds | null = null;
     const contains = (outer: Bounds, inner: Bounds) => inner[0] >= outer[0] && inner[1] >= outer[1]
       && inner[2] <= outer[2] && inner[3] <= outer[3];
-    const render = () => {
-      const bounds = map.getBounds(), zoom = Math.floor(map.getZoom());
-      const view: Bounds = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-      if (zoom === drawnZoom && drawnBounds && contains(drawnBounds, view)) return;
-      const x = (view[2] - view[0]) / 4, y = (view[3] - view[1]) / 4;
-      drawnBounds = [view[0] - x, view[1] - y, view[2] + x, view[3] + y];
-      drawnZoom = zoom;
-      source.setData(dashedPaths(paths, zoom, drawnBounds));
-    };
     source.setData(empty);
     setPathsError("");
     const load = () => {
       if (!pathsURL || map.getZoom() < PATHS_MIN_ZOOM) {
         controller?.abort();
         loadedBounds = null;
-        paths = [];
-        drawnBounds = null;
         source.setData(empty);
         setPathsError("");
         return;
       }
       const bounds = map.getBounds();
       const view: Bounds = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-      render();
       if (loadedBounds && contains(loadedBounds, view)) return;
       controller?.abort();
       const pending = new AbortController();
@@ -443,9 +469,13 @@ export function HikeMap({
       setPathsError("");
       void request<RoutePath[]>(url.toString(), pending.signal).then((loadedPaths) => {
         if (pending.signal.aborted) return;
-        paths = loadedPaths;
-        drawnBounds = null;
-        render();
+        source.setData({
+          type: "FeatureCollection",
+          features: loadedPaths.map(path => ({
+            type: "Feature", properties: { id: path.routeIds[0], routeIds: path.routeIds },
+            geometry: { type: "LineString", coordinates: path.geometry },
+          })),
+        });
       }).catch(() => {
         if (!pending.signal.aborted) {
           loadedBounds = null;
@@ -467,32 +497,15 @@ export function HikeMap({
     if (!map) return;
     clearSegmentHover.current();
     map.removeFeatureState({ source: "route" });
-    // Each physical segment is uploaded once, even for a returning stem.
-    const segments = new Map(activeRoute?.segments?.map(segment => [segment.id, segment]));
     (map.getSource("route") as GeoJSONSource).setData(
-      activeRoute
-        ? segments.size ? {
-            type: "FeatureCollection",
-            features: [...segments.values()].map((segment, index) => ({
-              type: "Feature",
-              // Vector tile encoding requires numeric IDs. Source replacement
-              // clears state, so collection indices are stable for this drawing.
-              id: index,
-              properties: { id: activeRoute.id, name: segment.name === undefined ? "Trail name unavailable" : segment.name || "Unnamed trail" },
-              geometry: { type: "LineString", coordinates: activeRoute.geometry.slice(segment.start, segment.end + 1).map(point => [point[0], point[1]]) },
-            })),
-          } : {
-            type: "Feature",
-            properties: { id: activeRoute.id },
-            geometry: { type: "LineString", coordinates: activeRoute.geometry.map(point => [point[0], point[1]]) },
-          }
-        : empty,
+      selectedRoute ? routeDrawing(selectedRoute) : empty,
     );
-  }, [map, activeRoute]);
+  }, [map, selectedRoute]);
 
   useEffect(() => {
     clearSegmentHover.current();
-  }, [focusedId, drawingBoundary]);
+    setStartLabel(null);
+  }, [selectedId, drawingBoundary]);
 
   useEffect(() => {
     if (!map) return;
@@ -510,103 +523,16 @@ export function HikeMap({
     });
   }, [map, profileCursor]);
 
-  const highlightStarts = () => {
-    const { selectedId } =
-      callbacks.current;
-    for (const start of starts.current.values()) {
-      start.marker.getElement().classList.toggle(
-        "selected",
-        start.routes.some(
-          (route) =>
-            route.id === selectedId,
-        ),
-      );
-    }
-  };
-  useEffect(() => {
-    highlightStarts();
-  }, [map, selectedId]);
   useEffect(() => {
     if (!map) return;
-    // World cells are stable across panning, and integer zooms avoid reclustering during animations.
-    const positions = new Map(routes.map((route) => [
-      route.id, MercatorCoordinate.fromLngLat([route.startPosition[0], route.startPosition[1]]),
-    ]));
-    let zoom = -1;
-    let clusters: ReturnType<typeof clusterLocations> = [];
-    const draw = () => {
-      const nextZoom = Math.floor(map.getZoom());
-      if (nextZoom !== zoom) {
-        zoom = nextZoom;
-        const scale = 512 * 2 ** zoom;
-        clusters = clusterLocations(routes, (route) => {
-          const point = positions.get(route.id)!;
-          return { x: point.x * scale, y: point.y * scale };
-        });
-      }
-      const bounds = map.getBounds();
-      const xMargin = (bounds.getEast() - bounds.getWest()) / 4;
-      const yMargin = (bounds.getNorth() - bounds.getSouth()) / 4;
-      const visible = new Set<string>();
-      for (const cluster of clusters) {
-        const [longitude, latitude] = cluster.position;
-        if (longitude < bounds.getWest() - xMargin || longitude > bounds.getEast() + xMargin ||
-            latitude < bounds.getSouth() - yMargin || latitude > bounds.getNorth() + yMargin) continue;
-        visible.add(cluster.key);
-        let entry = starts.current.get(cluster.key);
-        if (!entry) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "hike-marker";
-          entry = {
-            marker: new Marker({ element: button }),
-            routes: cluster.routes,
-          };
-          const current = entry;
-          for (const event of ["pointerenter", "focus"])
-            button.addEventListener(event, () => {
-              if (current.routes.length === 1) callbacks.current.onPreview(current.routes[0]!.id);
-            });
-          for (const event of ["pointerleave", "blur"])
-            button.addEventListener(event, () => callbacks.current.onPreview(null));
-          button.addEventListener("click", (event) => {
-            event.stopPropagation();
-            callbacks.current.onPreview(null);
-            if (current.routes.length === 1) {
-              callbacks.current.onSelect(current.routes[0]!.id);
-              return;
-            }
-            callbacks.current.onBrowse(current.routes.map((route) => route.id));
-          });
-          starts.current.set(cluster.key, entry);
-          entry.marker.setLngLat(cluster.position).addTo(map);
-        }
-        entry.routes = cluster.routes;
-        entry.marker.setLngLat(cluster.position);
-        const button = entry.marker.getElement();
-        const multiple = cluster.routes.length > 1;
-        // MapLibre owns the positioning and anchor classes on this element.
-        button.classList.toggle("hike-cluster", multiple);
-        button.textContent = multiple ? cluster.routes.length.toLocaleString() : "";
-        button.title = multiple ? `${cluster.routes.length} hikes: browse` : cluster.routes[0]!.startName || "Unnamed start";
-        button.setAttribute("aria-label", button.title);
-      }
-      for (const [key, entry] of starts.current) {
-        if (!visible.has(key)) {
-          entry.marker.remove();
-          starts.current.delete(key);
-        }
-      }
-      highlightStarts();
-    };
-    draw();
-    map.on("moveend", draw);
-    return () => {
-      map.off("moveend", draw);
-      for (const entry of starts.current.values()) entry.marker.remove();
-      starts.current.clear();
-    };
-  }, [map, routes]);
+    const id = previewId !== selectedId ? previewId : null;
+    map.setFilter("result-paths-preview", id
+      ? ["in", id, ["get", "routeIds"]] : ["==", ["get", "id"], ""]);
+    (map.getSource("preview-route") as GeoJSONSource).setData(
+      id && previewRoute?.id === id ? routeDrawing(previewRoute) : empty,
+    );
+  }, [map, selectedId, previewId, previewRoute]);
+
   useEffect(() => {
     if (!map) return;
     map.resize();
@@ -622,8 +548,11 @@ export function HikeMap({
     <section className="map-panel" aria-label="Hike map">
       <div className="map-canvas" ref={container} />
       <MapCoordinates map={map} />
-      {segmentLabel && segmentLabel.routeId === focusedId && !drawingBoundary && (
-        <div className="map-segment-label">{segmentLabel.name}</div>
+      <HikeMarkers map={map} routes={routes} selectedId={selectedId} previewId={previewId}
+        disabled={drawingBoundary} onSelect={onSelect} onPreview={onPreview} onBrowse={onBrowse}
+        onInspect={name => { clearSegmentHover.current(); setStartLabel(name); }} />
+      {!drawingBoundary && (startLabel || segmentLabel?.routeId === selectedId) && (
+        <div className="map-segment-label">{startLabel || segmentLabel?.name}</div>
       )}
       {drawingBoundary && <BoundaryDrawing map={map} onFinish={onFinishBoundary} onCancel={onCancelBoundary} />}
       {mapError && (

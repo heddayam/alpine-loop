@@ -51,8 +51,8 @@
   --line: #ccd1ce;
   --ink: #303835;
   --surface: #f1f3f2;
-  --selection: #f2eee8;
-  --active-route: #b95b2c;
+  --selection: #fbeef2;
+  --active-route: #d93664;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 * {
@@ -99,14 +99,7 @@ button:disabled {
   opacity: 0.45;
   cursor: default;
 }
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-summary:focus-visible {
-  outline: 2px solid #316ba3;
-  outline-offset: 1px;
-}
+:focus { outline: none; }
 a {
   color: #285d89;
 }
@@ -195,9 +188,6 @@ h4 {
 }
 .app-header nav button:hover {
   background: #355245;
-}
-.app-header nav button:focus-visible {
-  outline-color: #f4f3ed;
 }
 .header-count {
   margin-left: 5px;
@@ -778,7 +768,7 @@ label.area-row:hover {
   stroke-linejoin: round;
 }
 .profile-line {
-  stroke: #48564b;
+  stroke: var(--active-route);
   stroke-width: 1.5;
 }
 .profile-cursor {
@@ -923,60 +913,63 @@ label.area-row:hover {
   margin-top: 6px;
 }
 .hike-marker {
-  width: 28px;
-  height: 28px;
+  --marker-size: 10px;
+  --marker-fill: #fafbf8;
+  --marker-ring: var(--ink);
+  --marker-ring-width: 1.5px;
+  width: max(28px, var(--marker-size));
+  height: max(28px, var(--marker-size));
   padding: 0;
+  display: grid;
+  place-items: center;
   background: transparent;
   border: 0;
   border-radius: 50%;
+  color: var(--ink);
 }
-.hike-marker:not(.hike-cluster):hover { background: transparent; }
-.hike-marker:not(.hike-cluster)::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+.hike-marker:hover { background: transparent; }
+.hike-marker-symbol {
+  position: relative;
   box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: var(--marker-size);
+  height: var(--marker-size);
+  border: var(--marker-ring-width) solid var(--marker-ring);
   border-radius: 50%;
-  width: 12px;
-  height: 12px;
-  background: #fff;
-  border: 2px solid var(--ink);
-}
-.hike-marker.selected:not(.hike-cluster)::before {
-  background: var(--ink);
-  border-color: #fff;
-}
-.hike-cluster {
-  width: max-content;
-  min-width: 28px;
-  height: auto;
-  min-height: 28px;
-  aspect-ratio: 1;
-  padding: 0 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
+  background: var(--marker-fill);
+  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  background: #fff;
-  border: 2px solid var(--ink);
 }
-.hike-cluster.selected,
-.hike-cluster:focus-visible {
-  background: var(--ink);
-  color: #fff;
+.hike-marker--start[data-state="selected"] {
+  --marker-size: 14px;
+  --marker-fill: var(--active-route);
+  --marker-ring: #fff;
+  --marker-ring-width: 2px;
+  z-index: 2;
 }
-.hike-marker:focus-visible { outline: none; }
-.profile-map-marker {
-  width: 13px;
-  height: 13px;
-  border: 3px solid var(--ink);
+.hike-marker--start[data-state="selected"] .hike-marker-symbol::after {
+  content: "";
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
   background: #fff;
+}
+.hike-marker:is(:hover, :focus-visible),
+.hike-marker[data-state="preview"] { --marker-ring: var(--active-route); }
+.hike-marker--group:is(:hover, :focus-visible) { color: var(--active-route); }
+.hike-marker:focus-visible {
+  outline: 2px solid var(--active-route);
+  outline-offset: 2px;
+}
+.profile-map-marker {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--active-route);
   pointer-events: none;
 }
 .unit-settings { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 18px; padding: 0; border: 0; }
@@ -1335,6 +1328,8 @@ dialog::backdrop {
 .grade-column .field-unit { margin-left: 1px; }
 .grade-direction { font-size: 12px; }
 .grade-grid input { width: 100%; }
+.grade-grid .stepped-number { width: 100%; min-width: 0; }
+.grade-grid .stepped-number input { padding-left: 5px; text-align: left; }
 .grade-definition { margin-top: 9px; color: var(--muted); font-size: 11px; text-align: right; }
 .grade-guide { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 4px; }
 .grade-guide > span { white-space: nowrap; }
