@@ -793,6 +793,7 @@ export function App() {
               }
             >
               <HikeMap
+                units={units}
                 sections={mapDataset.sections}
                 selectedSections={
                   drawingBoundary ? mapDataset.sections.map(section => section.id) : showSearchArea
