@@ -1300,7 +1300,7 @@ dialog::backdrop {
 }
 .grade-grid {
   display: grid;
-  grid-template-columns: 59px 65px 98px 111px;
+  grid-template-columns: 59px 85px 91px 98px;
   gap: 7px;
   align-items: center;
 }
