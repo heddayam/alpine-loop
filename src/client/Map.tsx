@@ -19,6 +19,7 @@ import { request } from "./request.js";
 import { mergedRegionBoundary } from "./region-outline.js";
 import { boundaryGeometry } from "../boundary.js";
 import { BoundaryDrawing } from "./BoundaryDrawing.js";
+import { MapCoordinates } from "./MapCoordinates.js";
 import { dashedPaths } from "./path-dashes.js";
 
 setWorkerUrl(workerUrl);
@@ -590,6 +591,7 @@ export function HikeMap({
   return (
     <section className="map-panel" aria-label="Hike map">
       <div className="map-canvas" ref={container} />
+      <MapCoordinates map={map} />
       {segmentLabel && segmentLabel.routeId === focusedId && !drawingBoundary && (
         <div className="map-segment-label">{segmentLabel.name}</div>
       )}
