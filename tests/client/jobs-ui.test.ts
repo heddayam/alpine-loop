@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { JobSnapshot, RouteLocation } from "../../src/model.js";
-import { JobsDialog, savedResultsURL } from "../../src/client/JobsDialog.js";
+import { JobsDialog, jobAreaSummary, jobTitle, savedResultsURL } from "../../src/client/JobsDialog.js";
 import {
   startPoints,
   locationsInView,
@@ -86,15 +86,18 @@ describe("saved-job interface boundaries", () => {
     for (const status of ["queued", "running"] as const) {
       expect(renderJob(status)).toContain(">Cancel</button>");
       expect(renderJob(status)).not.toContain("View results");
-      expect(renderJob(status)).not.toContain(">Delete</button>");
+      expect(renderJob(status)).not.toContain('aria-label="Delete"');
     }
     for (const status of ["failed", "cancelled", "interrupted"] as const) {
       expect(renderJob(status)).toContain("Unfinished results were discarded.");
-      expect(renderJob(status)).toContain(">Delete</button>");
+      expect(renderJob(status)).toContain('aria-label="Delete"');
       expect(renderJob(status)).not.toContain("View results");
     }
     expect(renderJob("completed")).toContain("View results");
-    expect(renderJob("completed")).toContain("0 hikes");
+    expect(renderJob("completed")).toContain('<td class="job-number">0</td>');
+    const multipleRegions = { ...job("completed"), query: { ...job("completed").query, sections: ["one", "two"] } };
+    expect(jobTitle(multipleRegions, id => id === "one" ? "Olympics" : "Cascades")).toContain("Olympics, Cascades;");
+    expect(jobTitle(multipleRegions, id => id)).not.toContain("[object Object]");
     expect(renderJob("completed")).not.toContain("Search deeper");
     expect(renderJob("completed")).not.toContain("Standard search");
     expect(renderJob("completed")).toContain(
@@ -114,6 +117,18 @@ describe("saved-job interface boundaries", () => {
     expect(renderJob("running")).toContain(
       'aria-label="Within-region search progress"',
     );
+  });
+  it("summarizes prepared state and mountain groups without guessing unknown sections", () => {
+    const sections = [
+      { id: "north", name: "North Cascades", state: "WA", regionId: "cascades", regionName: "Cascades" },
+      { id: "south", name: "South Cascades", state: "WA", regionId: "cascades", regionName: "Cascades" },
+      { id: "ca", name: "California Cascades", state: "CA", regionId: "cascades", regionName: "Cascades" },
+    ];
+    const selected = { ...job("completed"), query: { ...job("completed").query, sections: ["north", "south"] } };
+    expect(jobAreaSummary(selected, sections)).toBe("WA Cascades");
+    expect(jobAreaSummary({ ...selected, query: { ...selected.query, sections: ["north", "ca", "old"] }, regions: [{ id: "old", name: "Old region" }] }, sections)).toBe("WA Cascades, CA Cascades, Old region");
+    expect(jobAreaSummary({ ...selected, regions: sections })).toBe("WA Cascades");
+    expect(jobAreaSummary({ ...selected, regions: sections }, sections.map(section => ({ ...section, regionName: "Renamed" })))).toBe("WA Cascades");
   });
   it("keeps saved result reads pinned to their selected publication", () => {
     const old = { id: "saved/job", resultsRevision: 0 };

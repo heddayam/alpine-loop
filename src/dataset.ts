@@ -74,7 +74,8 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     for (const pinned of inputs.sections) {
       const entry = current.sections?.find(section => section.id === pinned.id);
       const facts = entry && { id: entry.id, name: entry.name, bounds: entry.bounds, boundary: entry.boundary, files: entry.files };
-      if (!isDeepStrictEqual(facts, pinned)) throw new Error(`Prepared region changed during this job: ${pinned.name}`);
+      const { state, regionId, regionName, ...pinnedData } = pinned;
+      if (!isDeepStrictEqual(facts, pinnedData)) throw new Error(`Prepared region changed during this job: ${pinned.name}`);
       if (!await sections.installed(pinned.id)) throw new Error(`Prepared region was removed during this job: ${pinned.name}`);
     }
   }

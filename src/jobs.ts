@@ -127,7 +127,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
   // Inputs are separate from frequently polled compact status/history metadata.
   for (const job of rows()) if (job.inputs) {
     saveInputs.run(job.id, JSON.stringify(job.inputs));
-    job.regions = job.inputs.sections.map(({ id, name }) => ({ id, name }));
+    job.regions = job.inputs.sections.map(({ id, name, state, regionId, regionName }) => ({ id, name, state, regionId, regionName }));
     delete job.inputs; save(job);
   }
   for (const job of rows()) if (job.status === 'running') {
@@ -178,7 +178,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
         current.progress = event.progress;
         if (event.inputs) {
           saveInputs.run(job.id, JSON.stringify(event.inputs));
-          current.regions = event.inputs.sections.map(({ id, name }) => ({ id, name }));
+          current.regions = event.inputs.sections.map(({ id, name, state, regionId, regionName }) => ({ id, name, state, regionId, regionName }));
         }
         currentProgress = current;
         if (event.inputs || Date.now() - persistedAt >= 1000) {

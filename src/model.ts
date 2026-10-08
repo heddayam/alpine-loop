@@ -105,13 +105,17 @@ export type JobProgress = {
   totalSearchPoints?: number;
   completedSearchPoints?: number;
 };
+export type JobRegion = {
+  id: string; name: string;
+  state?: string; regionId?: string; regionName?: string;
+};
 export type JobInputs = {
   version: string;
-  sections: {
-    id: string; name: string; bounds: Bounds;
+  sections: (JobRegion & {
+    bounds: Bounds;
     boundary: { type: 'MultiPolygon'; coordinates: number[][][][] };
     files: Record<'graph' | 'starts' | 'geometry', { path: string; sha256: string; bytes: number; jsonBytes: number }>;
-  }[];
+  })[];
 };
 /** Status/history contains metadata only. Results are readable only after durable completion. */
 export type JobSnapshot = {
@@ -126,7 +130,7 @@ export type JobSnapshot = {
   queuePosition?: number;
   progress: JobProgress;
   reason?: string;
-  regions?: { id: string; name: string }[];
+  regions?: JobRegion[];
   inputs?: JobInputs;
   storageBytes: number;
   groupCount?: number;

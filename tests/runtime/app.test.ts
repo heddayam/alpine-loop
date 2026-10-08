@@ -62,6 +62,9 @@ describe('completed jobs through the actual app and worker', () => {
     await rm(directory, { recursive: true, force: true });
     app = await openApp(directory, jobDirectory);
     expect((await app.inject(`/api/jobs/${job.id}`)).json().query.grades).toEqual(grades);
+    expect((await app.inject(`/api/jobs/${job.id}`)).json().regions).toMatchObject([
+      { state: "WA", regionId: "offline", regionName: "Test mountains" },
+    ]);
     expect((await app.inject(url)).json()).toEqual(route);
   });
 

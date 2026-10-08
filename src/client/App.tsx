@@ -1002,6 +1002,7 @@ export function App() {
           open={jobsOpen}
           jobs={jobHistory.history}
           regionName={regionName}
+          catalogSections={dataset?.sections}
           highlightedId={highlightedJob}
           error={jobActionError || jobHistory.error}
           pending={pendingJob}
