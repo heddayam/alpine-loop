@@ -168,8 +168,9 @@ h4 {
   min-height: 36px;
   flex-shrink: 0;
   padding: 4px 9px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  border-bottom: 1px solid #1e3029;
+  background: #263d33;
+  color: #f4f3ed;
 }
 .app-header h1 {
   font-size: 14px;
@@ -189,11 +190,19 @@ h4 {
   font-size: 12px;
   padding: 3px 8px;
   white-space: nowrap;
+  border-color: #718579;
+  background: transparent;
+}
+.app-header nav button:hover {
+  background: #355245;
+}
+.app-header nav button:focus-visible {
+  outline-color: #f4f3ed;
 }
 .header-count {
   margin-left: 5px;
   padding-left: 6px;
-  border-left: 1px solid #aaa;
+  border-left: 1px solid #718579;
   font-size: 11px;
 }
 .query-bar {
