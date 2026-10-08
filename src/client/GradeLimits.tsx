@@ -66,12 +66,14 @@ export function GradeLimitsControl({ value, units, disabled, onChange }: {
             const label = direction === "uphill" ? "Uphill" : "Downhill";
             return <div className="grade-row" key={direction}>
               <span className="grade-direction">{label}</span>
-              {(["above", "total", "longest"] as const).map(key => <input
-                key={key} type="number" min="0" step="any"
-                aria-label={`${label} ${key === "above" ? "grade threshold (%)" : `${key === "total" ? "total allowed" : "longest stretch"} (${unit})`}`}
-                value={value[direction][key]} required={value.enabled}
-                onChange={event => onChange({ ...value, [direction]: { ...value[direction], [key]: event.target.value } })}
-              />)}
+              {(["above", "total", "longest"] as const).map(key => <span key={key} className={key === "above" ? "grade-threshold" : undefined}>
+                {key === "above" && <span className="input-bound" aria-hidden="true">Max</span>}
+                <input type="number" min="0" step="any"
+                  aria-label={`${label} ${key === "above" ? "grade threshold (%)" : `${key === "total" ? "total allowed" : "longest stretch"} (${unit})`}`}
+                  value={value[direction][key]} required={value.enabled}
+                  onChange={event => onChange({ ...value, [direction]: { ...value[direction], [key]: event.target.value } })}
+                />
+              </span>)}
             </div>;
           })}
         </div>
