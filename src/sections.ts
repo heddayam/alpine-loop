@@ -78,6 +78,13 @@ function catalogFrom(value: unknown): SectionCatalog {
         || typeof facts.sha256 !== 'string' || !digest.test(facts.sha256)) {
         throw new Error(`Invalid prepared section file: ${section.id}/${family}`);
       }
+      if (facts.url !== undefined) {
+        if (typeof facts.url !== 'string') throw new Error('Section downloads need an absolute HTTP(S) URL');
+        const url = new URL(facts.url);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) {
+          throw new Error('Section downloads need an absolute HTTP(S) URL');
+        }
+      }
     }
   }
   return value as unknown as SectionCatalog;
@@ -183,11 +190,11 @@ async function verifyDecodedSize(file: string, facts: DataFile, signal: AbortSig
   if (bytes !== facts.jsonBytes) throw new Error(`Prepared section file decoded size mismatch: ${facts.path}`);
 }
 
-async function download(file: string, facts: DataFile, baseUrl: string, signal: AbortSignal, advance: (bytes: number) => void) {
+async function download(file: string, facts: DataFile, baseUrl: string | undefined, signal: AbortSignal, advance: (bytes: number) => void) {
   const temporary = `${file}.download-${randomUUID()}`;
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
   try {
-    const response = await fetch(new URL(facts.path, baseUrl), { signal: requestSignal });
+    const response = await fetch(facts.url ?? new URL(facts.path, baseUrl), { signal: requestSignal });
     if (!response.ok || !response.body) throw new Error(`Section download failed: HTTP ${response.status} for ${facts.path}`);
     let bytes = 0;
     const sha = createHash('sha256');
@@ -255,7 +262,7 @@ export async function openSections(directory: string, budget?: WorkBudget) {
         advance(facts.bytes);
       } else if (await isVerified(staged, facts, signal)) advance(facts.bytes);
       else {
-        if (!catalog.baseUrl) throw new Error(`No download source is published for ${section.name}`);
+        if (!facts.url && !catalog.baseUrl) throw new Error(`No download source is published for ${section.name}`);
         await download(staged, facts, catalog.baseUrl, signal, advance);
       }
     }

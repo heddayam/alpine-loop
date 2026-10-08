@@ -52,6 +52,30 @@ async function settled(sections: Awaited<ReturnType<typeof openSections>>) {
 }
 
 describe('independent section installation', () => {
+  it('downloads flat release assets into unchanged section paths and rejects unsafe URLs', async () => {
+    const { directory, catalog, bodies, files, serve, save } = await fixture();
+    const calls: string[] = [];
+    await serve((path, response) => {
+      calls.push(path);
+      const family = families.find(family => path === `one.${family}.gz`);
+      response.writeHead(family ? 200 : 404);
+      response.end(family ? bodies.get(files[family].path) : 'Wrong asset path');
+    });
+    for (const family of families) files[family].url = `${catalog.baseUrl}one.${family}.gz`;
+    delete catalog.baseUrl;
+    await save();
+    const sections = await openSections(directory);
+    sections.downloads.start(['one']);
+    expect((await settled(sections)).status).toBe('complete');
+    expect(calls).toEqual(['one.graph.gz', 'one.starts.gz', 'one.geometry.gz']);
+    for (const family of families) expect(await readFile(join(directory, files[family].path))).toEqual(bodies.get(files[family].path));
+    for (const url of ['file:///tmp/source.gz', 'https://user:password@fixture.invalid/source.gz', 'https://fixture.invalid/source.gz#fragment', '/relative.gz']) {
+      files.graph.url = url;
+      await save();
+      await expect(openSections(directory)).rejects.toThrow();
+    }
+  });
+
   it('streams progress, cancels a partial file, and resumes verified files without exposing a partial section', async () => {
     const { directory, bodies, files, serve } = await fixture();
     let interrupted = true;

@@ -607,6 +607,14 @@
     "coverage": "Santa Cruz Mountains includes Montara and Big Basin; Diablo Range includes Mount Diablo and Tilden; Sonoma–Marin includes Mount Tamalpais. Exact GMBA boundaries remain authoritative and exclude San Bruno Mountain. Full named ranges extend beyond the immediate Bay Area.",
     "partitionPolicy": "All four additions are below 700,000 candidate source segments and remain whole, with no highway dividers.",
     "validation": "benchmarks/olympics-bay-preparation.json",
-    "hosting": "Local only; no public release or publication configuration change."
+    "hosting": "Prepared data is now published through the pinned GitHub release. Application hosting remains local."
+  },
+  "localContainerDelivery": {
+    "date": "2026-10-07",
+    "approved": "Keep local startup simple with one app container, automatic prepared-data acquisition and persistent jobs. Use GitHub Releases for prepared data; hikers never run preparation or configure catalogs.",
+    "architecture": "A two-stage Node 24 image runs the compiled app as a non-root user. Compose retains data and jobs in one named volume, publishes loopback HTTP, forwards signals and checks readiness. Native npm start shares the catalog bootstrap. Preparation remains the existing separate maintainer workflow.",
+    "release": "https://github.com/heddayam/alpine-loop/releases/tag/data-v2-2026-10-07-01a60e85",
+    "dataPolicy": "Pin the catalog URL and SHA-256. Publish complete verified sections as flat assets with explicit download URLs, preserving local paths, IDs and bytes. Retain attribution and optional provenance/audit evidence; exclude personal jobs and raw caches. Failed catalog updates retain the prior catalog and saved-job access.",
+    "verification": "docs/containerization.md"
   }
 }

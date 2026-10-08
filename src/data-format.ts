@@ -1,7 +1,7 @@
 import type { Bounds, DatasetInfo, Position, RouteSummary, TrailGraph, TrailGeometry, TrailStart } from './model.js';
 
 export type Boundary = { type: 'MultiPolygon'; coordinates: number[][][][] };
-export type DataFile = { path: string; bytes: number; jsonBytes: number; sha256: string };
+export type DataFile = { path: string; url?: string; bytes: number; jsonBytes: number; sha256: string };
 /** Complete, independently compiled mountain sections. IDs never join across sections. */
 export type PreparedSection = {
   id: string; regionId: string; name: string; bounds: Bounds; boundary: Boundary;
