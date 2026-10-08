@@ -41,6 +41,55 @@ async function finished(app: App, initial: JobSnapshot, timeout = 5000) {
 const submit = (app: App, payload = query) => app.inject({ method: 'POST', url: '/api/jobs', payload });
 
 describe('completed jobs through the actual app and worker', () => {
+  it('chooses a qualifying reverse direction before preference and retains grade criteria after restart', async () => {
+    const { directory, jobDirectory, firstLoop } = await fixture({ directional: true });
+    let app = await openApp(directory, jobDirectory);
+    const baseline = await finished(app, (await submit(app)).json());
+    const originalId = (await app.inject(`/api/jobs/${baseline.id}/results`)).json().routes[0].id;
+    expect((await app.inject(`/api/jobs/${baseline.id}/routes/${originalId}`)).json().geometry).toEqual(firstLoop);
+    const grades = { uphill: { above: 100, total: 0, longest: 0 }, downhill: { above: 17, total: 0, longest: 0 } };
+    const job = await finished(app, (await submit(app, { ...query, grades })).json());
+    expect(job).toMatchObject({ status: 'completed', groupCount: 1, query: { grades } });
+    const id = (await app.inject(`/api/jobs/${job.id}/results`)).json().routes[0].id;
+    const url = `/api/jobs/${job.id}/routes/${id}`;
+    const route = (await app.inject(url)).json() as RouteView;
+    expect(route.geometry).toEqual([...firstLoop].reverse());
+    expect(route.uncertain).toBe(true);
+    const strict = { uphill: { above: 1, total: 0, longest: 0 }, downhill: { above: 1, total: 0, longest: 0 } };
+    expect(await finished(app, (await submit(app, { ...query, grades: strict })).json()))
+      .toMatchObject({ status: 'completed', groupCount: 0 });
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+    app = await openApp(directory, jobDirectory);
+    expect((await app.inject(`/api/jobs/${job.id}`)).json().query.grades).toEqual(grades);
+    expect((await app.inject(url)).json()).toEqual(route);
+  });
+
+  it('uses interior elevations rather than edge averages and never accepts missing elevation as flat', async () => {
+    const { directory, jobDirectory, catalog } = await fixture();
+    const file = catalog.sections[0]!.files.geometry;
+    const shapes = gunzipSync(await readFile(join(directory, file.path))).toString().trim().split('\n').map(line => JSON.parse(line));
+    const [a, b] = shapes[0] as [number[], number[]];
+    shapes[0].splice(1, 0, [(a[0]! + b[0]!) / 2, (a[1]! + b[1]!) / 2, 300]);
+    const save = async () => {
+      const raw = Buffer.from(shapes.map(shape => JSON.stringify(shape) + '\n').join(''));
+      const compressed = gzipSync(raw);
+      Object.assign(file, { bytes: compressed.length, jsonBytes: raw.length, sha256: createHash('sha256').update(compressed).digest('hex') });
+      await writeFile(join(directory, file.path), compressed);
+      await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
+    };
+    await save();
+    let app = await openApp(directory, jobDirectory);
+    const grades = { uphill: { above: 50, total: 0, longest: 0 }, downhill: { above: 50, total: 0, longest: 0 } };
+    expect(await finished(app, (await submit(app, { ...query, grades })).json())).toMatchObject({ status: 'completed', groupCount: 0 });
+    expect(await finished(app, (await submit(app)).json())).toMatchObject({ status: 'completed', groupCount: 1 });
+    await app.close();
+    shapes[0][1].pop();
+    await save();
+    app = await openApp(directory, jobDirectory);
+    expect(await finished(app, (await submit(app, { ...query, grades })).json())).toMatchObject({ status: 'completed', groupCount: 0 });
+  });
+
   it('searches starts inside a drawn boundary across every overlapping section, allows routes outside, and retains the area after restart', async () => {
     const { directory, jobDirectory } = await fixture({ sectionCount: 2, startCount: 3, startNodes: [0, 1, 2] });
     const boundary: [number, number][] = [[-122.0006, 47.0499], [-121.9904, 47.0499], [-121.9904, 47.0501], [-122.0006, 47.0501]];

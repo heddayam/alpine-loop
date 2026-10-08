@@ -3,12 +3,14 @@ import { canonical, compareMetrics, preference, walkKey, type RouteMetrics } fro
 import type { RouteCandidate, SearchEvent, SearchProgress, SearchQuery, TrailGraph } from '../model.js';
 import { DEFAULT_ROAD_LIMITS } from '../model.js';
 import type { WorkBudget } from '../work-budget.js';
+import { validGradeLimits } from '../grade.js';
 
-type Options = { signal?: AbortSignal; maxExpansions?: number; maxResults?: number; sliceExpansions?: number; budget?: WorkBudget };
+type Options = { signal?: AbortSignal; maxExpansions?: number; maxResults?: number; sliceExpansions?: number; budget?: WorkBudget; gradeCheck?: (route: RouteCandidate) => boolean };
 type Physical = { trail: number; from: number; to: number; directions: number[]; distance: number; gain: number; road: number; trailDistanceUpper: number };
-type Index = { physical: Physical[]; physicalForEdge: Int32Array; incident: number[][]; reverse: Int32Array; starts: number[][]; eligible: number[]; stemRatio: number; zeroRepetitionPossible: boolean; rounding: number; roadBounds: Map<number, Map<number, number>>; roadShortest: Map<number, Map<number, number>>; roadCertificates: Map<string, boolean> };
+type Index = { physical: Physical[]; physicalForEdge: Int32Array; incident: number[][]; reverse: Int32Array; starts: number[][]; eligible: number[]; stemRatio: number; zeroRepetitionPossible: boolean; rounding: number; roadBounds: Map<number, Map<number, number>>; roadShortest: Map<number, Map<number, number>>; roadCertificates: Map<string, boolean>; gradeCheck?: Options['gradeCheck'] };
 
 export function validateQuery(query: SearchQuery): void {
+  if (query.grades !== undefined && !validGradeLimits(query.grades)) throw new Error('Invalid grade limits');
   for (const range of [query.distance, query.gain]) {
     if (range.length !== 2 || range.some(value => !Number.isFinite(value) || value < 0) || range[0] > range[1]) {
       throw new Error('Search distance and elevation gain need ordered, finite, nonnegative ranges');
@@ -281,7 +283,8 @@ function* roadDominated(graph: TrailGraph, index: Index, query: SearchQuery, rou
         }
         if (back.length !== earlier || consumed !== itinerary.length) continue;
         const alternative = candidate(graph, criteria, route.start, [...path, id, ...back], back);
-        if (alternative && alternative.roadDistance < route.roadDistance && (!alternative.uncertain || route.uncertain)) return alternative;
+        if (alternative && alternative.roadDistance < route.roadDistance && (!alternative.uncertain || route.uncertain)
+          && (!index.gradeCheck || index.gradeCheck(alternative))) return alternative;
       } else {
         // A future first-use trail cannot be reached by returning to a node
         // already in the prefix. Leave its endpoints available until that
@@ -657,6 +660,7 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
     emitted.add(route.id);
     const previous = best.get(key);
     if (previous && compareMetrics(route, previous) > 0) return;
+    if (index.gradeCheck && !index.gradeCheck(route)) return;
     const proof = roadDominated(graph, index, query, route);
     let result = proof.next(), work = 0;
     while (!result.done && work++ < proofBudget) { yield undefined; result = proof.next(); }
@@ -709,6 +713,7 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
  * All emitted walks pass strict ordered metrics and a road-minimum proof. */
 export async function* search(graph: TrailGraph, query: SearchQuery, options: Options = {}): AsyncGenerator<SearchEvent> {
   validateQuery(query);
+  if (query.grades && !options.gradeCheck) throw new Error('Grade-constrained search requires elevation geometry');
   query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], roads: { ...(query.roads ?? DEFAULT_ROAD_LIMITS) } };
   const plan = DISCOVERY[query.effort ?? 'normal'];
   if (!plan) throw new Error('Unknown discovery effort');
@@ -721,6 +726,7 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   await new Promise<void>(resolve => setTimeout(resolve, 0));
   if (options.signal?.aborted) { yield { type: 'done', status: 'stopped', progress: snapshot(), reason: 'Search stopped' }; return; }
   const index = indexGraph(graph, query), groups = components(index), seen = new Set<string>();
+  if (query.grades) index.gradeCheck = options.gradeCheck;
   const workspace = createForest(graph.nodes.length, index.physical.length);
   await options.budget?.checkpoint();
   progress.totalStarts = progress.attemptedStarts = index.eligible.length;

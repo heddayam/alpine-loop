@@ -1,4 +1,13 @@
-import type { Position } from "./model.js";
+import type { GradeLimits, Position } from "./model.js";
+
+export function validGradeLimits(value: unknown): value is GradeLimits {
+  if (!value || typeof value !== "object") return false;
+  return (["uphill", "downhill"] as const).every(direction => {
+    const limit = (value as GradeLimits)[direction];
+    return limit && (["above", "total", "longest"] as const).every(key =>
+      typeof limit[key] === "number" && Number.isFinite(limit[key]) && limit[key] >= 0);
+  });
+}
 
 export type ProfileSample = { distance: number; position: Position };
 

@@ -9,6 +9,7 @@ type Options = {
   onProgress?: (progress: SearchProgress) => void | Promise<void>;
   onRoute?: (route: SolvedRoute) => void | Promise<void>;
   budget?: WorkBudget;
+  gradeCheck?: (route: RouteCandidate) => boolean;
 };
 export const MIN_LOOP_SIMILARITY = 0.6;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
@@ -26,7 +27,7 @@ export async function solveSection(graph: TrailGraph, query: SearchQuery, option
   query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], roads: query.roads && { ...query.roads } };
   const circuits = new Map<string, { core: number[]; route: RouteCandidate }>();
   let progress: SearchProgress | undefined;
-  for await (const event of search(graph, query, { budget: options.budget })) {
+  for await (const event of search(graph, query, { budget: options.budget, gradeCheck: options.gradeCheck })) {
     if (event.type !== 'route') {
       progress = event.progress;
       await options.onProgress?.(progress);
