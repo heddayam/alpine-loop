@@ -1,15 +1,28 @@
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
+import { dependencyFingerprint, stampInstall } from './stamp-install.mjs';
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const local = join(root, '.local-data');
-const exists = file => readFile(file).then(() => true, error => {
+const exists = file => stat(file).then(info => info.isFile(), error => {
   if (error.code === 'ENOENT') return false;
   throw error;
 });
+
+/** npm's postinstall records manual installs too; still repair stale or incomplete installs. */
+export async function ensureDependencies(directory, install) {
+  const fingerprint = await dependencyFingerprint(directory);
+  const installed = await readFile(join(directory, 'node_modules', '.alpine-lock'), 'utf8').catch(error => {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  });
+  if (installed === fingerprint && await exists(join(directory, 'node_modules', 'vite', 'bin', 'vite.js'))) return;
+  await install();
+  await stampInstall(directory);
+}
 
 async function npm(args) {
   if (!process.env.npm_execpath) throw new Error('Launch Alpine Loop with npm start.');
@@ -31,7 +44,7 @@ async function files(directory) {
 export async function ensureBuild(directory, build) {
   const hash = createHash('sha256');
   const inputs = [...await files(join(directory, 'src')), ...['index.html', 'package.json', 'package-lock.json',
-    'tsconfig.json', 'tsconfig.server.json', 'vite.config.ts', 'scripts/start.mjs'].map(file => join(directory, file))].sort();
+    'tsconfig.json', 'tsconfig.server.json', 'vite.config.ts', 'scripts/start.mjs', 'scripts/stamp-install.mjs'].map(file => join(directory, file))].sort();
   for (const file of inputs) hash.update(file.slice(directory.length)).update('\0').update(await readFile(file)).update('\0');
   const fingerprint = hash.digest('hex'), stamp = join(directory, '.local-data', 'build.json');
   const cached = await readFile(stamp, 'utf8').then(JSON.parse).catch(error => {
@@ -51,16 +64,7 @@ export async function start() {
   try {
     if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Alpine Loop needs Node.js 24 or newer.');
     await mkdir(local, { recursive: true });
-    const lockHash = createHash('sha256').update(await readFile(join(root, 'package-lock.json'))).digest('hex');
-    const stamp = join(root, 'node_modules', '.alpine-lock');
-    const installedHash = await readFile(stamp, 'utf8').catch(error => {
-      if (error.code === 'ENOENT') return '';
-      throw error;
-    });
-    if (installedHash !== lockHash || !await exists(join(root, 'node_modules', 'vite', 'bin', 'vite.js'))) {
-      await npm(['ci']);
-      await writeFile(stamp, lockHash);
-    }
+    await ensureDependencies(root, () => npm(['ci']));
     await ensureBuild(root, () => npm(['run', 'build']));
     const server = spawn(process.execPath, ['scripts/run.mjs'], { cwd: root, stdio: 'inherit' });
     server.once('error', error => { console.error(error.message); process.exitCode = 1; });
