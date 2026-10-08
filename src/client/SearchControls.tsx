@@ -1,6 +1,7 @@
 import { useRef, type FormEvent } from "react";
 import type { CatalogView } from "../data-format.js";
-import { DEFAULT_ROAD_LIMITS, type SearchBoundary, type SearchQuery } from "../model.js";
+import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type SearchQuery } from "../model.js";
+import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
 import { RegionPicker } from "./RegionPicker.js";
 import { stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
@@ -12,9 +13,11 @@ type Measurement =
   | "gainMin"
   | "gainMax"
   | "stem"
-  | "roadDistance";
+  | "roadDistance"
+  | "uphillTotal" | "uphillLongest" | "downhillTotal" | "downhillLongest";
 const measurementKeys: Measurement[] = [
   "distanceMin", "distanceMax", "gainMin", "gainMax", "stem", "roadDistance",
+  "uphillTotal", "uphillLongest", "downhillTotal", "downhillLongest",
 ];
 const displayValue = (meters: number, divisor: number, gain: boolean) =>
   String(Number((meters / divisor).toFixed(gain ? 1 : 3)));
@@ -27,6 +30,7 @@ export type SearchDraft = {
   stem: string;
   stemPercent: string;
   roadDistance: string;
+  grades?: GradeDraft;
   /** Preserve exact limits when unit conversion rounds their displayed text. */
   exact?: {
     units: UnitSystem;
@@ -41,6 +45,10 @@ const fields = (draft: SearchDraft): Record<Measurement, string> => ({
   gainMax: draft.gain[1],
   stem: draft.stem,
   roadDistance: draft.roadDistance,
+  uphillTotal: draft.grades?.uphill.total ?? "",
+  uphillLongest: draft.grades?.uphill.longest ?? "",
+  downhillTotal: draft.grades?.downhill.total ?? "",
+  downhillLongest: draft.grades?.downhill.longest ?? "",
 });
 const measurement = (draft: SearchDraft, key: Measurement, units: UnitSystem) => {
   const text = fields(draft)[key];
@@ -72,12 +80,22 @@ function withMeasurements(
     gain: [text.gainMin, text.gainMax],
     stem: text.stem,
     roadDistance: text.roadDistance,
+    ...(draft.grades ? { grades: {
+      ...draft.grades,
+      uphill: { ...draft.grades.uphill, total: text.uphillTotal, longest: text.uphillLongest },
+      downhill: { ...draft.grades.downhill, total: text.downhillTotal, longest: text.downhillLongest },
+    } } : {}),
     exact,
   };
 }
 
 export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"): SearchDraft {
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
+  const savedGrades = query.grades;
+  const grades = savedGrades ?? {
+    uphill: { above: 15, total: 0.5 * MILE, longest: 0.2 * MILE },
+    downhill: { above: 15, total: 0.25 * MILE, longest: 0.1 * MILE },
+  };
   return withMeasurements({
     sections: [...query.sections],
     ...(query.boundary ? { boundary: query.boundary.map(point => [...point]) } : {}),
@@ -86,6 +104,11 @@ export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"
     stem: "",
     stemPercent: String((query.repetition ?? 1) * 100),
     roadDistance: "",
+    grades: {
+      enabled: !!savedGrades,
+      uphill: { above: String(grades.uphill.above), total: "", longest: "" },
+      downhill: { above: String(grades.downhill.above), total: "", longest: "" },
+    },
   }, {
     distanceMin: query.distance[0],
     distanceMax: query.distance[1],
@@ -93,6 +116,10 @@ export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"
     gainMax: query.gain[1],
     stem: stemLimit(query),
     roadDistance: roads.distance,
+    uphillTotal: grades.uphill.total,
+    uphillLongest: grades.uphill.longest,
+    downhillTotal: grades.downhill.total,
+    downhillLongest: grades.downhill.longest,
   }, units);
 }
 
@@ -143,7 +170,19 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
       "Use a positive maximum distance and ordered, nonnegative distance and elevation gain ranges. Stem and road distance must be zero or greater; stem percentage must be between 0 and 100.",
     );
   }
+  let grades: GradeLimits | undefined;
+  if (draft.grades?.enabled) {
+    const entries = [draft.grades.uphill, draft.grades.downhill];
+    if (entries.some(entry => Object.values(entry).some(value =>
+      !value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0,
+    ))) throw new Error("Grade thresholds and allowed distances must be zero or greater.");
+    grades = {
+      uphill: { above: Number(draft.grades.uphill.above), total: measurement(draft, "uphillTotal", units), longest: measurement(draft, "uphillLongest", units) },
+      downhill: { above: Number(draft.grades.downhill.above), total: measurement(draft, "downhillTotal", units), longest: measurement(draft, "downhillLongest", units) },
+    };
+  }
   return {
+    ...(grades ? { grades } : {}),
     sections: [...draft.sections],
     ...(draft.boundary ? { boundary: draft.boundary.map(point => [...point]) } : {}),
     distance: [minDistance, maxDistance],
@@ -311,7 +350,6 @@ export function SearchControls({
   disabled,
   submitting,
   units = "imperial",
-  changed = false,
   onChange,
   onSubmit,
   onDrawBoundary,
@@ -322,7 +360,6 @@ export function SearchControls({
   disabled: boolean;
   submitting: boolean;
   units?: UnitSystem;
-  changed?: boolean;
   onChange: (draft: SearchDraft) => void;
   onSubmit: (event: FormEvent) => void;
   onDrawBoundary: () => void;
@@ -423,6 +460,12 @@ export function SearchControls({
           value={draft.roadDistance}
           onChange={(roadDistance) => update({ roadDistance })}
         />
+        <GradeLimitsControl
+          value={draft.grades ?? convertDraft(initialDraft, "imperial", units).grades!}
+          units={units}
+          disabled={disabled}
+          onChange={(grades) => update({ grades })}
+        />
         <button
           className="primary search-button"
           type="submit"
@@ -430,11 +473,6 @@ export function SearchControls({
         >
           {submitting ? "Submitting…" : "Search"}
         </button>
-        {changed && (
-          <span className="search-state" role="status" title="Search settings have changed; the map still shows the saved results.">
-            Settings changed
-          </span>
-        )}
       </fieldset>
     </form>
   );

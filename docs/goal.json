@@ -617,6 +617,21 @@
     "dataPolicy": "Pin the catalog URL and SHA-256. Publish complete verified sections as flat assets with explicit download URLs, preserving local paths, IDs and bytes. Retain attribution and optional provenance/audit evidence; exclude personal jobs and raw caches. Failed catalog updates retain the prior catalog and saved-job access.",
     "verification": "docs/containerization.md"
   },
+  "gradeLimitsDecision": {
+    "date": "2026-10-07",
+    "approved": "Optional Grade limits checkbox and anchored popover, matching the compact search controls. Separate uphill/downhill threshold percentages, total allowed distance and longest stretch. Disabled by default; disabling retains draft values. No Settings changed indicator or hover fill. Inactive trigger is muted. Right-aligned single-line slope guidance: 5–10% moderate, 10–15% steep, 15–20% very steep and >20% extreme. No heading or dot separators.",
+    "semantics": "Signed grade uses the same centered 100 m window as profile hover, clipped at walk endpoints. Exact continuous threshold crossings measure total and longest exposure along the ordered walk, including return stems and trail joins. All limits apply before preferred start/direction selection and grouping. Unknown elevation never qualifies when grade limits are active. Immutable jobs retain their submitted grade limits.",
+    "architecture": "Shared pure elevation/grade module; enabled searches stream one section into compact distance/elevation pairs. Existing search preference and road proofs receive a grade predicate. No new dependency, prepared-data format or saved-result schema.",
+    "validation": "Build, typecheck, 102 focused checks (including the local HTTP download fixture with networking) and browser editing, enable/disable, retained values, Escape/focus and popover placement pass. Real Horse Lake searches consider all five starts: four hikes with initial limits and three with tighter 200 m total / 100 m longest budgets, about 17.3 seconds each. Independent Python 1 m integration of saved geometry verifies every returned budget. Evidence: .local-data/grade-review.json and .local-data/grade-review-strict.json. Existing six saved jobs remain available after local server restart. Maintained source: 10,170 lines across 57 files.",
+    "optimization": {
+      "design": "Linear merge of sorted 100 m window breakpoints with monotone interpolation cursors, compact per-trail profiles and one reusable ordered-walk buffer per section. Reject immediately when a directional distance budget is exceeded. No persistent cache, schema, search cap or dependency.",
+      "validation": "Build and typecheck pass; 24 focused checks include independent numerical exposure, actual-worker direction selection and missing elevations, immutable queries, hover grade and successive route decisions. Differential comparison across 20,000 generated profiles agrees within 8e-12 m. All six frozen real-data observations retain exact route hashes, starts, expansions and grade-check counts.",
+      "performance": "Grade-enabled Horse Lake 16.31→10.15 s, Teanaway 19.92→16.47 s, Olympics 37.79→7.57 s. Grade-check time falls 89–93%; single-run peak RSS varies and does not demonstrate a memory improvement. Core search timing excludes result storage. Evidence: benchmarks/grade-search-results.json; harness and frozen queries in benchmarks/grade-search.mjs and grade-search-queries.json.",
+      "userQuery": "The latest saved five-Cascades request also produces the same 27 public hike identities, all 10,187 starts and 15,771,724 expansions. Optimized preparation plus solving takes 56.54 s; the historical 299.68 s whole-job time also includes storage/verification, so timing scopes differ. Evidence: .local-data/grade-optimization-user-query.json.",
+      "maintainedSourceLines": 10272,
+      "maintainedSourceFiles": 58
+    }
+  },
   "areaCategorization": {
     "date": "2026-10-07",
     "requested": "Group areas by state, introduce range subgroups only for multiple sections, and use the same simpler model in Settings, search and preparation. Keep Manage areas compact and remove vertical subgroup bars.",

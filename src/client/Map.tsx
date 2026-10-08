@@ -21,6 +21,7 @@ import { boundaryGeometry } from "../boundary.js";
 import { BoundaryDrawing } from "./BoundaryDrawing.js";
 import { MapCoordinates } from "./MapCoordinates.js";
 import { dashedPaths } from "./path-dashes.js";
+import { unitsFor, type UnitSystem } from "./units.js";
 
 setWorkerUrl(workerUrl);
 // One local search already uses the CPU; Safari otherwise starts up to three map workers.
@@ -45,7 +46,19 @@ function bluredFont(value: unknown, pointLabel: boolean): unknown {
     pointLabel && value === "Ysabeau Bold" ? "Bold" : bluredWeights[value];
   return weight ? `Averia Serif Libre ${weight}` : value;
 }
+function peakElevationFeet(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  if (value.length === 2 && value[0] === "get" && value[1] === "ele")
+    return [
+      "case",
+      ["all", ["has", "ele"], ["!=", ["get", "ele"], ""]],
+      ["to-string", ["round", ["/", ["to-number", ["get", "ele"]], unitsFor("imperial").elevation]]],
+      "",
+    ];
+  return value.map(peakElevationFeet);
+}
 export function HikeMap({
+  units,
   sections,
   selectedSections,
   routes,
@@ -66,6 +79,7 @@ export function HikeMap({
   onFinishBoundary,
   onCancelBoundary,
 }: {
+  units: UnitSystem;
   sections: { id: string; boundary: Boundary }[];
   selectedSections: string[];
   routes: RouteLocation[];
@@ -88,6 +102,7 @@ export function HikeMap({
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
+  const peakLabels = useRef(new Map<string, ExpressionSpecification>());
   const [mapError, setMapError] = useState("");
   const [pathsError, setPathsError] = useState("");
   const [pathsRetry, setPathsRetry] = useState(0);
@@ -204,6 +219,11 @@ export function HikeMap({
         );
       }
       for (const layer of instance.getStyle().layers) {
+        if (layer.type === "symbol" && layer.id.startsWith("place_peak_label_"))
+          peakLabels.current.set(
+            layer.id,
+            layer.layout?.["text-field"] as ExpressionSpecification,
+          );
         if (layer.type !== "symbol" || !layer.layout?.["text-font"]) continue;
         instance.setLayoutProperty(
           layer.id,
@@ -343,6 +363,16 @@ export function HikeMap({
       instance.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!map) return;
+    for (const [id, original] of peakLabels.current)
+      map.setLayoutProperty(
+        id,
+        "text-field",
+        units === "metric" ? original : peakElevationFeet(original) as ExpressionSpecification,
+      );
+  }, [map, units]);
 
   useEffect(() => {
     if (!map) return;

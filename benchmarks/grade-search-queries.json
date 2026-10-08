@@ -1,0 +1,148 @@
+{
+  "frozenDate": "2026-10-07",
+  "baselineRevision": "a6b7558",
+  "purpose": "Fixed paired requests for grade optimization; all distances are meters and gains are meters.",
+  "queries": [
+    {
+      "id": "horse-lake",
+      "query": {
+        "sections": [
+          "mountain-70611e49c04901ed37bd793e"
+        ],
+        "effort": "deep",
+        "distance": [
+          8046.72,
+          19312.128
+        ],
+        "gain": [
+          0,
+          1219.2
+        ],
+        "boundary": [
+          [
+            -120.383488,
+            47.4614913
+          ],
+          [
+            -120.382488,
+            47.4614913
+          ],
+          [
+            -120.382488,
+            47.4624913
+          ],
+          [
+            -120.383488,
+            47.4624913
+          ]
+        ],
+        "repetition": 0.1,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        },
+        "grades": {
+          "uphill": {
+            "above": 15,
+            "total": 804.672,
+            "longest": 321.8688
+          },
+          "downhill": {
+            "above": 15,
+            "total": 402.336,
+            "longest": 160.9344
+          }
+        }
+      }
+    },
+    {
+      "id": "teanaway",
+      "query": {
+        "sections": [
+          "mountain-70611e49c04901ed37bd793e"
+        ],
+        "effort": "deep",
+        "distance": [
+          8046.72,
+          19312.128
+        ],
+        "gain": [
+          0,
+          1219.2
+        ],
+        "boundary": [
+          [
+            -121.07,
+            47.27
+          ],
+          [
+            -120.88,
+            47.27
+          ],
+          [
+            -120.88,
+            47.46
+          ],
+          [
+            -121.07,
+            47.46
+          ]
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        },
+        "grades": {
+          "uphill": {
+            "above": 15,
+            "total": 804.672,
+            "longest": 321.8688
+          },
+          "downhill": {
+            "above": 15,
+            "total": 402.336,
+            "longest": 160.9344
+          }
+        }
+      }
+    },
+    {
+      "id": "olympics",
+      "query": {
+        "sections": [
+          "mountain-bcb514054a1fdcb6bcf393a1"
+        ],
+        "effort": "deep",
+        "distance": [
+          8046.72,
+          19312.128
+        ],
+        "gain": [
+          0,
+          1219.2
+        ],
+        "repetition": 0.2,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1609.344,
+          "fraction": 0.1
+        },
+        "grades": {
+          "uphill": {
+            "above": 15,
+            "total": 804.672,
+            "longest": 321.8688
+          },
+          "downhill": {
+            "above": 15,
+            "total": 402.336,
+            "longest": 160.9344
+          }
+        }
+      }
+    }
+  ]
+}

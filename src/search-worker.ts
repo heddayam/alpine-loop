@@ -4,6 +4,7 @@ import { readDataset } from './dataset.js';
 import { solveSection } from './diversity.js';
 import { createRouteStore } from './route-store.js';
 import { createWorkBudget } from './work-budget.js';
+import { routeGradeCheck } from './route-grades.js';
 import type { JobInputs, JobProgress, Position, SearchQuery } from './model.js';
 
 const { directory, query, resultPath } = workerData as {
@@ -31,11 +32,13 @@ const samePosition = (a: Position, b: Position) => a[0] === b[0] && a[1] === b[1
 async function saveRoutes(chosen: (typeof selections)[number]) {
   const selection = await dataset.select(query, chosen);
   const { graph } = selection;
+  const gradeCheck = query.grades ? await routeGradeCheck(graph,
+    dataset.readGeometry(chosen.section.id, new Set(graph.edges.map(edge => edge.trail))), query.grades, budget) : undefined;
   const used = new Map<number, [Position, Position]>();
   const previousExpansions = progress.expansions;
   progress.stage = 'searching'; send();
   store.begin();
-  await solveSection(graph, query, { budget, onProgress: async measured => {
+  await solveSection(graph, query, { budget, gradeCheck, onProgress: async measured => {
     if (Date.now() - lastVerified >= 1000) { await verify(); lastVerified = Date.now(); }
     progress.expansions = previousExpansions + measured.expansions;
     progress.totalSearchPoints = measured.totalSearchPoints;

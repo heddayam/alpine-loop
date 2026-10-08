@@ -39,6 +39,10 @@ export type TrailGraph = {
 };
 export type TrailGeometry = { id: string; name: string | null; coordinates: Position[] };
 
+/** Grade is percent rise/run over a centered 100 m window; distances are meters. */
+export type GradeLimit = { above: number; total: number; longest: number };
+export type GradeLimits = { uphill: GradeLimit; downhill: GradeLimit };
+
 /** Engine/transport measurements use meters and fractions; UI converts units. */
 export type SearchQuery = {
   /** Exactly the prepared sections to search, considering every eligible start. */
@@ -56,6 +60,8 @@ export type SearchQuery = {
   includeUnknown: boolean;
   /** Omission uses the adjustable defaults; search snapshots record resolved limits. */
   roads?: RoadLimits;
+  /** Omission disables grade constraints. Both directions and all limits apply. */
+  grades?: GradeLimits;
 };
 export type RoadLimits = { distance: number; fraction: number };
 export const DEFAULT_ROAD_LIMITS: RoadLimits = { distance: 1609.344, fraction: 0.1 };
