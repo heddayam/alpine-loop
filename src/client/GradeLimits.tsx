@@ -59,7 +59,7 @@ export function GradeLimitsControl({ value, units, disabled, onChange }: {
       {open && <div className="grade-popover" style={{ left: offset }} id={`${id}-panel`} role="group" aria-label="Grade limits settings">
         <div className="grade-grid">
           <span />
-          <span className="grade-column">Above <span className="field-unit">%</span></span>
+          <span className="grade-column" title="The distance limits apply to slopes steeper than this grade.">Grade <span className="field-unit">%</span></span>
           <span className="grade-column">Total allowed <span className="field-unit">{unit}</span></span>
           <span className="grade-column">Longest stretch <span className="field-unit">{unit}</span></span>
           {(["uphill", "downhill"] as const).map(direction => {
