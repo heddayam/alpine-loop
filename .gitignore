@@ -13,6 +13,7 @@ test-results/
 *.tsbuildinfo.*
 
 # Local configuration and secrets
+.agents/
 .env
 .env.*
 !.env.example

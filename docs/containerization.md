@@ -1,6 +1,9 @@
 # Local containers and prepared data
 
-From a fresh checkout with Docker and Docker Compose installed:
+Install and open [OrbStack](https://docs.orbstack.dev/install) (recommended for Mac)
+or [Docker Desktop](https://docs.docker.com/get-started/get-docker/) (Mac, Windows or Linux).
+Both include Docker and Compose.
+From the repository folder:
 
 ```sh
 docker compose up --build
