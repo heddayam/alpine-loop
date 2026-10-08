@@ -49,7 +49,9 @@ describe('hosted anonymous search ownership', () => {
     expect(health.json()).toEqual({ status: 'ok' });
     expect(health.headers['set-cookie']).toBeUndefined();
     expect(health.headers['cache-control']).toBe('no-store');
-    expect((await app.inject('/api/catalog')).json().hosted).toBe(true);
+    const catalog = (await app.inject('/api/catalog')).json();
+    expect(catalog.hosted).toBe(true);
+    expect(catalog.sections.length).toBeGreaterThan(0);
     expect((await app.inject('/')).headers['set-cookie']).toBeDefined();
     const cookie = await visitor(app);
     for (const invalid of [undefined, 'http://alpineloop.test', 'https://other.test', `${origin}/path`]) {

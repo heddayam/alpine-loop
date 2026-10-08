@@ -58,7 +58,10 @@ export async function createApp(directory: string, clientDirectory?: string, job
     if (access) throw new RequestError('Trail data is installed by the site administrator. This area is currently unavailable for new searches.', 503);
   };
   app.get('/health', async () => ({ status: 'ok' }));
-  app.get('/api/catalog', async () => ({ ...(await availableData()).view(), ...(access ? { hosted: true } : {}) }));
+  app.get('/api/catalog', async () => {
+    const catalog = await (await availableData()).view();
+    return access ? { ...catalog, hosted: true } : catalog;
+  });
   app.post('/api/coverage', async request => (await availableData()).coverage(parseQuery(request.body)));
   app.get('/api/downloads', async () => (await availableData()).downloads.latest());
   app.post('/api/downloads', async (request, reply) => {
