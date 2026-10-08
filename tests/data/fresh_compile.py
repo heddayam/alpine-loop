@@ -289,7 +289,7 @@ class FreshCompiler(unittest.TestCase):
             self.assertNotEqual(original_frontier, shifted_frontier)
 
             evidence = {"osm": hashlib.sha256(source.read_bytes()).hexdigest(), "dem": hashlib.sha256(dem.read_bytes()).hexdigest()}
-            section = {"id": "fixture-section", "regionId": "11202", "name": "Fixture",
+            section = {"id": "fixture-section", "regionId": "11202", "state": "WA", "regionName": "Fixture", "name": "Fixture",
                        "bounds": bounds, "boundary": boundary(box(*bounds)), "sourceSegments": 50}
             first = write_section(root / "network", section, graph, geometry)
             repeat = write_section(root / "repeat", section, graph, geometry)

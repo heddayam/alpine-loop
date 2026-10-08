@@ -10,6 +10,9 @@ export async function createApp(directory: string, clientDirectory?: string, job
   // Saved jobs remain usable even when the prepared catalog has been removed.
   let dataset = await readDataset(directory).catch(() => undefined);
   const jobs = await createJobs(directory, jobDirectory);
+  // Old immutable results lack per-trail names. Retain only one section's names,
+  // never its graph, and share concurrent reads. New jobs save names themselves.
+  let trailNames: { key: string; pending: Promise<(string | null)[] | undefined> } | undefined;
   const availableData = async () => {
     if (!dataset) dataset = await readDataset(directory).catch(() => undefined);
     if (!dataset) throw new RequestError('Prepared trail data is unavailable. Saved jobs remain available in Jobs.', 503);
@@ -59,7 +62,22 @@ export async function createApp(directory: string, clientDirectory?: string, job
     jobs.paths(request.params.id, [request.query.west, request.query.south, request.query.east, request.query.north].map(value => value === undefined || !value.trim() ? NaN : Number(value)), revision(request.query.revision)));
   app.post<{ Params: { id: string } }>('/api/jobs/:id/cancel', async request => jobs.cancel(request.params.id));
   app.delete<{ Params: { id: string } }>('/api/jobs/:id', async (request, reply) => { await jobs.delete(request.params.id); return reply.code(204).send(); });
-  app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId', async request => jobs.route(request.params.id, request.params.routeId, revision(request.query.revision)));
+  app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId', async request => {
+    const route = jobs.route(request.params.id, request.params.routeId, revision(request.query.revision));
+    if (!dataset || !route.segments?.some(segment => segment.name === undefined)) return route;
+    for (const section of jobs.get(request.params.id).inputs?.sections ?? []) {
+      const missing = route.segments.filter(segment => segment.name === undefined && segment.id.startsWith(`${section.id}:`));
+      if (!missing.length) continue;
+      const key = `${section.id}:${section.files.graph.sha256}`;
+      if (trailNames?.key !== key) trailNames = { key, pending: dataset.readTrailNames(section).catch(() => undefined) };
+      const names = await trailNames.pending;
+      for (const segment of missing) {
+        const name = names?.[Number(segment.id.slice(section.id.length + 1))];
+        if (name !== undefined) segment.name = name;
+      }
+    }
+    return route;
+  });
   app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId.gpx', async (request, reply) => {
     const route = jobs.route(request.params.id, request.params.routeId, revision(request.query.revision));
     return reply.type('application/gpx+xml').header('Content-Disposition', 'attachment; filename="alpine-loop.gpx"').send(gpx(route));

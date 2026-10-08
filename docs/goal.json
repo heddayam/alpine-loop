@@ -616,5 +616,14 @@
     "release": "https://github.com/heddayam/alpine-loop/releases/tag/data-v2-2026-10-07-01a60e85",
     "dataPolicy": "Pin the catalog URL and SHA-256. Publish complete verified sections as flat assets with explicit download URLs, preserving local paths, IDs and bytes. Retain attribution and optional provenance/audit evidence; exclude personal jobs and raw caches. Failed catalog updates retain the prior catalog and saved-job access.",
     "verification": "docs/containerization.md"
+  },
+  "areaCategorization": {
+    "date": "2026-10-07",
+    "requested": "Group areas by state, introduce range subgroups only for multiple sections, and use the same simpler model in Settings, search and preparation. Keep Manage areas compact and remove vertical subgroup bars.",
+    "architecture": "Catalog areas declare state, regionId, regionName, name and optional highway-scope description. One CatalogAreas component owns hierarchy, rows and bulk selection for search and downloads. Removed label parsing, duplicate grouping and duplicate selection handlers. Singleton ranges remain direct rows under their state.",
+    "release": "https://github.com/heddayam/alpine-loop/releases/tag/data-v2-2026-10-07-state-first",
+    "preservation": "The new metadata catalog reuses all 27 immutable published trail assets. All nine section IDs, boundaries and file hashes remain unchanged. Native startup reused all installed sections; the 15 saved jobs, result counts and a saved GPX checksum remain unchanged.",
+    "appearance": "Shared 27 px rows, quiet range headings and simple indentation. No vertical subgroup bars or per-row rules. Manage areas is 330 px tall instead of 558 px at the verified desktop viewport; Settings is 560 px wide.",
+    "validation": "Build and typecheck pass. The full offline suite and two preparation fixtures passed before the spacing refinement; the final eight focused hierarchy/download/catalog checks and six composition/packaging checks pass. Browser checks confirm Cascades selects exactly five sections, Washington selects six, and clearing Washington preserves a California selection. Current combined working tree measures 9,600 maintained source lines across 53 files, including unrelated concurrent app changes."
   }
 }

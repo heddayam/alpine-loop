@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { StoredRoute } from './data-format.js';
 import { MIN_LOOP_SIMILARITY } from './diversity.js';
-import { ROUTES_PER_PAGE, type Bounds, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RoutePath, type RouteView, type SortOrder } from './model.js';
+import { ROUTES_PER_PAGE, type Bounds, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RoutePath, type RouteSegment, type RouteView, type SortOrder } from './model.js';
 
 export type SavedChoice = { route: StoredRoute; groupId: string };
 type Counts = { routeCount: number; groupCount: number };
@@ -165,7 +165,7 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
       route(id: string): RouteView | undefined {
         const row = detail.get(id) as (ChoiceRow & { steps: string }) | undefined;
         if (!row) return undefined;
-        const coordinates: Position[] = [], shapes = new Map<string, Position[]>();
+        const coordinates: Position[] = [], segments: RouteSegment[] = [], shapes = new Map<string, Position[]>();
         for (const step of JSON.parse(row.steps) as StoredRoute['sections']) {
           const key = `${step.section}:${step.id}`;
           let points = shapes.get(key);
@@ -178,9 +178,11 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
           }
           const previous = coordinates.at(-1), first = points[step.reverse ? points.length - 1 : 0]!;
           if (previous && (previous[0] !== first[0] || previous[1] !== first[1])) throw new Error('Saved route drawing has a broken connection');
+          const start = Math.max(0, coordinates.length - 1);
           for (let index = previous ? 1 : 0; index < points.length; index++) coordinates.push(points[step.reverse ? points.length - 1 - index : index]!);
+          segments.push({ id: key, start, end: coordinates.length - 1, ...(step.name !== undefined ? { name: step.name } : {}) });
         }
-        return { ...choice(row), geometry: coordinates };
+        return { ...choice(row), geometry: coordinates, segments };
       },
       close(): void { if (db.isOpen) db.close(); },
     };

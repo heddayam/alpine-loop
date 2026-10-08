@@ -18,7 +18,7 @@ async function directory(t) {
 async function fixture(root, id, date = '2026-08-01', west = -123) {
   const path = join(root, id), bounds = [west, 37, west + 1, 38];
   const boundary = { type: 'MultiPolygon', coordinates: [[[[west, 37], [west + 1, 37], [west + 1, 38], [west, 38], [west, 37]]]] };
-  const section = { id, regionId: `region-${id}`, name: id, bounds, boundary, sourceSegments: 1, startCount: 1, files: {} };
+  const section = { id, state: 'WA', regionId: `region-${id}`, regionName: id, name: id, bounds, boundary, sourceSegments: 1, startCount: 1, files: {} };
   await mkdir(join(path, 'sections', id), { recursive: true });
   for (const family of ['graph', 'starts', 'geometry']) {
     const decoded = Buffer.from(`${JSON.stringify(family === 'graph' ? { graph: { info: { id }, starts: [{ id: 'start' }] } } : [[west, 37, 100]])}\n`);
@@ -64,6 +64,14 @@ test('release packaging preserves verified section bytes and identity, excludes 
   }
   await assert.rejects(packageData(input.path, output, options), { code: 'EEXIST' });
   assert.deepEqual(await readFile(join(output, 'catalog.json')), body);
+  input.catalog = catalog;
+  input.section = catalog.sections[0];
+  await save(input);
+  const metadata = join(root, 'metadata');
+  await packageData(input.path, metadata, { ...options, tag: 'data-v2-metadata' });
+  assert.equal((await readdir(metadata)).length, 5);
+  const next = JSON.parse(await readFile(join(metadata, 'catalog.json')));
+  assert.deepEqual(next.sections[0].files, catalog.sections[0].files, 'Metadata releases retain existing immutable asset URLs and hashes');
   await writeFile(join(input.path, input.section.files.graph.path), 'corrupt');
   const failed = join(root, 'failed');
   await assert.rejects(packageData(input.path, failed, options), /Compressed size/);
@@ -75,7 +83,7 @@ test('release packaging preserves verified section bytes and identity, excludes 
 test('composition preserves section identity and bytes, aggregates metadata and retains original evidence', async t => {
   const root = await directory(t);
   const first = await fixture(root, 'first'), second = await fixture(root, 'second', '2026-09-15', -121);
-  second.catalog.unavailable.push({ name: 'Pending area', bounds: second.section.bounds, boundary: second.section.boundary, reason: 'No approved divider' });
+  second.catalog.unavailable.push({ state: 'WA', regionId: 'pending', regionName: 'Pending area', name: 'Pending area', bounds: second.section.bounds, boundary: second.section.boundary, reason: 'No approved divider' });
   await save(second);
   const originals = await Promise.all([first, second].map(input => readFile(join(input.path, 'catalog.json'))));
   const output = join(root, 'combined');

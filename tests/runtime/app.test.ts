@@ -57,6 +57,8 @@ describe('completed jobs through the actual app and worker', () => {
     expect(locations.every((route: { startId: string }) => route.startId.endsWith('/start-0'))).toBe(true);
     const url = `/api/jobs/${snapshot.id}/routes/${locations[0].id}`;
     const route = (await app.inject(url)).json() as RouteView;
+    expect(route.segments?.length).toBeGreaterThan(0);
+    expect(route.segments?.every(segment => segment.name !== undefined)).toBe(true);
     expect(route.geometry.some(point => point[1] < 47.0499 || point[1] > 47.0501)).toBe(true);
     const gpx = (await app.inject(`${url}.gpx`)).body;
     await app.close();
@@ -78,6 +80,42 @@ describe('completed jobs through the actual app and worker', () => {
     const snapshot = await finished(app, (await submit(app, { ...query, boundary })).json());
     expect(snapshot).toMatchObject({ status: 'completed', groupCount: 0, progress: { totalStarts: 0, completedStarts: 0 } });
     expect((await app.inject(`/api/jobs/${snapshot.id}/locations`)).json()).toEqual([]);
+  });
+
+  it.each(['matching', 'replaced', 'removed'] as const)('uses only pinned source names for older saved segments with %s data', async source => {
+    const { directory, jobDirectory, catalog } = await fixture();
+    let app = await openApp(directory, jobDirectory);
+    const job = await finished(app, (await submit(app)).json());
+    const routeId = (await app.inject(`/api/jobs/${job.id}/results`)).json().routes[0].id;
+    const url = `/api/jobs/${job.id}/routes/${routeId}`;
+    const original = (await app.inject(url)).json() as RouteView;
+    await app.close();
+    const file = join(jobDirectory, (await readdir(jobDirectory)).find(name => name.startsWith(job.id) && name.endsWith('.sqlite'))!);
+    const db = new DatabaseSync(file);
+    try {
+      const rows = db.prepare('SELECT id, steps FROM routes').all();
+      for (const row of rows) {
+        const steps = JSON.parse(row.steps as string);
+        for (const step of steps) delete step.name;
+        db.prepare('UPDATE routes SET steps = ? WHERE id = ?').run(JSON.stringify(steps), row.id as string);
+      }
+    } finally { db.close(); }
+    if (source === 'removed') await rm(directory, { recursive: true, force: true });
+    if (source === 'replaced') {
+      catalog.sections[0]!.files.graph.sha256 = '0'.repeat(64);
+      await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
+    }
+    const before = await readFile(file);
+    app = await openApp(directory, jobDirectory);
+    const restored = (await app.inject(url)).json() as RouteView;
+    expect(restored.geometry).toEqual(original.geometry);
+    expect(restored.segments).toEqual(original.segments!.map(segment => {
+      if (source === 'matching') return segment;
+      const { name: _, ...withoutName } = segment;
+      return withoutName;
+    }));
+    expect((await app.inject(url)).json()).toEqual(restored);
+    expect(await readFile(file)).toEqual(before);
   });
 
   it.each(['missing', 'disconnected', 'shifted'] as const)('rejects %s drawing geometry before publication', async fault => {

@@ -6,6 +6,7 @@ import os
 import resource
 import subprocess
 import platform
+import re
 import tempfile
 import time
 import urllib.request
@@ -109,8 +110,12 @@ def make_plan(manifest, root, temporary, max_segments):
             identity = {"sources": proof, "regionId": manifest["regionId"], "boundary": boundary(area),
                         "cuts": decisions, "maxSegments": max_segments}
             section_id = "mountain-" + hashlib.sha256(json_bytes(identity)).hexdigest()[:24]
-            name = manifest["name"] + (" — " + ", ".join(f"{side} of {ref}" for ref, side in labels) if labels else "")
-            sections.append({"id": section_id, "regionId": manifest["regionId"], "name": name,
+            label = ", ".join(f"{side} of {ref}" for ref, side in labels)
+            region_name = manifest.get("regionName", manifest["name"])
+            name = manifest.get("sectionNames", {}).get(label, label) if labels else region_name
+            description = re.sub(r"\bWA(\d+)\b", r"SR \1", re.sub(r"\bUS(\d+)\b", r"US \1", re.sub(r"\bI(\d+)\b", r"I-\1", label)))
+            sections.append({"id": section_id, "regionId": manifest["regionId"], "regionName": region_name,
+                             "state": manifest["state"], "name": name, **({"description": description[:1].upper() + description[1:]} if label else {}),
                              "bounds": list(area.bounds), "boundary": boundary(area), "sourceSegments": source_segments,
                              "cuts": decisions, "status": "ready" if source_segments <= max_segments else "unresolved",
                              **({"reason": f"{source_segments:,} source segments exceeds the {max_segments:,} limit; no approved through highway can resolve it."}
@@ -175,7 +180,7 @@ def build_catalog(manifest, plan, root, output, selected, audit_enabled, base_ur
         cut_lines = [shape(cut["geometry"]) for cut in plan["cuts"]]
         for section in plan["sections"]:
             if section["id"] not in requested:
-                catalog["unavailable"].append({key: section[key] for key in ("name", "bounds", "boundary")} | {
+                catalog["unavailable"].append({key: section[key] for key in ("state", "regionId", "regionName", "name", "bounds", "boundary", *(["description"] if "description" in section else []))} | {
                     "reason": section.get("reason", "This mountain section has not been prepared yet.")})
                 continue
             geometry = shape(section["boundary"])

@@ -26,6 +26,8 @@ export async function packageData(input, destination, { repository, tag }) {
     delete catalog.baseUrl;
     for (const section of catalog.sections) {
       for (const [family, facts] of Object.entries(section.files)) {
+        // Metadata-only releases reuse already published, checksum-pinned files.
+        if (facts.url) continue;
         const name = `${section.id}.${family}.${family === 'geometry' ? 'jsonl' : 'json'}.gz`;
         await rename(join(prepared, facts.path), join(output, name));
         facts.url = `${baseUrl}${name}`;

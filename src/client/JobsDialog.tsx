@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { regionLabel } from "./RegionPicker.js";
 import type { JobSnapshot, SearchQuery } from "../model.js";
 import { DEFAULT_ROAD_LIMITS } from "../model.js";
 import { distanceText, elevationText, stemLimit, unitsFor, type UnitSystem } from "./units.js";
@@ -36,11 +35,9 @@ export const jobRegionName = (
   id: string,
   regionName: (id: string) => string,
 ) =>
-  regionLabel(
-    job.regions?.find((region) => region.id === id)?.name ??
-      job.inputs?.sections.find((section) => section.id === id)?.name ??
-      regionName(id),
-  );
+  regionName(id) !== id ? regionName(id) :
+    (job.regions?.find((region) => region.id === id)?.name ??
+      job.inputs?.sections.find((section) => section.id === id)?.name ?? id);
 export const jobTitle = (
   job: JobSnapshot,
   regionName: (id: string) => string,
@@ -113,6 +110,12 @@ export function JobsDialog({
       ref={dialog}
       className="jobs-modal"
       aria-labelledby="jobs-title"
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right ||
+            event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+      }}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -154,12 +157,18 @@ export function JobsDialog({
               aria-busy={busy || undefined}
             >
               <header>
+                <div className="job-heading-text">
                 <h3>
-                  {job.query.boundary && "Drawn boundary · "}
+                  {job.query.boundary && "Drawn boundary: "}
                   {job.query.sections
                     .map((id) => jobRegionName(job, id, regionName))
                     .join(", ")}
                 </h3>
+                <time className="job-created" dateTime={job.createdAt} title={new Date(job.createdAt).toLocaleString()}>
+                  {new Date(job.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  {", "}{new Date(job.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                </time>
+                </div>
                 <span className={`job-status status-${job.status}`}>
                   {busy
                     ? pending.action === "cancel"
@@ -168,46 +177,33 @@ export function JobsDialog({
                         ? "Deleting…"
                         : "Opening…"
                     : status}
+                  {job.status === "running" && !busy && ` ${elapsed(job.progress.elapsedMs)}`}
                 </span>
               </header>
-              <p className="job-created">
-                {new Date(job.createdAt).toLocaleString()}
-              </p>
-              <p className="job-query">{requestSummary(job.query, units)}</p>
-              {job.query.boundary && <p className="job-limits">Starting points inside the boundary; hikes may extend outside.</p>}
-              <p className="job-limits">
-                Stem up to {distanceText(stemLimit(job.query), units, 3)} {display.distanceLabel}{job.query.repetition !== undefined && ` and ${job.query.repetition * 100}%`}; roads{" "}
-                {distanceText(roads.distance, units, 3)} {display.distanceLabel} and{" "}
-                {roads.fraction * 100}%
-              </p>
-              {job.status === "queued" ? (
-                <p className="job-stage">
-                  Queue position {job.queuePosition ?? "—"}
+              <div className="job-specs">
+                <p className="job-query">
+                  <span>{Number(distanceText(job.query.distance[0], units))}–{Number(distanceText(job.query.distance[1], units))} {display.distanceLabel}</span>
+                  <span>{elevationText(job.query.gain[0], units)}–{elevationText(job.query.gain[1], units)} {display.elevationLabel} gain</span>
                 </p>
-              ) : job.status === "running" ? (
-                <p className="job-stage" role="status">
-                  {job.progress.stage === "preparing"
-                    ? "Preparing trail data"
-                    : job.progress.stage === "saving"
-                      ? "Saving results"
-                      : "Searching trails"}
-                  {job.progress.currentRegion
-                    ? `: ${job.progress.currentRegion.name}`
-                    : ""}
-                  , {elapsed(job.progress.elapsedMs)} elapsed
-                </p>
-              ) : (
-                <p className="job-stage">
-                  {job.status === "completed"
-                    ? `${job.groupCount?.toLocaleString() ?? "Saved"} ${job.groupCount === 1 ? "hike" : "hikes"}, `
-                    : ""}
-                  {elapsed(job.progress.elapsedMs)} elapsed
-                </p>
-              )}
+                <details className="job-details">
+                  <summary>Constraints</summary>
+                  <div>
+                    {job.query.boundary && <p>Starting points inside the boundary; hikes may extend outside.</p>}
+                    <p>Stem up to {Number(distanceText(stemLimit(job.query), units, 3))} {display.distanceLabel}{job.query.repetition !== undefined && ` and ${Number((job.query.repetition * 100).toFixed(1))}%`}; roads {Number(distanceText(roads.distance, units, 3))} {display.distanceLabel} and {Number((roads.fraction * 100).toFixed(1))}%.</p>
+                  </div>
+                </details>
+              </div>
               {job.status === "running" && (
                 <div className="job-search-progress">
                   <div>
-                    <span>Region search progress</span>
+                    <span>
+                      {job.progress.stage === "preparing"
+                        ? "Preparing trail data"
+                        : job.progress.stage === "saving"
+                          ? "Saving results"
+                          : `Searching ${job.progress.currentRegion?.name ?? "trails"}`}
+                    </span>
+                    <span className="job-region-count">{job.progress.completedRegions.length} of {job.progress.totalRegions} regions finished</span>
                     {!!job.progress.totalSearchPoints && (
                       <strong>
                         {Math.floor(
@@ -229,17 +225,10 @@ export function JobsDialog({
                   />
                 </div>
               )}
-              {job.status !== "queued" && (
-                <p className="job-regions">
-                  {job.progress.completedRegions.length} of{" "}
-                  {job.progress.totalRegions} regions completed
-                </p>
-              )}
               {job.reason && <p className="job-error">{job.reason}</p>}
               {job.status === "interrupted" && (
                 <p className="job-note">
-                  The server stopped during this job. Copy its settings to
-                  submit it again.
+                  Server stopped. Copy settings to try again.
                 </p>
               )}
               {["cancelled", "failed", "interrupted"].includes(job.status) && (
@@ -251,6 +240,19 @@ export function JobsDialog({
                 </p>
               )}
               <footer>
+              {job.status === "queued" ? (
+                <p className="job-stage">
+                  Queue position {job.queuePosition ?? "—"}
+                </p>
+              ) : job.status !== "running" ? (
+                <p className="job-stage">
+                  {job.status === "completed"
+                    ? `${job.groupCount?.toLocaleString() ?? "Saved"} ${job.groupCount === 1 ? "hike" : "hikes"}, `
+                    : ""}
+                  {elapsed(job.progress.elapsedMs)} elapsed
+                </p>
+              ) : null}
+                <div className="job-actions">
                 {hasSavedResults(job) && (
                   <button
                     type="button"
@@ -285,6 +287,7 @@ export function JobsDialog({
                     Delete
                   </button>
                 )}
+                </div>
               </footer>
               {confirmDelete === job.id && (
                 <div className="delete-confirm" role="alert">

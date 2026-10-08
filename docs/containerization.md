@@ -91,6 +91,10 @@ optional source/provenance/audit evidence. Personal jobs, undeclared files and
 raw source caches are excluded. Failed verification removes only the new output;
 existing destinations and inputs are never overwritten.
 
+For metadata-only updates, retain existing per-file URLs and checksums. The
+packager verifies the local files but reuses those published assets without
+uploading another copy. Keep every referenced release available.
+
 Create a **draft** GitHub release with these files and `DATA.md` as its notes,
 marking it as a data release rather than the latest app release. Compare every
 uploaded asset's size and SHA-256 with the local package before publishing.
@@ -99,10 +103,13 @@ then copy the generated `data-release.json` into `scripts/data-release.json` and
 commit the small descriptor with the application. Generated release files stay
 outside Git. Test a source-only checkout and empty Docker volume before merging.
 
-The first data release is
+The current catalog is
+[data-v2-2026-10-07-state-first](https://github.com/heddayam/alpine-loop/releases/tag/data-v2-2026-10-07-state-first).
+It adds explicit state, mountain-range and section labels and reuses all 27 trail
+assets from the first release,
 [data-v2-2026-10-07-01a60e85](https://github.com/heddayam/alpine-loop/releases/tag/data-v2-2026-10-07-01a60e85).
-GitHub permits up to 1,000 assets per release, each under 2 GiB; this package uses
-32 assets, with the optional evidence archive around 69 MB and every runtime
+GitHub permits up to 1,000 assets per release, each under 2 GiB; the first package uses
+32 assets and the metadata update uses five, with the optional evidence archive around 69 MB and every runtime
 trail asset under 20 MB. See [GitHub release limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
 
 ## Verification on 2026-10-07

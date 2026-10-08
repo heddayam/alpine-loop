@@ -1,5 +1,13 @@
 {
   "name": "Washington Cascades",
+  "regionName": "Cascades",
+  "sectionNames": {
+    "north of I90, south of US2": "Alpine Lakes",
+    "north of I90, north of US2, south of WA20": "Glacier Peak & Mountain Loop",
+    "north of I90, north of US2, north of WA20": "Mount Baker & North Cascades",
+    "south of I90, north of US12": "Mount Rainier & Central Cascades",
+    "south of I90, south of US12": "Mount St. Helens & Mount Adams"
+  },
   "regionId": "11202",
   "state": "WA",
   "sourceDate": "2026-08-01",

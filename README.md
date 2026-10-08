@@ -16,7 +16,7 @@ docker compose up --build
 ```
 
 Open http://127.0.0.1:3000. Startup obtains the pinned mountain catalog from
-[GitHub Releases](https://github.com/heddayam/alpine-loop/releases/tag/data-v2-2026-10-07-01a60e85); missing trail sections
+[GitHub Releases](https://github.com/heddayam/alpine-loop/releases/tag/data-v2-2026-10-07-state-first); missing trail sections
 are downloaded when you choose **Download and search**. Panning never downloads
 anything. Settings → Manage areas offers grouped downloads with actual sizes,
 progress, cancellation and verified-file reuse.
@@ -50,8 +50,10 @@ loads one section at a time, considering every eligible start across the
 selected sections. Missing or unprepared coverage is disclosed.
 
 Search regions and prepared data sections share the same identity and exact
-footprint. Familiar place names identify each area in a grouped search dropdown;
-exact boundaries remain visible on the map and in Settings. Select regions from
+footprint. Search and Settings group areas by state, with a mountain-range heading
+only when that range contains multiple sections. Familiar section names and
+grouping come from the catalog; exact boundaries remain visible on the map and
+in Settings. Select regions from
 the dropdown, or choose **Draw** beside it under **Search area** and click around an area on the map.
 Finish with the first point, the Finish button or Enter; Undo removes the last
 point and Cancel or Escape keeps the previous selection. Drawing automatically

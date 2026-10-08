@@ -19,6 +19,7 @@ import { request } from "./request.js";
 import { mergedRegionBoundary } from "./region-outline.js";
 import { boundaryGeometry } from "../boundary.js";
 import { BoundaryDrawing } from "./BoundaryDrawing.js";
+import { dashedPaths } from "./path-dashes.js";
 
 setWorkerUrl(workerUrl);
 // One local search already uses the CPU; Safari otherwise starts up to three map workers.
@@ -50,6 +51,7 @@ export function HikeMap({
   pathsURL,
   activeRoute,
   selectedId,
+  focusedId,
   routeNotice,
   onRetryRoute,
   camera,
@@ -69,6 +71,7 @@ export function HikeMap({
   pathsURL?: string;
   activeRoute: HikeRoute | null;
   selectedId: string | null;
+  focusedId: string | null;
   routeNotice: string;
   onRetryRoute?: () => void;
   camera: { bounds: Bounds; revision: number; padding?: number };
@@ -87,6 +90,8 @@ export function HikeMap({
   const [mapError, setMapError] = useState("");
   const [pathsError, setPathsError] = useState("");
   const [pathsRetry, setPathsRetry] = useState(0);
+  const [segmentLabel, setSegmentLabel] = useState<{ routeId: string; name: string } | null>(null);
+  const clearSegmentHover = useRef<() => void>(() => {});
   const starts = useRef(new Map<string, {
     marker: Marker;
     routes: RouteLocation[];
@@ -96,6 +101,7 @@ export function HikeMap({
     onSelect,
     onPreview,
     selectedId,
+    focusedId,
     onBoundsChange,
     onBrowse,
     drawingBoundary,
@@ -104,6 +110,7 @@ export function HikeMap({
     onSelect,
     onPreview,
     selectedId,
+    focusedId,
     onBoundsChange,
     onBrowse,
     drawingBoundary,
@@ -232,12 +239,18 @@ export function HikeMap({
         type: "line",
         source: "result-paths",
         minzoom: PATHS_MIN_ZOOM,
+        filter: ["==", ["get", "hit"], false],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": "#58615b",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 9, 2, 12, 2.5, 16, 3],
-          "line-opacity": 0.95,
+          "line-width": 2,
+          "line-opacity": 1,
         },
+      });
+      instance.addLayer({
+        id: "result-paths-hit", type: "line", source: "result-paths", minzoom: PATHS_MIN_ZOOM,
+        filter: ["==", ["get", "hit"], true],
+        paint: { "line-width": 8, "line-opacity": 0 },
       });
       instance.addLayer({
         id: "route",
@@ -246,29 +259,58 @@ export function HikeMap({
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": "#b95b2c",
-          "line-width": 4,
+          "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 6, 4],
           "line-opacity": 0.9,
         },
       });
-      const pathAt = (point: { x: number; y: number }) => {
-        const id = instance.queryRenderedFeatures(
+      const pathAt = (point: { x: number; y: number }) =>
+        instance.queryRenderedFeatures(
           [[point.x - 4, point.y - 4], [point.x + 4, point.y + 4]],
-          { layers: ["route", "result-paths"] },
-        )[0]?.properties.id;
-        return typeof id === "string" ? id : null;
+          { layers: ["route", "result-paths-hit"] },
+        )[0];
+      let hoveredSegment: string | number | undefined;
+      let hoverFrame = 0;
+      const hoverSegment = (id?: string | number, routeId?: string, name?: string) => {
+        if (id === hoveredSegment) return;
+        if (hoveredSegment !== undefined)
+          instance.setFeatureState({ source: "route", id: hoveredSegment }, { hover: false });
+        hoveredSegment = id;
+        if (id !== undefined)
+          instance.setFeatureState({ source: "route", id }, { hover: true });
+        setSegmentLabel(routeId && name ? { routeId, name } : null);
       };
+      const clearHover = () => {
+        cancelAnimationFrame(hoverFrame);
+        hoverFrame = 0;
+        hoverSegment();
+        instance.getCanvas().style.cursor = "";
+      };
+      clearSegmentHover.current = clearHover;
       instance.on("mousemove", (event) => {
         if (callbacks.current.drawingBoundary) return;
         if (instance.isMoving()) return;
-        const id = pathAt(event.point);
-        instance.getCanvas().style.cursor = id ? "pointer" : "";
-        callbacks.current.onPreview(id);
+        // Hit-test at most once per frame, using the latest pointer position.
+        cancelAnimationFrame(hoverFrame);
+        hoverFrame = requestAnimationFrame(() => {
+          hoverFrame = 0;
+          const feature = pathAt(event.point);
+          const id = feature?.properties.id;
+          instance.getCanvas().style.cursor = typeof id === "string" ? "pointer" : "";
+          if (feature?.layer.id === "route" && id === callbacks.current.focusedId && feature.id !== undefined) {
+            hoverSegment(feature.id, id, feature.properties.name);
+            callbacks.current.onPreview(null);
+          } else {
+            hoverSegment();
+            callbacks.current.onPreview(typeof id === "string" ? id : null);
+          }
+        });
       });
-      instance.on("mouseout", () => callbacks.current.onPreview(null));
+      instance.on("movestart", clearHover);
+      instance.on("mouseout", () => { clearHover(); callbacks.current.onPreview(null); });
       instance.on("click", (event) => {
         if (callbacks.current.drawingBoundary) return;
-        const id = pathAt(event.point);
-        if (id) {
+        const id = pathAt(event.point)?.properties.id;
+        if (typeof id === "string") {
           callbacks.current.onPreview(null);
           callbacks.current.onSelect(id);
         }
@@ -279,6 +321,8 @@ export function HikeMap({
     const resize = new ResizeObserver(() => instance.resize());
     resize.observe(container.current!);
     return () => {
+      clearSegmentHover.current();
+      clearSegmentHover.current = () => {};
       resize.disconnect();
       profileMarker.current?.remove();
       profileMarker.current = null;
@@ -313,20 +357,36 @@ export function HikeMap({
     const source = map.getSource("result-paths") as GeoJSONSource;
     let controller: AbortController | undefined;
     let loadedBounds: Bounds | null = null;
+    let paths: RoutePath[] = [];
+    let drawnZoom = -1;
+    let drawnBounds: Bounds | null = null;
+    const contains = (outer: Bounds, inner: Bounds) => inner[0] >= outer[0] && inner[1] >= outer[1]
+      && inner[2] <= outer[2] && inner[3] <= outer[3];
+    const render = () => {
+      const bounds = map.getBounds(), zoom = Math.floor(map.getZoom());
+      const view: Bounds = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+      if (zoom === drawnZoom && drawnBounds && contains(drawnBounds, view)) return;
+      const x = (view[2] - view[0]) / 4, y = (view[3] - view[1]) / 4;
+      drawnBounds = [view[0] - x, view[1] - y, view[2] + x, view[3] + y];
+      drawnZoom = zoom;
+      source.setData(dashedPaths(paths, zoom, drawnBounds));
+    };
     source.setData(empty);
     setPathsError("");
     const load = () => {
       if (!pathsURL || map.getZoom() < PATHS_MIN_ZOOM) {
         controller?.abort();
         loadedBounds = null;
+        paths = [];
+        drawnBounds = null;
         source.setData(empty);
         setPathsError("");
         return;
       }
       const bounds = map.getBounds();
       const view: Bounds = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-      if (loadedBounds && view[0] >= loadedBounds[0] && view[1] >= loadedBounds[1]
-        && view[2] <= loadedBounds[2] && view[3] <= loadedBounds[3]) return;
+      render();
+      if (loadedBounds && contains(loadedBounds, view)) return;
       controller?.abort();
       const pending = new AbortController();
       controller = pending;
@@ -337,16 +397,11 @@ export function HikeMap({
       const url = new URL(pathsURL, window.location.href);
       ["west", "south", "east", "north"].forEach((key, index) => url.searchParams.set(key, String(loadedBounds![index])));
       setPathsError("");
-      void request<RoutePath[]>(url.toString(), pending.signal).then((paths) => {
+      void request<RoutePath[]>(url.toString(), pending.signal).then((loadedPaths) => {
         if (pending.signal.aborted) return;
-        source.setData({
-          type: "FeatureCollection",
-          features: paths.map((path) => ({
-            type: "Feature",
-            properties: { id: path.routeIds[0] },
-            geometry: { type: "LineString", coordinates: path.geometry },
-          })),
-        });
+        paths = loadedPaths;
+        drawnBounds = null;
+        render();
       }).catch(() => {
         if (!pending.signal.aborted) {
           loadedBounds = null;
@@ -366,9 +421,23 @@ export function HikeMap({
 
   useEffect(() => {
     if (!map) return;
+    clearSegmentHover.current();
+    map.removeFeatureState({ source: "route" });
+    // Each physical segment is uploaded once, even for a returning stem.
+    const segments = new Map(activeRoute?.segments?.map(segment => [segment.id, segment]));
     (map.getSource("route") as GeoJSONSource).setData(
       activeRoute
-        ? {
+        ? segments.size ? {
+            type: "FeatureCollection",
+            features: [...segments.values()].map((segment, index) => ({
+              type: "Feature",
+              // Vector tile encoding requires numeric IDs. Source replacement
+              // clears state, so collection indices are stable for this drawing.
+              id: index,
+              properties: { id: activeRoute.id, name: segment.name === undefined ? "Trail name unavailable" : segment.name || "Unnamed trail" },
+              geometry: { type: "LineString", coordinates: activeRoute.geometry.slice(segment.start, segment.end + 1).map(point => [point[0], point[1]]) },
+            })),
+          } : {
             type: "Feature",
             properties: { id: activeRoute.id },
             geometry: { type: "LineString", coordinates: activeRoute.geometry.map(point => [point[0], point[1]]) },
@@ -376,6 +445,10 @@ export function HikeMap({
         : empty,
     );
   }, [map, activeRoute]);
+
+  useEffect(() => {
+    clearSegmentHover.current();
+  }, [focusedId, drawingBoundary]);
 
   useEffect(() => {
     if (!map) return;
@@ -504,6 +577,9 @@ export function HikeMap({
   return (
     <section className="map-panel" aria-label="Hike map">
       <div className="map-canvas" ref={container} />
+      {segmentLabel && segmentLabel.routeId === focusedId && !drawingBoundary && (
+        <div className="map-segment-label">{segmentLabel.name}</div>
+      )}
       {drawingBoundary && <BoundaryDrawing map={map} onFinish={onFinishBoundary} onCancel={onCancelBoundary} />}
       {mapError && (
         <div className="map-notice preview-notice" role="alert">

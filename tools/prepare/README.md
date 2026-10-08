@@ -160,6 +160,12 @@ boundary, source count, start count, and three complete gzip files:
 - `sections/<section.id>/geometry.jsonl.gz`: one full measured coordinate array per corridor per line,
   indexed exactly like that section's graph.
 
+Prepared and unavailable areas carry explicit `state`, `regionId`, `regionName`
+and `name` fields. Search and Settings share state-first grouping; a range with
+multiple sections gets one subgroup heading. A manifest's optional `regionName`
+and `sectionNames` supply familiar labels; `description` retains the actual
+highway scope. Labels never determine section identity, geometry or search scope.
+
 Every file declares compressed/decoded sizes and SHA-256. IDs incorporate pinned
 sources, compiler/policy evidence, and exact section geometry. JSON and gzip
 outputs are deterministic. There are no replicated geographic cells, cross
