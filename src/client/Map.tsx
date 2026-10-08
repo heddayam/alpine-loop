@@ -235,6 +235,19 @@ export function HikeMap({
         paint: { "line-color": "#557f9b", "line-width": 2, "line-dasharray": [3, 2] },
       });
       instance.addLayer({
+        id: "result-paths-background",
+        type: "line",
+        source: "result-paths",
+        minzoom: PATHS_MIN_ZOOM,
+        filter: ["==", ["get", "hit"], true],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 2,
+          "line-opacity": 1,
+        },
+      });
+      instance.addLayer({
         id: "result-paths",
         type: "line",
         source: "result-paths",
@@ -260,7 +273,7 @@ export function HikeMap({
         paint: {
           "line-color": "#b95b2c",
           "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 6, 4],
-          "line-opacity": 0.9,
+          "line-opacity": 1,
         },
       });
       const pathAt = (point: { x: number; y: number }) =>
