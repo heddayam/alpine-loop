@@ -51,6 +51,9 @@ justify it. Changing VM size preserves the attached data disk.
   unfinished searches stay private. There are no accounts or cross-device login.
 - Each browser may queue two searches, with twenty pending globally. New searches
   pause below 1 GiB free disk; retained history is never automatically deleted.
+- Browsers fetch basemap tiles directly from the existing
+  [Maptoolkit Community service](https://www.maptoolkit.org/). It requires no API
+  key; its license eligibility, visible attribution, and fair-use conditions apply.
 
 ## Deploy and verify
 
@@ -79,6 +82,11 @@ The release script archives committed source only, builds before replacing the
 running app, and keeps earlier release directories. Build failure leaves the
 current containers running. The user’s uncommitted changes are not published.
 Deploying interrupts a running search; queued searches continue after restart.
+
+If the source-IP rule blocks SSH, Azure VM Run Command can run the same build
+and Compose commands. Download the public GitHub source archive pinned to a full
+commit SHA into a new release directory; keep the secret env file and existing
+data mount on the VM. This avoids widening inbound SSH access.
 
 Check `/health`, installed catalog coverage, search completion, GPX download,
 browser reconnect, two-browser privacy, and restart persistence before publishing.
@@ -119,6 +127,16 @@ The public browser displayed the completed hikes, map, elevation profile, and GP
 A search submitted from the public UI completed with five hikes in 25 seconds;
 reloading its stable result URL restored the results and browser-owned history.
 HTTP requests redirect to HTTPS at Cloudflare.
+The blue header and coordinated accents are committed on `main` and included
+in the deployed hosting branch; the live header and primary buttons were checked
+as `#245b78` after rebuilding and reloading the public site.
+
+A separate local container completed all 10,187 starts across five Washington
+sections and stored 918 routes in about 35 minutes, peaking at 363 MiB of app
+container memory. This was a local resource check, not an Azure throughput
+measurement. The initial Azure snapshot recovery point is valid; its first vault
+transfer was still running when this report was recorded. See
+[`benchmarks/hosting-verification-2026-10-08.json`](../benchmarks/hosting-verification-2026-10-08.json).
 
 References: [Azure VM pricing](https://azure.microsoft.com/pricing/details/virtual-machines/linux/),
 [Azure Backup pricing](https://azure.microsoft.com/pricing/details/backup/),

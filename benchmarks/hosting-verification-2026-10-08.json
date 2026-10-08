@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-08T22:39:11.900Z",
+  "platform": {
+    "cloudflarePlan": "Free",
+    "azureRegion": "westus2",
+    "vmSize": "Standard_B2ats_v2",
+    "vmMemoryGiB": 1,
+    "osDiskGiB": 32,
+    "dataDiskGiB": 32,
+    "swapGiB": 2
+  },
+  "validation": {
+    "build": "passed",
+    "typecheck": "passed",
+    "focusedRuntimeChecks": 27,
+    "installedSections": 9,
+    "publicHttps": "passed",
+    "httpRedirect": "passed",
+    "gpx": "passed",
+    "privateHistory": "passed",
+    "foreignMutationRejection": "passed",
+    "restartOwnership": "passed",
+    "publicBrowserReconnect": "passed"
+  },
+  "publicBoundedSearch": {
+    "groupCount": 4,
+    "routeCount": 4,
+    "elapsedMs": 18678.184633000055
+  },
+  "publicUiSearch": {
+    "groupCount": 5,
+    "elapsedSeconds": 25,
+    "headerColor": "#245b78",
+    "primaryButtonColor": "#245b78"
+  },
+  "localBroadSearch": {
+    "request": {
+      "sections": [
+        "mountain-1a237ff8895adebfa21e390b",
+        "mountain-70611e49c04901ed37bd793e",
+        "mountain-7a6c62952459c6276843dae6",
+        "mountain-d43a7b201dc5e484847ccc42",
+        "mountain-e003916c5698006638c9c77c"
+      ],
+      "effort": "deep",
+      "distance": [
+        8046.72,
+        19312.128
+      ],
+      "gain": [
+        0,
+        1219.2
+      ],
+      "repetition": 0.2,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 0.1
+      }
+    },
+    "status": "completed",
+    "groupCount": 918,
+    "routeCount": 918,
+    "elapsedMs": 2084059.261937,
+    "totalStarts": 10187,
+    "completedStarts": 10187,
+    "containerMemoryLimitMiB": 896,
+    "containerPeakMemoryBytes": 380325888,
+    "note": "This resource run used the initial image; subsequent fixes affected catalog metadata and CSS only."
+  },
+  "azureSmallSearchMemory": {
+    "containerPeakMemoryBytes": 274554880,
+    "note": "Observed after the private search and restart, before the blue UI release."
+  },
+  "backup": {
+    "scheduleUtc": "08:00",
+    "dailyRetentionDays": 30,
+    "redundancy": "LRS",
+    "initialSnapshotTier": "Valid InstantRP",
+    "initialVaultTransfer": "InProgress",
+    "restoreDrill": "not performed"
+  }
+}
