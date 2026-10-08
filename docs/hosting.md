@@ -18,6 +18,9 @@ change. Azure bills running VMs hourly without a reservation. Deallocating stops
 compute charges but takes the site offline; disks and reserved public IPs continue
 to bill. This deployment does not scale to zero between searches.
 
+Daily VM Backup adds a protected-instance charge and backup storage. Budget
+roughly $20–25/month altogether for light use and check the actual invoice.
+
 Check credit eligibility and expiration in the billing profile. Credits are used
 before the default payment method for eligible charges; expiration does not
 automatically stop the server. Keep account-specific balances out of source control.
@@ -88,18 +91,36 @@ file and data mount. Do not restore old data just to roll back source code.
 
 ## Backups and recovery
 
-Persistent storage is not a backup. Enable Azure VM Backup with a daily policy
-and short retention, or manage independent snapshots of the data disk before
-relying on the service for irreplaceable history. Backups add charges. Protect
-the session secret and tunnel token separately; application-only backups do not
-include `/etc/alpine-loop` on the OS disk. Confirm the first backup succeeds and
-test a restore before describing backups as verified.
+Azure VM Backup is enabled in the `alpine-loop-backup` Recovery Services vault
+in the `alpine-loop-prod` resource group. Its `DefaultPolicy` runs daily at
+08:00 UTC and keeps daily recovery points for 30 days, with no weekly, monthly,
+or yearly retention. The vault uses locally redundant storage. No disks are
+excluded: the OS disk includes `/etc/alpine-loop`, and the data disk includes
+prepared trails and durable history. Backups add charges.
+
+Check the first backup job and recovery point in the vault. A restore drill has
+not yet been performed; a successful backup alone does not verify recovery.
+Keep the session secret and tunnel token protected during any export or restore.
 
 Restore disks to a separate VM, mount them before Docker starts, restore the
 same session secret, and attach the existing tunnel. Do not inspect a live
 container's SQLite WAL through the host filesystem. Restarts interrupt active
 jobs and resume queued jobs rather than publishing partial results.
 
+## Deployment verification
+
+The October 8, 2026 deployment passed 27 focused runtime checks, build, and
+typecheck. On Azure, all nine published sections were installed; a real bounded
+Horse Lake search completed with four hikes, and GPX download, isolated browser
+histories, forbidden foreign mutations, and ownership after restart passed.
+The same search and privacy checks passed through public Cloudflare HTTPS.
+Both `alpineloop.org` and `www.alpineloop.org` served a valid HTTPS health response.
+The public browser displayed the completed hikes, map, elevation profile, and GPX link.
+A search submitted from the public UI completed with five hikes in 25 seconds;
+reloading its stable result URL restored the results and browser-owned history.
+HTTP requests redirect to HTTPS at Cloudflare.
+
 References: [Azure VM pricing](https://azure.microsoft.com/pricing/details/virtual-machines/linux/),
+[Azure Backup pricing](https://azure.microsoft.com/pricing/details/backup/),
 [Azure credits](https://learn.microsoft.com/azure/cost-management-billing/manage/mca-check-azure-credits-balance),
 [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/).
