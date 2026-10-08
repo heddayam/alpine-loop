@@ -59,21 +59,19 @@ export function GradeLimitsControl({ value, units, disabled, onChange }: {
       {open && <div className="grade-popover" style={{ left: offset }} id={`${id}-panel`} role="group" aria-label="Grade limits settings">
         <div className="grade-grid">
           <span />
-          <span className="grade-column" title="The distance limits apply to slopes steeper than this grade.">Grade <span className="field-unit">%</span></span>
+          <span className="grade-column" title="The distance limits apply to slopes steeper than this grade.">Max grade <span className="field-unit">%</span></span>
           <span className="grade-column">Total allowed <span className="field-unit">{unit}</span></span>
           <span className="grade-column">Longest stretch <span className="field-unit">{unit}</span></span>
           {(["uphill", "downhill"] as const).map(direction => {
             const label = direction === "uphill" ? "Uphill" : "Downhill";
             return <div className="grade-row" key={direction}>
               <span className="grade-direction">{label}</span>
-              {(["above", "total", "longest"] as const).map(key => <span key={key} className={key === "above" ? "grade-threshold" : undefined}>
-                {key === "above" && <span className="input-bound" aria-hidden="true">Max</span>}
-                <input type="number" min="0" step="any"
-                  aria-label={`${label} ${key === "above" ? "grade threshold (%)" : `${key === "total" ? "total allowed" : "longest stretch"} (${unit})`}`}
-                  value={value[direction][key]} required={value.enabled}
-                  onChange={event => onChange({ ...value, [direction]: { ...value[direction], [key]: event.target.value } })}
-                />
-              </span>)}
+              {(["above", "total", "longest"] as const).map(key => <input
+                key={key} type="number" min="0" step="any"
+                aria-label={`${label} ${key === "above" ? "maximum grade (%)" : `${key === "total" ? "total allowed" : "longest stretch"} (${unit})`}`}
+                value={value[direction][key]} required={value.enabled}
+                onChange={event => onChange({ ...value, [direction]: { ...value[direction], [key]: event.target.value } })}
+              />)}
             </div>;
           })}
         </div>

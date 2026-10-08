@@ -304,9 +304,7 @@ h4 {
   text-align: right;
 }
 .stepped-number input::-webkit-inner-spin-button,
-.stepped-number input::-webkit-outer-spin-button,
-.grade-threshold input::-webkit-inner-spin-button,
-.grade-threshold input::-webkit-outer-spin-button {
+.stepped-number input::-webkit-outer-spin-button {
   appearance: none;
   margin: 0;
 }
@@ -1311,8 +1309,6 @@ dialog::backdrop {
 .grade-column .field-unit { margin-left: 1px; }
 .grade-direction { font-size: 12px; }
 .grade-grid input { width: 100%; }
-.grade-threshold { position: relative; min-width: 0; }
-.planner .grade-threshold input { appearance: textfield; padding-left: 32px; text-align: right; }
 .grade-definition { margin-top: 9px; color: var(--muted); font-size: 11px; text-align: right; }
 .grade-guide { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 4px; }
 .grade-guide > span { white-space: nowrap; }
