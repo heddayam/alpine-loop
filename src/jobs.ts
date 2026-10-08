@@ -83,8 +83,10 @@ export async function createJobs(dataDirectory: string, directory: string) {
     CREATE TABLE IF NOT EXISTS jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL, status TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS job_inputs (id TEXT PRIMARY KEY, facts TEXT NOT NULL);`);
   if (!db.prepare('PRAGMA table_info(jobs)').all().some(column => column.name === 'status')) db.exec("ALTER TABLE jobs ADD COLUMN status TEXT NOT NULL DEFAULT ''");
+  if (!db.prepare('PRAGMA table_info(jobs)').all().some(column => column.name === 'visitor')) db.exec('ALTER TABLE jobs ADD COLUMN visitor TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status, position)');
-  const insert = db.prepare('INSERT INTO jobs(id, snapshot, status) VALUES (?, ?, ?)');
+  db.exec('CREATE INDEX IF NOT EXISTS jobs_visitor ON jobs(visitor, position)');
+  const insert = db.prepare('INSERT INTO jobs(id, snapshot, status, visitor) VALUES (?, ?, ?, ?)');
   const update = db.prepare('UPDATE jobs SET snapshot = ?, status = ? WHERE id = ?');
   const saveInputs = db.prepare('INSERT OR REPLACE INTO job_inputs VALUES (?, ?)');
   const loadInputs = db.prepare('SELECT facts FROM job_inputs WHERE id = ?');
@@ -255,24 +257,37 @@ export async function createJobs(dataDirectory: string, directory: string) {
     try { return read(store); } finally { store.close(); }
   }
   return {
-    start(query: SearchQuery): JobSnapshot {
+    start(query: SearchQuery, visitor?: string): JobSnapshot {
+      if (visitor) {
+        const own = Number(db.prepare("SELECT COUNT(*) AS count FROM jobs WHERE visitor = ? AND status IN ('queued', 'running')").get(visitor)!.count);
+        if (own >= 2) throw new RequestError('You already have two searches waiting or running. Wait for one to finish or cancel it before submitting another.', 429);
+        const pending = Number(db.prepare("SELECT COUNT(*) AS count FROM jobs WHERE status IN ('queued', 'running')").get()!.count);
+        if (pending >= 20) throw new RequestError('The search queue is full. Please try again after a search finishes.', 429);
+      }
       const job: JobSnapshot = { id: randomUUID(), query: structuredClone(query), status: 'queued', createdAt: new Date().toISOString(),
         progress: { stage: 'preparing', completedRegions: [], totalRegions: query.sections.length, elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 }, storageBytes: 0 };
-      insert.run(job.id, JSON.stringify(job), job.status);
+      insert.run(job.id, JSON.stringify(job), job.status, visitor ?? null);
       startPump(); return snapshot(job.id, false);
     },
-    active: () => db.prepare("SELECT id FROM jobs WHERE status IN ('queued', 'running') ORDER BY position DESC").all()
+    active: (visitor?: string) => db.prepare("SELECT id FROM jobs WHERE status IN ('queued', 'running') AND (? IS NULL OR visitor = ?) ORDER BY position DESC").all(visitor ?? null, visitor ?? null)
       .map(row => snapshot(row.id as string, false)),
-    history(before?: string): JobHistoryPage {
+    history(before?: string, visitor?: string): JobHistoryPage {
       let position = Number.MAX_SAFE_INTEGER;
       if (before !== undefined) {
-        const row = db.prepare('SELECT position FROM jobs WHERE id = ?').get(before);
+        const row = db.prepare('SELECT position FROM jobs WHERE id = ? AND (? IS NULL OR visitor = ?)').get(before, visitor ?? null, visitor ?? null);
         if (!row) throw new RequestError('This history page is no longer available.', 404);
         position = Number(row.position);
       }
-      const entries = db.prepare('SELECT id FROM jobs WHERE position < ? ORDER BY position DESC LIMIT 51').all(position);
+      const entries = db.prepare('SELECT id FROM jobs WHERE position < ? AND (? IS NULL OR visitor = ?) ORDER BY position DESC LIMIT 51').all(position, visitor ?? null, visitor ?? null);
       const jobs = entries.slice(0, 50).map(row => snapshot(row.id as string, false));
       return { jobs, ...(entries.length > 50 ? { nextCursor: jobs.at(-1)!.id } : {}) };
+    },
+    authorize(id: string, visitor: string, mutate = false) {
+      const row = db.prepare('SELECT visitor, status FROM jobs WHERE id = ?').get(id);
+      if (!row || row.visitor !== visitor && row.status !== 'completed') throw new RequestError('This search job is not available.', 404);
+      const canManage = row.visitor === visitor;
+      if (mutate && !canManage) throw new RequestError('Only the browser that created this search can change or delete it.', 403);
+      return canManage;
     },
     get: snapshot,
     page(id: string, offset = 0, sort: ResultSort = 'distance', order: SortOrder = 'asc', revision?: number) {
