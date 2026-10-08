@@ -815,6 +815,44 @@ label.area-row:hover {
   left: 10px;
   z-index: 500;
 }
+.map-panel .map-coordinates .maplibregl-popup-content {
+  padding: 5px 7px;
+  border-radius: 6px;
+  color: var(--ink);
+  font: 13px/1.4 var(--sans);
+}
+.coordinate-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.coordinate-row > span {
+  font-family: var(--mono);
+  white-space: nowrap;
+  user-select: text;
+}
+.coordinate-row > button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+}
+.coordinate-feedback {
+  max-width: 240px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.coordinate-feedback:empty { display: none; }
+.coordinate-copied {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
 .map-provider img {
   display: block;
   height: 24px;
