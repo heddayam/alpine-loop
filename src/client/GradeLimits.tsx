@@ -77,7 +77,7 @@ export function GradeLimitsControl({ value, units, disabled, onChange }: {
         </div>
         <p className="grade-definition">
           <span className="grade-guide" title="Approximate slope descriptions; overall effort also depends on distance and terrain. Grade alone does not establish scrambling.">
-            <span>5–10% moderate</span><span>10–15% stiff</span>
+            <span>5–10% moderate</span><span>10–15% steep</span>
             <span>15–20% very steep</span><span>{">20% extreme"}</span>
           </span>
           Grade averaged over 100 m.
