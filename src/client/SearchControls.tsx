@@ -2,6 +2,7 @@ import { useRef, type FormEvent } from "react";
 import type { CatalogView } from "../data-format.js";
 import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type SearchQuery } from "../model.js";
 import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
+import { SteppedNumber } from "./SteppedNumber.js";
 import { RegionPicker } from "./RegionPicker.js";
 import { stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
@@ -195,75 +196,6 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
   };
 }
 
-function SteppedNumber({
-  id,
-  label,
-  bound,
-  value,
-  step,
-  max,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  bound: "Min" | "Max";
-  value: string;
-  step: number;
-  max?: number;
-  onChange: (value: string) => void;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  const number = Number(value) || 0;
-  const adjust = (direction: number) => {
-    input.current?.focus();
-    onChange(
-      String(Math.min(max ?? Infinity, Math.max(0, number + direction * step))),
-    );
-  };
-  return (
-    <span className="stepped-number">
-      <span className="input-bound" aria-hidden="true">{bound}</span>
-      <input
-        ref={input}
-        id={id}
-        aria-label={label}
-        type="number"
-        min="0"
-        max={max}
-        step="any"
-        required
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-            event.preventDefault();
-            adjust(event.key === "ArrowUp" ? 1 : -1);
-          }
-        }}
-      />
-      <span className="number-steppers">
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={`Increase ${label.toLowerCase()} by ${step}`}
-          disabled={max !== undefined && number >= max}
-          onClick={() => adjust(1)}
-        >
-          <span className="step-arrow up" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={`Decrease ${label.toLowerCase()} by ${step}`}
-          disabled={number <= 0}
-          onClick={() => adjust(-1)}
-        >
-          <span className="step-arrow down" aria-hidden="true" />
-        </button>
-      </span>
-    </span>
-  );
-}
 
 function Range({
   name,

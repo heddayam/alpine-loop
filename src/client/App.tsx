@@ -135,7 +135,8 @@ export function App() {
   const viewedRevisions = useRef(new Map<string, number>());
   const downloading = download?.status === "running";
   const choosingDownload = !!pendingDownload;
-  const activeId = hoveredId ?? selectedId;
+  // Finish an explicit selection before spending work on an incidental preview.
+  const activeId = selectedId && !selected ? selectedId : hoveredId ?? selectedId;
   const activeRoute = useMemo(
     () =>
       geometry?.id === activeId
@@ -346,7 +347,7 @@ export function App() {
               }
             })
             .catch((failure) => {
-              if (!controller.signal.aborted) setRouteError(failure.message);
+              if (!controller.signal.aborted && activeId === selectedId) setRouteError(failure.message);
             });
         },
         activeId === selectedId ? 0 : 120,
@@ -806,12 +807,13 @@ export function App() {
                 routes={drawingBoundary ? [] : locations}
                 pathsURL={viewedJob && !drawingBoundary ? savedResultsURL(viewedJob, "paths") : undefined}
                 profileCursor={profileCursor}
-                activeRoute={activeRoute}
-                selectedId={activeId}
-                focusedId={selectedId}
+                selectedRoute={selected}
+                previewRoute={hoveredId && activeRoute?.id === hoveredId ? activeRoute : null}
+                selectedId={selectedId}
+                previewId={hoveredId}
                 routeNotice={
-                  activeId
-                    ? routeError || (!activeRoute ? "Loading route…" : "")
+                  selectedId
+                    ? routeError || (!selected ? "Loading route…" : "")
                     : ""
                 }
                 onRetryRoute={

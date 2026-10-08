@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { unitsFor, type UnitSystem } from "./units.js";
+import { SteppedNumber } from "./SteppedNumber.js";
 export type GradeDraft = {
   enabled: boolean;
   uphill: { above: string; total: string; longest: string };
@@ -66,11 +67,11 @@ export function GradeLimitsControl({ value, units, disabled, onChange }: {
             const label = direction === "uphill" ? "Uphill" : "Downhill";
             return <div className="grade-row" key={direction}>
               <span className="grade-direction">{label}</span>
-              {(["above", "total", "longest"] as const).map(key => <input
-                key={key} type="number" min="0" step="any"
-                aria-label={`${label} ${key === "above" ? "maximum grade (%)" : `${key === "total" ? "total allowed" : "longest stretch"} (${unit})`}`}
+              {(["above", "total", "longest"] as const).map(key => <SteppedNumber
+                key={key} step={key === "above" ? 1 : 0.1}
+                label={`${label} ${key === "above" ? "maximum grade (%)" : `${key === "total" ? "total allowed" : "longest stretch"} (${unit})`}`}
                 value={value[direction][key]} required={value.enabled}
-                onChange={event => onChange({ ...value, [direction]: { ...value[direction], [key]: event.target.value } })}
+                onChange={text => onChange({ ...value, [direction]: { ...value[direction], [key]: text } })}
               />)}
             </div>;
           })}

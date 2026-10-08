@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { JobSnapshot, RouteLocation } from "../../src/model.js";
 import { JobsDialog, savedResultsURL } from "../../src/client/JobsDialog.js";
 import {
-  clusterLocations,
+  startPoints,
   locationsInView,
 } from "../../src/client/clusters.js";
 
@@ -136,35 +136,25 @@ describe("saved-job interface boundaries", () => {
       "revision=0",
     );
   });
-  it("clusters the entire location set deterministically and preserves all choices at a shared start", () => {
-    const locations = Array.from({ length: 75 }, (_, i) =>
-      location(`hike-${i}`, i < 3 ? 0 : i * 100),
-    );
-    const project = (route: RouteLocation) => ({
-      x: route.startPosition[0],
-      y: route.startPosition[1],
-    });
-    const clusters = clusterLocations(locations, project);
-    expect(clusterLocations([...locations].reverse(), project)).toEqual(
-      clusters,
-    );
-    expect(
-      clusters
-        .flatMap((cluster) => cluster.routes)
-        .map((route) => route.id)
-        .sort(),
-    ).toEqual(locations.map((route) => route.id).sort());
-    expect(
-      clusters.find((cluster) => cluster.routes.length === 3),
-    ).toMatchObject({ coincident: true });
-    expect(
-      clusters
-        .flatMap((cluster) => cluster.routes)
-        .some((route) => route.id === "hike-74"),
-    ).toBe(true);
-    expect(
-      clusterLocations([location("a", 0), location("b", 30)], project)[0]!
-        .coincident,
-    ).toBe(false);
+  it("groups only exact shared starts before proximity clustering, preserving every hike", () => {
+    const locations = [location("a", 0), location("b", 0), location("nearby", 0.001)];
+    const points = startPoints(locations);
+    expect(points).toHaveLength(2);
+    expect(points[0]!.routes.map(route => route.id)).toEqual(["a", "b"]);
+    expect(points[1]!.routes.map(route => route.id)).toEqual(["nearby"]);
+    expect(points[1]!.position).toEqual(locations[2]!.startPosition);
+    expect(points.flatMap(point => point.routes).map(route => route.id).sort()).toEqual(["a", "b", "nearby"]);
+    expect(startPoints([...locations].reverse())).toEqual(points);
+  });
+  it("shows only the selected hike at its exact start and restores all choices on clear", () => {
+    const locations = [location("a", 0), location("b", 0), location("nearby", 30)];
+    const before = structuredClone(locations);
+    const selected = startPoints(locations, "b");
+    expect(selected).toHaveLength(1);
+    expect(selected[0]!.routes).toEqual([locations[1]]);
+    expect(selected[0]!.position).toEqual(locations[1]!.startPosition);
+    expect(startPoints(locations, null).flatMap(point => point.routes)).toEqual(locations);
+    expect(startPoints(locations, "missing")).toEqual([]);
+    expect(locations).toEqual(before);
   });
 });
