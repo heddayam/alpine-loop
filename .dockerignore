@@ -12,6 +12,7 @@
 !scripts/
 !scripts/run.mjs
 !scripts/install-data.mjs
+!scripts/install-hosted-data.mjs
 !scripts/data-release.json
 !scripts/stamp-install.mjs
 !public/

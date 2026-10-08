@@ -1,0 +1,40 @@
+#cloud-config
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - unattended-upgrades
+write_files:
+  - path: /usr/local/sbin/alpine-storage
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      disk=/dev/disk/azure/scsi1/lun0
+      test -b "$disk"
+      # Only an unformatted attached data disk may be initialized.
+      if ! blkid "$disk" >/dev/null; then mkfs.ext4 -L alpine-data "$disk"; fi
+      test "$(blkid -s TYPE -o value "$disk")" = ext4
+      mkdir -p /srv/alpine-loop/data /srv/alpine-loop/releases /etc/alpine-loop
+      uuid=$(blkid -s UUID -o value "$disk")
+      if ! findmnt /srv/alpine-loop/data >/dev/null; then
+        grep -q "UUID=$uuid " /etc/fstab || echo "UUID=$uuid /srv/alpine-loop/data ext4 defaults 0 2" >> /etc/fstab
+        mount /srv/alpine-loop/data
+      fi
+      chown 1000:1000 /srv/alpine-loop/data
+      chmod 700 /etc/alpine-loop
+      systemctl enable --now docker
+      # Compose must never start against the OS disk if the data mount fails.
+      mkdir -p /etc/systemd/system/docker.service.d
+      printf '[Unit]\nRequiresMountsFor=/srv/alpine-loop/data\n' > /etc/systemd/system/docker.service.d/alpine-storage.conf
+      systemctl daemon-reload
+      # A small swap reserve absorbs startup/build spikes on the 1 GiB VM.
+      if ! test -f /swapfile; then
+        fallocate -l 2G /swapfile
+        chmod 600 /swapfile
+        mkswap /swapfile
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+      fi
+      swapon -a
+runcmd:
+  - [bash, /usr/local/sbin/alpine-storage]

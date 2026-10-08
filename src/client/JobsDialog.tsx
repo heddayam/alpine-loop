@@ -146,7 +146,7 @@ export function JobsDialog({
   const list = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const deletingJob = jobs.find(job => job.id === confirmDelete);
+  const deletingJob = jobs.find(job => job.id === confirmDelete && job.canManage !== false);
   useEffect(() => {
     if (!open) return;
     const previous =
@@ -304,11 +304,11 @@ export function JobsDialog({
                     <button type="button" className="job-icon-button" aria-label="Copy settings" title="Copy settings" disabled={busy} onClick={() => onCopy(job)}>
                       <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="9" rx="1" /><path d="M3 11H2V2h8v1" /></svg>
                     </button>
-                    {activeJob(job)
+                    {job.canManage !== false && (activeJob(job)
                       ? <button type="button" className="job-cancel" disabled={busy} onClick={() => onAction(job, "cancel")}>Cancel</button>
                       : <button type="button" id={`job-delete-${job.id}`} className="job-icon-button" aria-label="Delete" title="Delete job" disabled={busy} onClick={() => setConfirmDelete(job.id)}>
                         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M6 4V2h4v2M4 4l1 10h6l1-10M7 6v5M9 6v5" /></svg>
-                      </button>}
+                      </button>)}
                     </div>
                   </div></td>
                 </tr>

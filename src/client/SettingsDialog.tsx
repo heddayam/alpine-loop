@@ -108,7 +108,7 @@ export function SettingsDialog({
             Metric <span>kilometers, meters</span>
           </label>
         </fieldset>
-        {download && (
+        {!dataset?.hosted && download && (
           <section
             className="download-panel"
             aria-labelledby="settings-download-title"
@@ -192,7 +192,7 @@ export function SettingsDialog({
             </div>
           </section>
         )}
-        <section aria-labelledby="trail-downloads-title">
+        {!dataset?.hosted && <section aria-labelledby="trail-downloads-title">
           <h3 id="trail-downloads-title">Manage areas</h3>
           {!dataset && <p role="status">Opening trail data…</p>}
           {dataset && <CatalogAreas dataset={dataset} value={selected} onChange={setSelected} disabled={locked} purpose="download" />}
@@ -220,7 +220,7 @@ export function SettingsDialog({
               )}
             </div>
           )}
-        </section>
+        </section>}
         {!download && downloadError && <p role="alert">{downloadError}</p>}
         {dataset && (
           <details className="settings-notes">

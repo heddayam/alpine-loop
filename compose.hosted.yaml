@@ -1,0 +1,41 @@
+name: alpine-loop
+services:
+  app:
+    image: alpine-loop:${ALPINE_VERSION:-hosted}
+    build: .
+    init: true
+    restart: unless-stopped
+    environment:
+      ALPINE_HOSTED: '1'
+      ALPINE_SESSION_SECRET: ${ALPINE_SESSION_SECRET:?Set a persistent session secret of at least 32 bytes}
+    volumes:
+      - /srv/alpine-loop/data:/app/.local-data
+    # SSH forwarding can reach this for diagnostics; no public origin port.
+    ports:
+      - '127.0.0.1:3000:3000'
+    mem_limit: 896m
+    memswap_limit: 1536m
+    stop_grace_period: 30s
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10m
+      retries: 3
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    restart: unless-stopped
+    command: ['tunnel', '--no-autoupdate', 'run', '--token-file', '/run/secrets/tunnel_token']
+    secrets: [tunnel_token]
+    depends_on:
+      app: { condition: service_healthy }
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+secrets:
+  tunnel_token:
+    file: /etc/alpine-loop/tunnel-token

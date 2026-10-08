@@ -15,7 +15,7 @@ ENV NODE_ENV=production HOST=0.0.0.0
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
-COPY scripts/run.mjs scripts/install-data.mjs scripts/data-release.json ./scripts/
+COPY scripts/run.mjs scripts/install-data.mjs scripts/install-hosted-data.mjs scripts/data-release.json ./scripts/
 RUN mkdir -p /app/.local-data && chown node:node /app/.local-data
 USER node
 EXPOSE 3000

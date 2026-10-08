@@ -16,7 +16,7 @@ export type PreparedSection = Area & {
 export type UnavailableSection = Area & { reason: string };
 export type SectionCatalog = { version: 2; info: DatasetInfo; baseUrl?: string; sections: PreparedSection[]; unavailable?: UnavailableSection[] };
 export type SectionView = PreparedSection & { installed: boolean; bytes: number; needsRepair?: boolean };
-export type CatalogView = DatasetInfo & { sections: SectionView[]; unavailable?: UnavailableSection[] };
+export type CatalogView = DatasetInfo & { sections: SectionView[]; unavailable?: UnavailableSection[]; hosted?: boolean };
 export type Coverage = { sections: string[]; missing: string[]; bytes: number };
 export type DownloadSnapshot = {
   status: 'running' | 'complete' | 'stopped' | 'failed'; sections: string[];

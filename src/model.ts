@@ -122,6 +122,8 @@ export type JobInputs = {
 /** Status/history contains metadata only. Results are readable only after durable completion. */
 export type JobSnapshot = {
   id: string;
+  /** Hosted shared results are readable, but only their visitor can change them. */
+  canManage?: boolean;
   query: SearchQuery;
   status: JobStatus;
   /** Identifies the saved result set, including previously completed local jobs. */

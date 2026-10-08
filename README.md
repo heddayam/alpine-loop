@@ -29,3 +29,5 @@ Downloaded regions and saved searches stay on your computer.
 Stop the app with `docker compose down`; run the startup command again to reopen it.
 
 [App details and development](docs/app-reference.md)
+
+[Cloudflare + Azure hosting](docs/hosting.md)

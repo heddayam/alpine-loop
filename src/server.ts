@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { statfs } from 'node:fs/promises';
 import { gpx, readDataset } from './dataset.js';
 import { gpxFilename } from './route-name.js';
 import { createJobs, parseQuery, RequestError } from './jobs.js';
@@ -57,7 +58,7 @@ export async function createApp(directory: string, clientDirectory?: string, job
     if (access) throw new RequestError('Trail data is installed by the site administrator. This area is currently unavailable for new searches.', 503);
   };
   app.get('/health', async () => ({ status: 'ok' }));
-  app.get('/api/catalog', async () => (await availableData()).view());
+  app.get('/api/catalog', async () => ({ ...(await availableData()).view(), ...(access ? { hosted: true } : {}) }));
   app.post('/api/coverage', async request => (await availableData()).coverage(parseQuery(request.body)));
   app.get('/api/downloads', async () => (await availableData()).downloads.latest());
   app.post('/api/downloads', async (request, reply) => {
@@ -74,6 +75,10 @@ export async function createApp(directory: string, clientDirectory?: string, job
     return { ...page, jobs: page.jobs.map(job => view(request, job)) };
   });
   app.post('/api/jobs', async (request, reply) => {
+    if (access) {
+      const disk = await statfs(jobDirectory);
+      if (disk.bavail * disk.bsize < 1024 ** 3) throw new RequestError('The site is low on storage. New searches are temporarily paused; saved results remain available.', 503);
+    }
     const query = parseQuery(request.body);
     const coverage = await (await availableData()).coverage(query);
     query.sections = coverage.sections;

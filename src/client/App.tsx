@@ -379,6 +379,7 @@ export function App() {
     else if (sections?.length) moveTo(combinedBounds(sections));
   };
   const mutateJob = async (job: JobSnapshot, action: "cancel" | "delete") => {
+    if (job.canManage === false) return;
     const controller = new AbortController();
     setPendingJob({ id: job.id, action });
     setJobActionError("");
@@ -502,6 +503,7 @@ export function App() {
       );
       if (controller.signal.aborted) return;
       if (coverage.missing.length) {
+        if (dataset?.hosted) throw new Error("This area is temporarily unavailable for new searches. Please try another area.");
         setDownload(null);
         setPendingDownload({ query, coverage });
       } else await beginSearch(query);
@@ -539,7 +541,7 @@ export function App() {
     sections: string[],
     query: SearchQuery | null = null,
   ) => {
-    if (busy || downloading) return;
+    if (busy || downloading || dataset?.hosted) return;
     const controller = new AbortController();
     operation.current = controller;
     downloadQuery.current = query;
