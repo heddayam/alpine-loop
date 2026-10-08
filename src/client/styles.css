@@ -660,6 +660,10 @@ label.area-row:hover {
   scrollbar-width: thin;
   border-top: 1px solid #9caaa0;
 }
+.close-hike {
+  float: right;
+  margin: 7px 8px 0 6px;
+}
 .route-detail {
   padding: 7px 8px 9px;
 }

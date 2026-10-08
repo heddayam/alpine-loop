@@ -271,6 +271,14 @@ export function RouteDock({
       </div>
       {selectedId && (
         <div className="route-inspector" aria-label="Selected hike">
+          <button
+            className="close-button close-hike"
+            type="button"
+            aria-label="Close hike details"
+            onClick={onClear}
+          >
+            ×
+          </button>
           {selected ? (
             <RouteDetails
               route={selected}
