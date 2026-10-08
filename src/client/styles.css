@@ -1265,3 +1265,48 @@ dialog::backdrop {
 }
 
 .numeric-field[data-unit="%"] .stepped-number { width: 80px; }
+
+.grade-limits { position: relative; }
+.grade-trigger {
+  display: flex;
+  align-items: center;
+  min-height: 27px;
+  border: 1px solid #929c96;
+  background: #fff;
+  padding-left: 7px;
+}
+.grade-trigger.enabled { background: #e8ece9; border-color: #607366; }
+.grade-trigger button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  padding: 4px 7px;
+  background: transparent;
+  font-size: 12px;
+}
+.grade-trigger button:hover { background: #e8ece9; }
+.grade-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 3px);
+  z-index: 800;
+  width: 379px;
+  max-width: calc(100vw - 18px);
+  border: 1px solid #777;
+  background: #fff;
+  padding: 10px;
+  box-shadow: 0 3px 10px #0002;
+}
+.grade-grid {
+  display: grid;
+  grid-template-columns: 59px 65px 98px 111px;
+  gap: 7px;
+  align-items: center;
+}
+.grade-row { display: contents; }
+.grade-column { font-size: 11px; white-space: nowrap; }
+.grade-column .field-unit { margin-left: 1px; }
+.grade-direction { font-size: 12px; }
+.grade-grid input { width: 100%; }
+.grade-definition { margin-top: 9px; color: var(--muted); font-size: 11px; }

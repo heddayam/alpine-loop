@@ -81,4 +81,39 @@ describe("editable search constraints", () => {
     expect(queryForDraft(valid, "metric").stem).toBe(1.5 * 1609.344);
     expect(queryForDraft({ ...valid, stem: "1" }, "metric").stem).toBe(1000);
   });
+
+  it("omits disabled grade limits, keeps their values, and validates enabled limits", () => {
+    const draft = { ...initialDraft, sections: ["fixture"] };
+    expect(queryForDraft(draft)).not.toHaveProperty("grades");
+    const enabled = { ...draft, grades: { ...draft.grades!, enabled: true } };
+    expect(queryForDraft(enabled)).toMatchObject({ grades: {
+      uphill: { above: 15, total: 0.5 * 1609.344, longest: 0.2 * 1609.344 },
+      downhill: { above: 15, total: 0.25 * 1609.344, longest: 0.1 * 1609.344 },
+    } });
+    const invalid = { ...enabled, grades: { ...enabled.grades, uphill: { ...enabled.grades.uphill, total: "" } } };
+    expect(() => queryForDraft(invalid)).toThrow("Grade thresholds");
+    expect(queryForDraft({ ...invalid, grades: { ...invalid.grades, enabled: false } })).not.toHaveProperty("grades");
+    const zero = { ...enabled, grades: { ...enabled.grades, uphill: { above: "0", total: "0", longest: "0" } } };
+    expect(queryForDraft(zero)).toMatchObject({ grades: { uphill: { above: 0, total: 0, longest: 0 } } });
+  });
+
+  it("restores saved grade limits and preserves exact distances through unit changes", () => {
+    const query = { ...queryForDraft({ ...initialDraft, sections: ["fixture"] }), grades: {
+      uphill: { above: 12.5, total: 823.123456, longest: 234.56789 },
+      downhill: { above: 17, total: 345.123456, longest: 123.456789 },
+    } };
+    let draft = draftForQuery(query);
+    expect(draft.grades?.enabled).toBe(true);
+    for (let i = 0; i < 5; i++) {
+      draft = convertDraft(draft, "imperial", "metric");
+      expect(queryForDraft(draft, "metric")).toEqual(query);
+      draft = convertDraft(draft, "metric", "imperial");
+      expect(queryForDraft(draft)).toEqual(query);
+    }
+    const edited = { ...draft, grades: { ...draft.grades!, uphill: { ...draft.grades!.uphill, total: "1" } } };
+    expect(queryForDraft(edited)).toMatchObject({ grades: { uphill: { total: 1609.344 } } });
+    const off = { ...draft, grades: { ...draft.grades!, enabled: false } };
+    expect(convertDraft(off, "imperial", "metric").grades?.uphill.total).toBe("0.823");
+  });
+
 });
