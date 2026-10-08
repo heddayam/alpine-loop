@@ -627,6 +627,7 @@
       "design": "Linear merge of sorted 100 m window breakpoints with monotone interpolation cursors, compact per-trail profiles and one reusable ordered-walk buffer per section. Reject immediately when a directional distance budget is exceeded. No persistent cache, schema, search cap or dependency.",
       "validation": "Build and typecheck pass; 24 focused checks include independent numerical exposure, actual-worker direction selection and missing elevations, immutable queries, hover grade and successive route decisions. Differential comparison across 20,000 generated profiles agrees within 8e-12 m. All six frozen real-data observations retain exact route hashes, starts, expansions and grade-check counts.",
       "performance": "Grade-enabled Horse Lake 16.31→10.15 s, Teanaway 19.92→16.47 s, Olympics 37.79→7.57 s. Grade-check time falls 89–93%; single-run peak RSS varies and does not demonstrate a memory improvement. Core search timing excludes result storage. Evidence: benchmarks/grade-search-results.json; harness and frozen queries in benchmarks/grade-search.mjs and grade-search-queries.json.",
+      "userQuery": "The latest saved five-Cascades request also produces the same 27 public hike identities, all 10,187 starts and 15,771,724 expansions. Optimized preparation plus solving takes 56.54 s; the historical 299.68 s whole-job time also includes storage/verification, so timing scopes differ. Evidence: .local-data/grade-optimization-user-query.json.",
       "maintainedSourceLines": 10272,
       "maintainedSourceFiles": 58
     }

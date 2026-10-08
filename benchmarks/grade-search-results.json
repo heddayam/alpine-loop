@@ -1,7 +1,7 @@
 {
   "date": "2026-10-08T06:36:05.415Z",
   "baselineRevision": "a6b755812d4d81d51deddbc76ae2de286e5356a5",
-  "optimizedRevision": "072149b + grade.ts and route-grades.ts optimization",
+  "optimizedRevision": "9b56d62",
   "method": "Fresh process per case; fixed prepared dataset and queries; 40% of one core; dataset selection, profile preparation and solving included, storage excluded. Single observations, not repeated medians.",
   "caution": "Grade-disabled cases also improved 3–5%; wall time and peak RSS vary between runs.",
   "observations": [
