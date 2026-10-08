@@ -9,22 +9,29 @@ set of alternatives; it can miss qualifying hikes.
 
 ## Run
 
-Requires Node.js 24 or newer:
+With Docker and Docker Compose installed:
 
 ```sh
-npm start
+docker compose up --build
 ```
 
-Open the printed local URL. Launch installs dependencies and reuses the build until source, configuration,
-dependencies or required outputs change.
-It obtains the published mountain catalog automatically; missing trail sections
+Open http://127.0.0.1:3000. Startup obtains the pinned mountain catalog from
+[GitHub Releases](https://github.com/heddayam/alpine-loop/releases/tag/data-v2-2026-10-07-state-first); missing trail sections
 are downloaded when you choose **Download and search**. Panning never downloads
 anything. Settings → Manage areas offers grouped downloads with actual sizes,
 progress, cancellation and verified-file reuse.
 
-This development checkout uses `.local-data/mountains`. Public prepared-data
-publication is still pending; the catalog release descriptor remains unset.
-Hikers never need Python, Osmium, raw OSM, elevation products, or API keys.
+The catalog is about 2.4 MB; all nine regions total about 139 MB of compressed
+trail data. Internet is needed for the initial build and data downloads. Downloaded
+regions and saved jobs survive container recreation and `docker compose down`
+in a Docker volume. See [container operations and data releases](docs/containerization.md)
+for stopping, changing ports, updates and maintainer publication.
+Hikers need no Node, Python, Osmium, raw OSM, elevation products or API keys.
+
+For native development, Node.js 24 or newer and `npm start` use the same automatic
+data delivery. Launch installs dependencies and reuses the build until source,
+configuration, dependencies or required outputs change. Native data and jobs live
+in `.local-data`; Docker keeps its own separate volume.
 
 ## Mountain sections
 
@@ -43,8 +50,10 @@ loads one section at a time, considering every eligible start across the
 selected sections. Missing or unprepared coverage is disclosed.
 
 Search regions and prepared data sections share the same identity and exact
-footprint. Familiar place names identify each area in a grouped search dropdown;
-exact boundaries remain visible on the map and in Settings. Select regions from
+footprint. Search and Settings group areas by state, with a mountain-range heading
+only when that range contains multiple sections. Familiar section names and
+grouping come from the catalog; exact boundaries remain visible on the map and
+in Settings. Select regions from
 the dropdown, or choose **Draw** beside it under **Search area** and click around an area on the map.
 Finish with the first point, the Finish button or Enter; Undo removes the last
 point and Cancel or Escape keeps the previous selection. Drawing automatically
@@ -79,7 +88,8 @@ current correctness and real-data measurements; the
 solver's unfinished jobs and memory failures.
 Completed jobs become ready in the app without changing your screen.
 
-History and completed geometry live in `.local-data/jobs`. Reloading restores
+History and completed geometry live in `.local-data/jobs` (inside the Docker volume
+for container launches). Reloading restores
 jobs; completed views have stable `?job=ID` URLs. Restarting interrupts the job
 that was running and continues queued jobs. Cancellation, interruption and failure
 discard unfinished results while keeping settings to copy into a new submission.

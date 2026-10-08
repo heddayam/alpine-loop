@@ -24,7 +24,7 @@ async function fixture() {
     files[family] = { path, bytes: body.length, jsonBytes: raw.length, sha256: hash(body) };
     bodies.set(path, body);
   }
-  const catalog: SectionCatalog = { version: 2, info, sections: [{ id: 'one', regionId: '11202', name: 'One section',
+  const catalog: SectionCatalog = { version: 2, info, sections: [{ id: 'one', state: 'WA', regionId: '11202', regionName: 'One range', name: 'One section',
     bounds: info.bounds, boundary: { type: 'MultiPolygon', coordinates: [[[[-122, 47], [-121, 47], [-121, 48], [-122, 48], [-122, 47]]]] },
     sourceSegments: 3, startCount: 1, files }] };
   const save = () => writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
@@ -52,6 +52,30 @@ async function settled(sections: Awaited<ReturnType<typeof openSections>>) {
 }
 
 describe('independent section installation', () => {
+  it('downloads flat release assets into unchanged section paths and rejects unsafe URLs', async () => {
+    const { directory, catalog, bodies, files, serve, save } = await fixture();
+    const calls: string[] = [];
+    await serve((path, response) => {
+      calls.push(path);
+      const family = families.find(family => path === `one.${family}.gz`);
+      response.writeHead(family ? 200 : 404);
+      response.end(family ? bodies.get(files[family].path) : 'Wrong asset path');
+    });
+    for (const family of families) files[family].url = `${catalog.baseUrl}one.${family}.gz`;
+    delete catalog.baseUrl;
+    await save();
+    const sections = await openSections(directory);
+    sections.downloads.start(['one']);
+    expect((await settled(sections)).status).toBe('complete');
+    expect(calls).toEqual(['one.graph.gz', 'one.starts.gz', 'one.geometry.gz']);
+    for (const family of families) expect(await readFile(join(directory, files[family].path))).toEqual(bodies.get(files[family].path));
+    for (const url of ['file:///tmp/source.gz', 'https://user:password@fixture.invalid/source.gz', 'https://fixture.invalid/source.gz#fragment', '/relative.gz']) {
+      files.graph.url = url;
+      await save();
+      await expect(openSections(directory)).rejects.toThrow();
+    }
+  });
+
   it('streams progress, cancels a partial file, and resumes verified files without exposing a partial section', async () => {
     const { directory, bodies, files, serve } = await fixture();
     let interrupted = true;
@@ -142,11 +166,19 @@ describe('independent section installation', () => {
     await save();
     await expect(openSections(directory)).rejects.toThrow(/duplicate/);
     catalog.sections.pop();
+    catalog.sections[0]!.state = '';
+    await save();
+    await expect(openSections(directory)).rejects.toThrow(/geography/);
+    catalog.sections[0]!.state = 'WA';
+    catalog.sections.push({ ...catalog.sections[0]!, id: 'two', regionName: 'Conflicting name' });
+    await save();
+    await expect(openSections(directory)).rejects.toThrow(/Conflicting mountain-region names/);
+    catalog.sections.pop();
     catalog.baseUrl = 'file:///tmp/';
     await save();
     await expect(openSections(directory)).rejects.toThrow(/HTTP/);
     delete catalog.baseUrl;
-    catalog.unavailable = [{ name: 'Unresolved range', bounds: info.bounds, boundary: catalog.sections[0]!.boundary,
+    catalog.unavailable = [{ state: 'WA', regionId: 'unresolved', regionName: 'Unresolved range', name: 'Unresolved range', bounds: info.bounds, boundary: catalog.sections[0]!.boundary,
       reason: 'No through-highway divides this oversized region.' }];
     catalog.sections = [];
     await save();

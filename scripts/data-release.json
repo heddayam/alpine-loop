@@ -1,1 +1,4 @@
-null
+{
+  "catalogUrl": "https://github.com/heddayam/alpine-loop/releases/download/data-v2-2026-10-07-state-first/catalog.json",
+  "catalogSha256": "d97efe028600ca623ec3f58829d942f9cb5a469162a133352edd15dbd82fd9a4"
+}

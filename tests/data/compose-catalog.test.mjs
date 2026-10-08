@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { gzipSync } from 'node:zlib';
 import { composeCatalog } from '../../scripts/compose-catalog.mjs';
+import { packageData } from '../../scripts/package-data.mjs';
 
 const sha = data => createHash('sha256').update(data).digest('hex');
 const attribution = { name: 'Shared source', url: 'https://fixture.invalid/source', license: 'Public domain' };
@@ -17,7 +18,7 @@ async function directory(t) {
 async function fixture(root, id, date = '2026-08-01', west = -123) {
   const path = join(root, id), bounds = [west, 37, west + 1, 38];
   const boundary = { type: 'MultiPolygon', coordinates: [[[[west, 37], [west + 1, 37], [west + 1, 38], [west, 38], [west, 37]]]] };
-  const section = { id, regionId: `region-${id}`, name: id, bounds, boundary, sourceSegments: 1, startCount: 1, files: {} };
+  const section = { id, state: 'WA', regionId: `region-${id}`, regionName: id, name: id, bounds, boundary, sourceSegments: 1, startCount: 1, files: {} };
   await mkdir(join(path, 'sections', id), { recursive: true });
   for (const family of ['graph', 'starts', 'geometry']) {
     const decoded = Buffer.from(`${JSON.stringify(family === 'graph' ? { graph: { info: { id }, starts: [{ id: 'start' }] } } : [[west, 37, 100]])}\n`);
@@ -39,10 +40,50 @@ async function fixture(root, id, date = '2026-08-01', west = -123) {
 async function save(fixture) { await writeFile(join(fixture.path, 'catalog.json'), JSON.stringify(fixture.catalog)); }
 async function absent(path) { await assert.rejects(lstat(path), { code: 'ENOENT' }); }
 
+test('release packaging preserves verified section bytes and identity, excludes unrelated files, and refuses bad inputs or overwrites', async t => {
+  const root = await directory(t), input = await fixture(root, 'first'), output = join(root, 'release');
+  await mkdir(join(input.path, 'jobs'));
+  await writeFile(join(input.path, 'jobs', 'private.sqlite'), 'private');
+  const options = { repository: 'fixture/alpine-loop', tag: 'data-v2-test' };
+  const result = await packageData(input.path, output, options);
+  const body = await readFile(join(output, 'catalog.json')), catalog = JSON.parse(body);
+  assert.deepEqual(catalog.info, input.catalog.info);
+  assert.equal(catalog.sections[0].id, input.section.id);
+  assert.equal(catalog.baseUrl, undefined);
+  assert.equal(result.release.catalogSha256, sha(body));
+  for (const [family, facts] of Object.entries(catalog.sections[0].files)) {
+    const name = `first.${family}.${family === 'geometry' ? 'jsonl' : 'json'}.gz`;
+    assert.equal(facts.url, `https://github.com/fixture/alpine-loop/releases/download/data-v2-test/${name}`);
+    assert.equal(facts.path, input.section.files[family].path);
+    assert.deepEqual(await readFile(join(output, name)), await readFile(join(input.path, facts.path)));
+  }
+  assert.equal((await readdir(output)).length, 8);
+  for (const line of (await readFile(join(output, 'SHA256SUMS'), 'utf8')).trim().split('\n')) {
+    const [digest, name] = line.split('  ');
+    assert.equal(digest, sha(await readFile(join(output, name))));
+  }
+  await assert.rejects(packageData(input.path, output, options), { code: 'EEXIST' });
+  assert.deepEqual(await readFile(join(output, 'catalog.json')), body);
+  input.catalog = catalog;
+  input.section = catalog.sections[0];
+  await save(input);
+  const metadata = join(root, 'metadata');
+  await packageData(input.path, metadata, { ...options, tag: 'data-v2-metadata' });
+  assert.equal((await readdir(metadata)).length, 5);
+  const next = JSON.parse(await readFile(join(metadata, 'catalog.json')));
+  assert.deepEqual(next.sections[0].files, catalog.sections[0].files, 'Metadata releases retain existing immutable asset URLs and hashes');
+  await writeFile(join(input.path, input.section.files.graph.path), 'corrupt');
+  const failed = join(root, 'failed');
+  await assert.rejects(packageData(input.path, failed, options), /Compressed size/);
+  await absent(failed);
+  await assert.rejects(packageData(input.path, failed, { ...options, tag: '../bad' }), /release tag/);
+  await absent(failed);
+});
+
 test('composition preserves section identity and bytes, aggregates metadata and retains original evidence', async t => {
   const root = await directory(t);
   const first = await fixture(root, 'first'), second = await fixture(root, 'second', '2026-09-15', -121);
-  second.catalog.unavailable.push({ name: 'Pending area', bounds: second.section.bounds, boundary: second.section.boundary, reason: 'No approved divider' });
+  second.catalog.unavailable.push({ state: 'WA', regionId: 'pending', regionName: 'Pending area', name: 'Pending area', bounds: second.section.bounds, boundary: second.section.boundary, reason: 'No approved divider' });
   await save(second);
   const originals = await Promise.all([first, second].map(input => readFile(join(input.path, 'catalog.json'))));
   const output = join(root, 'combined');

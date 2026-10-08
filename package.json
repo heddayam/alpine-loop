@@ -9,6 +9,7 @@
   "scripts": {
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node scripts/start.mjs",
+    "postinstall": "node scripts/stamp-install.mjs",
     "dev": "npm start",
     "typecheck": "tsc --noEmit",
     "test": "tsc -p tsconfig.server.json && vitest run && node --test tests/data/witness.test.mjs tests/data/install-data.test.mjs tests/data/build-cache.test.mjs tests/data/compose-catalog.test.mjs",
@@ -18,15 +19,15 @@
   "dependencies": {
     "@fastify/static": "10.1.5",
     "fastify": "5.12.5",
-    "maplibre-gl": "6.13.0",
-    "polyclip-ts": "0.16.8",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "polyclip-ts": "0.16.8"
   },
   "devDependencies": {
     "@types/node": "26.1.2",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
+    "maplibre-gl": "6.13.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "typescript": "6.0.3",
     "vite": "8.2.0",
     "vitest": "4.1.10"

@@ -28,7 +28,6 @@ import {
   storage,
 } from "./JobsDialog.js";
 
-import { regionLabel, sectionLabel } from "./RegionPicker.js";
 import { boundaryBounds, boundarySections } from "../boundary.js";
 import type { SearchBoundary } from "../model.js";
 import { SettingsDialog } from "./SettingsDialog.js";
@@ -70,7 +69,7 @@ const savedMap = (job: JobSnapshot): CatalogView | undefined =>
         startCount: job.progress.totalStarts,
         sections: job.inputs.sections.map((section) => ({
           ...section,
-          regionId: section.id,
+          state: "", regionId: section.id, regionName: section.name,
           sourceSegments: 0,
           startCount: 0,
           installed: true,
@@ -171,9 +170,7 @@ export function App() {
   );
   const visibleBoundary = showSearchArea ? draft.boundary : viewedJob?.query.boundary;
   const regionName = (id: string) =>
-    regionLabel(
-      dataset?.sections.find((section) => section.id === id)?.name ?? id,
-    );
+    dataset?.sections.find((section) => section.id === id)?.name ?? id;
   const moveTo = (bounds: Bounds, padding = 40) =>
     setCamera((current) => ({
       bounds,
@@ -673,11 +670,8 @@ export function App() {
     savedDraft && JSON.stringify(draft) !== JSON.stringify(savedDraft);
   const viewedRegions = viewedJob?.query.boundary ? "Drawn boundary" : viewedJob?.query.sections
     .map((id) =>
-      sectionLabel(
-        viewedJob.inputs?.sections.find((section) => section.id === id)?.name ??
-          dataset?.sections.find((section) => section.id === id)?.name ??
-          id,
-      ),
+      dataset?.sections.find((section) => section.id === id)?.name ??
+        viewedJob.inputs?.sections.find((section) => section.id === id)?.name ?? id,
     )
     .join(", ");
   return (
@@ -818,6 +812,7 @@ export function App() {
                 profileCursor={profileCursor}
                 activeRoute={activeRoute}
                 selectedId={activeId}
+                focusedId={selectedId}
                 routeNotice={
                   activeId
                     ? routeError || (!activeRoute ? "Loading route…" : "")

@@ -19,7 +19,8 @@ export class RouteCache {
       this.bytes -= previous.bytes;
     }
     // Conservative estimate includes arrays, boxed numbers, object and summary strings.
-    const bytes = 2048 + route.geometry.length * 128 + route.trailNames.join("").length * 2;
+    const bytes = 2048 + route.geometry.length * 128 + route.trailNames.join("").length * 2
+      + (route.segments ?? []).reduce((sum, segment) => sum + 128 + (segment.id.length + (segment.name?.length ?? 0)) * 2, 0);
     if (bytes > this.maxBytes) return;
     this.entries.set(key, { route, bytes });
     this.bytes += bytes;

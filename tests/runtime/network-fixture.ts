@@ -43,7 +43,7 @@ export async function createNetworkFixture({ dense = false, startCount = 1, rout
       geometry.push({ id: `corridor-${trail}`, name: 'Creek & Ridge', coordinates: [positions[from]!, positions[to]!] });
     }
     const west = -122.01 + sectionIndex * .01, east = -122 + (sectionIndex + 1) * .01;
-    const section: SectionCatalog['sections'][number] = { id, regionId: 'offline', name: `Test section ${sectionIndex}`, sourceSegments: pairs.length,
+    const section: SectionCatalog['sections'][number] = { id, state: 'WA', regionId: 'offline', regionName: 'Test mountains', name: `Test section ${sectionIndex}`, sourceSegments: pairs.length,
       startCount, bounds: [west, 47.04, east, 47.06], boundary: { type: 'MultiPolygon', coordinates: [[[[west,47.04],[east,47.04],[east,47.06],[west,47.06],[west,47.04]]]] }, files: {} as never };
     await mkdir(join(directory, 'sections', id), { recursive: true });
     for (const [family, value] of Object.entries({ graph: data, starts: starts.map(start => [start, positions[start.node]]), geometry })) {

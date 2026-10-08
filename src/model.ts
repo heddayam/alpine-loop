@@ -77,7 +77,9 @@ export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'ro
   startPosition: Position;
   trailNames: string[];
 };
-export type HikeRoute = RouteSummary & { geometry: Position[] };
+/** Inclusive indices into the ordered walk; repeated physical trails share an ID. */
+export type RouteSegment = { id: string; start: number; end: number; name?: string | null };
+export type HikeRoute = RouteSummary & { geometry: Position[]; segments?: RouteSegment[] };
 /** The preferred qualifying walk for one displayed hike. */
 export type RouteChoice = RouteSummary & {
   groupId: string;

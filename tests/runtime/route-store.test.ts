@@ -73,6 +73,9 @@ it('reuses a lollipop approach without reversing its saved drawing or losing ele
     item.route.summary.kind = 'lollipop';
     item.route.sections = [{ section: 'fixture', id: 0, reverse: false },
       { section: 'fixture', id: 1, reverse: false }, { section: 'fixture', id: 0, reverse: true }];
+    item.route.sections[0]!.name = 'Approach';
+    item.route.sections[1]!.name = null;
+    item.route.sections[2]!.name = 'Approach';
     store.begin(); store.add(item);
     store.saveGeometry('fixture', 0, approach); store.saveGeometry('fixture', 1, loop);
     store.saveGeometry('fixture', 99, [[-10, -10], [10, 10]]);
@@ -80,6 +83,11 @@ it('reuses a lollipop approach without reversing its saved drawing or losing ele
     const published = createRouteStore(file);
     try {
       expect(published.route('lollipop')!.geometry).toEqual(expected);
+      expect(published.route('lollipop')!.segments).toEqual([
+        { id: 'fixture:0', name: 'Approach', start: 0, end: 2 },
+        { id: 'fixture:1', name: null, start: 2, end: 5 },
+        { id: 'fixture:0', name: 'Approach', start: 5, end: 7 },
+      ]);
       expect(published.route('lollipop')!.geometry).toEqual(expected);
       expect(published.locations()[0]!.bounds).toEqual([0, 0, 3, 1]);
       expect(published.paths([-1, -1, 4, 2]).map(path => path.routeIds)).toEqual([['lollipop'], ['lollipop']]);

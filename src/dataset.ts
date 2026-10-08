@@ -60,7 +60,7 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
       return {
         summary: { id, distance, gain, roadDistance, repetition, kind, uncertain, startId: start.id, startName: start.name, startKind: start.kind,
           startPosition: graph.nodes[start.node]!, trailNames: [...names].sort((a, b) => b[1] - a[1]).map(([name]) => name) },
-        sections: steps.map(edge => ({ section: chosen.section.id, id: edge.trail, reverse: edge.reverse })),
+        sections: steps.map(edge => ({ section: chosen.section.id, id: edge.trail, reverse: edge.reverse, name: trails[edge.trail]!.name })),
       };
     }
     return { graph, describe };
@@ -78,6 +78,11 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     }
   }
   return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, select, verifyInputs,
+    readTrailNames: async (section: JobInputs['sections'][number]) => {
+      if (byId.get(section.id)?.files.graph.sha256 !== section.files.graph.sha256) return undefined;
+      const { trails } = await sections.read<SectionGraph>(section.id, 'graph');
+      return trails.map(trail => trail.name);
+    },
     readGeometry: (id: string, trails: ReadonlySet<number>) => sections.geometry(id, trails),
     view: sections.view, downloads: sections.downloads };
 }

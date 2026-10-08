@@ -1,19 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CatalogView, DownloadSnapshot } from "../data-format.js";
 import type { UnitSystem } from "./units.js";
-import {
-  boundaryLabel,
-  groupedCatalog,
-  regionLabel,
-  sectionLabel,
-} from "./RegionPicker.js";
-
-const size = (bytes: number) => {
-  const unit = bytes >= 1_000_000_000 ? "GB" : bytes >= 1_000_000 ? "MB" : "KB";
-  const divisor =
-    unit === "GB" ? 1_000_000_000 : unit === "MB" ? 1_000_000 : 1_000;
-  return `${(bytes / divisor).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`;
-};
+import { CatalogAreas, size } from "./CatalogAreas.js";
 
 export function SettingsDialog({
   open,
@@ -46,18 +34,9 @@ export function SettingsDialog({
   const [selected, setSelected] = useState<string[]>([]);
   const downloading = download?.status === "running";
   const locked = busy || downloading;
-  const groups = dataset ? groupedCatalog(dataset) : [];
   const missing =
     dataset?.sections.filter((section) => !section.installed) ?? [];
   const chosen = missing.filter((section) => selected.includes(section.id));
-  const update = (ids: string[], checked: boolean) => {
-    if (!locked)
-      setSelected((value) =>
-        checked
-          ? [...new Set([...value, ...ids])]
-          : value.filter((id) => !ids.includes(id)),
-      );
-  };
   useEffect(() => {
     if (!open) return;
     const previous =
@@ -88,6 +67,12 @@ export function SettingsDialog({
       ref={dialog}
       className="settings-modal"
       aria-labelledby="settings-title"
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right ||
+            event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+      }}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -141,10 +126,7 @@ export function SettingsDialog({
             <p>
               {download.sections
                 .map((id) =>
-                  regionLabel(
-                    dataset?.sections.find((section) => section.id === id)
-                      ?.name ?? id,
-                  ),
+                  dataset?.sections.find((section) => section.id === id)?.name ?? id,
                 )
                 .join(", ")}
             </p>
@@ -213,78 +195,7 @@ export function SettingsDialog({
         <section aria-labelledby="trail-downloads-title">
           <h3 id="trail-downloads-title">Manage areas</h3>
           {!dataset && <p role="status">Opening trail data…</p>}
-          {groups.map((group) => {
-            const ids = group.sections
-              .filter((section) => !section.installed)
-              .map((section) => section.id);
-            const allSelected =
-              ids.length > 0 && ids.every((id) => selected.includes(id));
-            return (
-              <section
-                className="area-group"
-                key={`${group.id}-${group.name}`}
-                aria-label={group.name}
-              >
-                <header>
-                  <h4>{group.name}</h4>
-                  {!!ids.length && (
-                    <button
-                      type="button"
-                      disabled={locked}
-                      onClick={() => update(ids, !allSelected)}
-                    >
-                      {allSelected ? "Clear" : "Select all"}
-                    </button>
-                  )}
-                </header>
-                {group.sections.map((section) =>
-                  section.installed ? (
-                    <div
-                      className="area-row area-ready"
-                      key={section.id}
-                      title={boundaryLabel(section.name)}
-                    >
-                      <span aria-hidden="true">✓</span>
-                      <span>{sectionLabel(section.name)}</span>
-                      <span className="area-status">Ready</span>
-                    </div>
-                  ) : (
-                    <label
-                      className="area-row"
-                      key={section.id}
-                      title={boundaryLabel(section.name)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(section.id)}
-                        disabled={locked}
-                        aria-label={`Download ${regionLabel(section.name)}`}
-                        onChange={(event) =>
-                          update([section.id], event.target.checked)
-                        }
-                      />
-                      <span>{sectionLabel(section.name)}</span>
-                      <span className="area-status">
-                        {section.needsRepair ? "Repair, " : ""}
-                        {size(section.bytes)}
-                      </span>
-                    </label>
-                  ),
-                )}
-                {group.unavailable.map((section, index) => (
-                  <div
-                    className="area-row unavailable"
-                    key={`${section.name}-${index}`}
-                    title={section.reason}
-                  >
-                    <span aria-hidden="true">—</span>
-                    <span>{sectionLabel(section.name)}</span>
-                    <span className="area-status">Unavailable</span>
-                  </div>
-                ))}
-              </section>
-            );
-          })}
+          {dataset && <CatalogAreas dataset={dataset} value={selected} onChange={setSelected} disabled={locked} purpose="download" />}
           {!!missing.length && (
             <div className="area-toolbar">
               <button
@@ -322,9 +233,9 @@ export function SettingsDialog({
               crossings, including bridges and underpasses.
             </p>
             <ul>
-              {dataset.sections.map((section) => (
+              {dataset.sections.filter(section => section.description).map((section) => (
                 <li key={section.id}>
-                  {sectionLabel(section.name)}: {boundaryLabel(section.name)}
+                  {section.name}: {section.description}
                 </li>
               ))}
             </ul>

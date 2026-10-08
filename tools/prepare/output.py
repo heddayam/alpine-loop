@@ -38,5 +38,5 @@ def write_section(directory, section, graph, geometry):
         files[family] = {"path": path, **write_json(directory / path, value, True, lines=family == "geometry")}
         if files[family]["bytes"] > 128 * 1024 * 1024 or files[family]["jsonBytes"] > 512 * 1024 * 1024:
             raise ValueError(f"Prepared {family} exceeds the runtime file-size limit; choose a smaller section capacity")
-    return {key: section[key] for key in ("id", "regionId", "name", "bounds", "boundary", "sourceSegments")} | {
+    return {key: section[key] for key in ("id", "state", "regionId", "regionName", "name", "bounds", "boundary", "sourceSegments", *(["description"] if "description" in section else []))} | {
         "startCount": len(graph["starts"]), "files": files}

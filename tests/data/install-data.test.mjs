@@ -44,3 +44,16 @@ test('launch rejects non-HTTP release URLs and unbounded catalog responses', asy
   await assert.rejects(installCatalog(root, release, { fetch: () => new Response(oversized) }), /exceeds 16 MB/);
   assert.deepEqual(await readdir(root), []);
 });
+
+test('stopping a catalog download removes partial bytes and preserves the previous catalog', async t => {
+  const root = await directory(t), controller = new AbortController();
+  await writeFile(join(root, 'catalog.json'), 'previous catalog');
+  await assert.rejects(installCatalog(root, release, { signal: controller.signal, fetch: () => new Response(new ReadableStream({
+    start(stream) {
+      stream.enqueue(body.subarray(0, 4));
+      setImmediate(() => controller.abort());
+    },
+  })) }), /abort/i);
+  assert.deepEqual(await readdir(root), ['catalog.json']);
+  assert.equal(await readFile(join(root, 'catalog.json'), 'utf8'), 'previous catalog');
+});

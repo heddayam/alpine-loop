@@ -57,15 +57,24 @@ function catalogFrom(value: unknown): SectionCatalog {
     }
     if (!url.pathname.endsWith('/')) throw new Error('Section download base URL must end with a slash');
   }
-  if (value.unavailable !== undefined && (!Array.isArray(value.unavailable) || !value.unavailable.every(item => object(item)
-    && typeof item.name === 'string' && !!item.name.trim() && bounds(item.bounds) && validBoundary(item.boundary)
-    && typeof item.reason === 'string' && !!item.reason.trim()))) throw new Error('Invalid unavailable mountain-section metadata');
+  if (value.unavailable !== undefined && !Array.isArray(value.unavailable)) throw new Error('Invalid unavailable mountain-section metadata');
+  const ranges = new Map<string, string>();
+  for (const area of [...value.sections, ...((value.unavailable ?? []) as unknown[])]) {
+    if (!object(area) || typeof area.state !== 'string' || !/^[A-Z]{2}$/.test(area.state)
+      || typeof area.regionId !== 'string' || !identifier.test(area.regionId)
+      || typeof area.regionName !== 'string' || !area.regionName.trim()
+      || typeof area.name !== 'string' || !area.name.trim() || !bounds(area.bounds) || !validBoundary(area.boundary)
+      || (area.description !== undefined && typeof area.description !== 'string')) throw new Error('Invalid mountain-section geography');
+    const key = `${area.state}/${area.regionId}`;
+    if (ranges.has(key) && ranges.get(key) !== area.regionName) throw new Error('Conflicting mountain-region names');
+    ranges.set(key, area.regionName);
+  }
+  if (Array.isArray(value.unavailable) && value.unavailable.some(item => !object(item)
+    || typeof item.reason !== 'string' || !item.reason.trim())) throw new Error('Invalid unavailable mountain-section metadata');
   const ids = new Set<string>();
   for (const section of value.sections) {
     if (!object(section) || typeof section.id !== 'string' || !identifier.test(section.id) || ids.has(section.id)
-      || typeof section.regionId !== 'string' || !identifier.test(section.regionId)
-      || typeof section.name !== 'string' || !section.name.trim() || !bounds(section.bounds)
-      || !validBoundary(section.boundary) || !count(section.sourceSegments) || !count(section.startCount)
+      || !count(section.sourceSegments) || !count(section.startCount)
       || !object(section.files) || Object.keys(section.files).length !== families.length) {
       throw new Error('Invalid or duplicate mountain section');
     }
@@ -77,6 +86,13 @@ function catalogFrom(value: unknown): SectionCatalog {
         || !Number.isSafeInteger(facts.jsonBytes) || (facts.jsonBytes as number) <= 0 || (facts.jsonBytes as number) > jsonLimit
         || typeof facts.sha256 !== 'string' || !digest.test(facts.sha256)) {
         throw new Error(`Invalid prepared section file: ${section.id}/${family}`);
+      }
+      if (facts.url !== undefined) {
+        if (typeof facts.url !== 'string') throw new Error('Section downloads need an absolute HTTP(S) URL');
+        const url = new URL(facts.url);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) {
+          throw new Error('Section downloads need an absolute HTTP(S) URL');
+        }
       }
     }
   }
@@ -183,11 +199,11 @@ async function verifyDecodedSize(file: string, facts: DataFile, signal: AbortSig
   if (bytes !== facts.jsonBytes) throw new Error(`Prepared section file decoded size mismatch: ${facts.path}`);
 }
 
-async function download(file: string, facts: DataFile, baseUrl: string, signal: AbortSignal, advance: (bytes: number) => void) {
+async function download(file: string, facts: DataFile, baseUrl: string | undefined, signal: AbortSignal, advance: (bytes: number) => void) {
   const temporary = `${file}.download-${randomUUID()}`;
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
   try {
-    const response = await fetch(new URL(facts.path, baseUrl), { signal: requestSignal });
+    const response = await fetch(facts.url ?? new URL(facts.path, baseUrl), { signal: requestSignal });
     if (!response.ok || !response.body) throw new Error(`Section download failed: HTTP ${response.status} for ${facts.path}`);
     let bytes = 0;
     const sha = createHash('sha256');
@@ -255,7 +271,7 @@ export async function openSections(directory: string, budget?: WorkBudget) {
         advance(facts.bytes);
       } else if (await isVerified(staged, facts, signal)) advance(facts.bytes);
       else {
-        if (!catalog.baseUrl) throw new Error(`No download source is published for ${section.name}`);
+        if (!facts.url && !catalog.baseUrl) throw new Error(`No download source is published for ${section.name}`);
         await download(staged, facts, catalog.baseUrl, signal, advance);
       }
     }

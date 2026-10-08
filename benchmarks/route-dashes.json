@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-07",
+  "savedJob": "8d85c852-dc2e-4ea6-b696-0e538a1f8ec1",
+  "inputPaths": 980,
+  "inputPoints": 29776,
+  "method": "Node geometry generation, 5 warmup runs then 20 measured runs per view. Serialized source size is a payload proxy, not browser heap or GPU memory. No browser-wide memory reduction claim.",
+  "behavior": "One viewport-buffered source, clipped click targets and geographically anchored dashes. Recut on moveend only if integer zoom changes or viewport leaves the prior buffer. No per-frame geometry updates or retained zoom variants.",
+  "results": [
+    {
+      "zoom": 9,
+      "bounds": [
+        -123,
+        36,
+        -121,
+        38
+      ],
+      "meanGenerationMs": 7.667643650000004,
+      "maxGenerationMs": 11.279167000000001,
+      "visibleDashPoints": 15922,
+      "clickTargetPoints": 29776,
+      "serializedSourceBytes": 1526131
+    },
+    {
+      "zoom": 12,
+      "bounds": [
+        -122.25,
+        37.7,
+        -122.05,
+        37.95
+      ],
+      "meanGenerationMs": 4.8956331999999945,
+      "maxGenerationMs": 5.890457999999967,
+      "visibleDashPoints": 2637,
+      "clickTargetPoints": 5312,
+      "serializedSourceBytes": 296000
+    },
+    {
+      "zoom": 16,
+      "bounds": [
+        -122.22500012734375,
+        37.35073357265625,
+        -122.22316907265625,
+        37.35256462734375
+      ],
+      "meanGenerationMs": 4.5618353499999955,
+      "maxGenerationMs": 6.240333000000021,
+      "visibleDashPoints": 107,
+      "clickTargetPoints": 77,
+      "serializedSourceBytes": 6446
+    },
+    {
+      "zoom": 22,
+      "bounds": [
+        -122.22409890511474,
+        37.35163479488526,
+        -122.22407029488525,
+        37.35166340511475
+      ],
+      "meanGenerationMs": 4.309439649999996,
+      "maxGenerationMs": 4.5317079999999805,
+      "visibleDashPoints": 32,
+      "clickTargetPoints": 3,
+      "serializedSourceBytes": 1740
+    }
+  ],
+  "pattern": "2px dash / 5px gap at zooms 9–10, 3px / 8px at 11–12, 4px / 8px at 13+. Dimensions at integer reference zoom; anchored geometry scales naturally during a gesture. Opacity 1."
+}

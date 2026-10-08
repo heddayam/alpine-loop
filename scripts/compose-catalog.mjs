@@ -42,12 +42,19 @@ function validate(catalog) {
     || !Array.isArray(catalog.sections) || !Array.isArray(catalog.unavailable ?? [])) {
     throw new Error('Invalid mountain-section catalog metadata');
   }
+  const ranges = new Map();
   for (const area of [...catalog.sections, ...(catalog.unavailable ?? [])]) {
-    if (!object(area) || !text(area.name) || !validBounds(area.bounds) || !validBoundary(area.boundary)
+    if (!object(area) || typeof area.state !== 'string' || !/^[A-Z]{2}$/.test(area.state)
+      || typeof area.regionId !== 'string' || !identifier.test(area.regionId) || !text(area.regionName)
+      || (area.description !== undefined && typeof area.description !== 'string')
+      || !text(area.name) || !validBounds(area.bounds) || !validBoundary(area.boundary)
       || area.bounds[0] < info.bounds[0] || area.bounds[1] < info.bounds[1]
       || area.bounds[2] > info.bounds[2] || area.bounds[3] > info.bounds[3]) {
-      throw new Error('Invalid mountain-section boundary or bounds');
+      throw new Error('Invalid mountain-section geography, boundary or bounds');
     }
+    const key = `${area.state}/${area.regionId}`;
+    if (ranges.has(key) && ranges.get(key) !== area.regionName) throw new Error('Conflicting mountain-region names');
+    ranges.set(key, area.regionName);
   }
   for (const section of catalog.sections) {
     if (typeof section.id !== 'string' || !identifier.test(section.id)
