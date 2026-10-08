@@ -107,10 +107,21 @@ describe("saved-job interface boundaries", () => {
     const measured = renderJob("running", {
       totalSearchPoints: 100,
       completedSearchPoints: 25,
+      currentRegion: { id: "second", name: "Second region" },
+      totalRegions: 5,
+      completedRegions: ["first"],
     });
+    expect(renderJob("running")).not.toContain('<td class="job-number">0</td>');
+    expect(renderJob("running", { foundHikes: 0 })).toContain('<td class="job-number">0</td>');
+    const live = renderJob("running", { foundHikes: 37 });
+    expect(live).toContain('<td class="job-number">37</td>');
+    expect(live).not.toContain("View results");
+    expect(renderJob("failed", { foundHikes: 37 })).not.toContain('<td class="job-number">37</td>');
     expect(measured).toContain('value="25"');
     expect(measured).toContain('max="100"');
-    expect(measured).toContain("25%");
+    expect(measured.match(/Region 2 of 5, 25%/g)).toHaveLength(2);
+    expect(measured).not.toContain("regions finished");
+    expect(renderJob("running", { stage: "saving", completedRegions: ["cascades"] })).toContain("Saving results");
     expect(measured).not.toContain("planned search steps");
     expect(measured).not.toContain("fully explored");
     expect(renderJob("completed")).not.toContain("fully explored");

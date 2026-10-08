@@ -132,7 +132,6 @@ export function App() {
   const downloadQuery = useRef<SearchQuery | null>(null);
   const operation = useRef<AbortController | null>(null);
   const viewOperation = useRef<AbortController | null>(null);
-  const viewedRevisions = useRef(new Map<string, number>());
   const downloading = download?.status === "running";
   const choosingDownload = !!pendingDownload;
   // Finish an explicit selection before spending work on an incidental preview.
@@ -250,7 +249,6 @@ export function App() {
       clearSelection();
       setShowSearchArea(false);
       setJobsOpen(false);
-      viewedRevisions.current.set(job.id, fullJob.resultsRevision ?? 0);
       localURL(job.id);
       const map = savedMap(fullJob) ?? dataset;
       if (map) moveTo(map.bounds);
@@ -660,11 +658,12 @@ export function App() {
     setSelected(null);
     setSelectedId(id);
   };
-  const readyCount = jobs.filter(
-    (job) =>
-      hasSavedResults(job) &&
-      viewedRevisions.current.get(job.id) !== (job.resultsRevision ?? 0),
-  ).length;
+  const runningCount = jobs.filter((job) => job.status === "running").length;
+  const queuedCount = jobs.filter((job) => job.status === "queued").length;
+  const jobsActivity = [
+    runningCount ? `${runningCount} running` : "",
+    queuedCount ? `${queuedCount} queued` : "",
+  ].filter(Boolean).join(", ");
   const currentJob = jobs.find((job) => job.id === highlightedJob);
   const viewedRegions = viewedJob?.query.boundary ? ["Drawn boundary"] : viewedJob?.query.sections
     .map((id) =>
@@ -677,6 +676,15 @@ export function App() {
         <h1>Alpine Loop</h1>
         <nav aria-label="App">
           <button
+            id="open-search-jobs"
+            type="button"
+            className="jobs-button"
+            onClick={() => setJobsOpen(true)}
+          >
+            Jobs
+            {jobsActivity && <span className="header-count">{jobsActivity}</span>}
+          </button>
+          <button
             id="open-settings"
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -687,19 +695,6 @@ export function App() {
                 ↓
               </span>
             )}
-          </button>
-          <button
-            id="open-search-jobs"
-            type="button"
-            className="jobs-button"
-            onClick={() => setJobsOpen(true)}
-          >
-            Jobs
-            {readyCount ? (
-              <span className="header-count">{readyCount} ready</span>
-            ) : jobs.some(activeJob) ? (
-              <span className="header-count">Running</span>
-            ) : null}
           </button>
         </nav>
       </header>

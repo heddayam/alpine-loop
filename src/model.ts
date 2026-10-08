@@ -94,6 +94,8 @@ export type RouteView = HikeRoute & RouteChoice;
 export const ROUTES_PER_PAGE = 50;
 export type JobStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed' | 'interrupted';
 export type JobProgress = {
+  /** Distinct hikes accepted so far; results remain private until completion. */
+  foundHikes?: number;
   stage: 'preparing' | 'searching' | 'saving';
   currentRegion?: { id: string; name: string };
   completedRegions: string[];

@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { Worker } from 'node:worker_threads';
+import type { JobWorkerEvent } from '../../src/jobs.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,6 +43,23 @@ async function finished(app: App, initial: JobSnapshot, timeout = 5000) {
 const submit = (app: App, payload = query) => app.inject({ method: 'POST', url: '/api/jobs', payload });
 
 describe('completed jobs through the actual app and worker', () => {
+  it('reports accepted hike counts in progress before publishing completion', async () => {
+    const { directory, jobDirectory } = await fixture();
+    const worker = new Worker(join(process.cwd(), 'dist/server/search-worker.js'), {
+      workerData: { directory, query, resultPath: join(jobDirectory, 'progress.sqlite') },
+    });
+    cleanup.push(async () => { await worker.terminate(); });
+    const events: JobWorkerEvent[] = [];
+    worker.on('message', (event: JobWorkerEvent) => events.push(event));
+    expect((await once(worker, 'exit'))[0]).toBe(0);
+    const done = events.at(-1);
+    expect(done?.type).toBe('done');
+    if (done?.type !== 'done') throw new Error('Missing worker completion');
+    const counts = events.filter(event => event.type === 'progress').map(event => event.progress.foundHikes);
+    expect(counts[0]).toBeUndefined();
+    expect(counts.some(count => count! > 0)).toBe(true);
+    expect(counts.at(-1)).toBe(done.counts.groupCount);
+  });
   it('chooses a qualifying reverse direction before preference and retains grade criteria after restart', async () => {
     const { directory, jobDirectory, firstLoop } = await fixture({ directional: true });
     let app = await openApp(directory, jobDirectory);
@@ -211,6 +230,7 @@ describe('completed jobs through the actual app and worker', () => {
     expect(snapshot.query).not.toHaveProperty('repetition');
     expect(snapshot).not.toHaveProperty('routes');
     expect(snapshot.progress).toMatchObject({ completedRegions: ['fixture-0'], totalRegions: 1, totalStarts: count, completedStarts: count });
+    expect(snapshot.progress.foundHikes).toBe(snapshot.groupCount);
     expect(snapshot.progress.totalSearchPoints).toBeGreaterThan(0);
     expect(snapshot.progress.completedSearchPoints).toBe(snapshot.progress.totalSearchPoints);
     expect(snapshot.storageBytes).toBeGreaterThan(0);

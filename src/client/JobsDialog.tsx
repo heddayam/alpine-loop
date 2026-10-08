@@ -61,6 +61,47 @@ export function jobAreaSummary(job: JobSnapshot, catalog: JobRegion[] = []) {
   return [...groups.values()].join(", ");
 }
 
+function DeleteJobDialog({ job, area, onClose, onDelete }: {
+  job: JobSnapshot;
+  area: string;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement;
+    const element = dialog.current!;
+    element.showModal();
+    return () => {
+      element.close();
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, []);
+  return <dialog ref={dialog} className="delete-job-modal" role="alertdialog"
+    aria-labelledby="delete-job-title" aria-describedby="delete-job-warning"
+    onCancel={event => { event.preventDefault(); event.stopPropagation(); onClose(); }}
+    onClick={event => {
+      if (event.target !== event.currentTarget) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right ||
+          event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+    }}>
+    <div className="delete-job-body">
+      <h2 id="delete-job-title">Delete job?</h2>
+      <p id="delete-job-warning">This permanently deletes the job{hasSavedResults(job) ? " and its saved results" : ""}.</p>
+      <div className="delete-job-summary">
+        <strong>{job.query.boundary ? `Drawn area: ${area}` : area}</strong>
+        <time dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString()}</time>
+        {hasSavedResults(job) && <span>{job.groupCount?.toLocaleString() ?? "Saved"} {job.groupCount === 1 ? "hike" : "hikes"} ({storage(job.storageBytes)})</span>}
+      </div>
+    </div>
+    <footer>
+      <button type="button" autoFocus onClick={onClose}>Cancel</button>
+      <button type="button" className="delete-job-button" onClick={onDelete}>Delete job</button>
+    </footer>
+  </dialog>;
+}
+
 export function JobsDialog({
   open,
   units = "imperial",
@@ -105,6 +146,7 @@ export function JobsDialog({
   const list = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const deletingJob = jobs.find(job => job.id === confirmDelete);
   useEffect(() => {
     if (!open) return;
     const previous =
@@ -143,7 +185,7 @@ export function JobsDialog({
     >
       <header className="jobs-heading">
         <div>
-          <h2 id="jobs-title">Jobs <span className="jobs-count">{jobs.length}{hasOlder || hasNewer ? " shown" : ""}</span></h2>
+          <h2 id="jobs-title">Jobs <span className="jobs-count">{jobs.length}{hasOlder || hasNewer ? " shown" : ""} | {storage(jobs.reduce((bytes, job) => bytes + job.storageBytes, 0))}</span></h2>
         </div>
         <button type="button" aria-label="Close jobs" onClick={onClose}>
           ×
@@ -195,6 +237,11 @@ export function JobsDialog({
             const percentage = job.progress.totalSearchPoints
               ? Math.floor(100 * (job.progress.completedSearchPoints ?? 0) / job.progress.totalSearchPoints)
               : null;
+            const progressText = job.progress.stage === "saving"
+              ? "Saving results"
+              : job.progress.currentRegion
+                ? `Region ${job.progress.completedRegions.length + (job.progress.completedRegions.includes(job.progress.currentRegion.id) ? 0 : 1)} of ${job.progress.totalRegions}${percentage !== null ? `, ${percentage}%` : ""}`
+                : "Preparing trails";
             const status = job.status[0]!.toUpperCase() + job.status.slice(1);
             return (
               <Fragment key={job.id}>
@@ -216,7 +263,7 @@ export function JobsDialog({
                   </td>
                   <th scope="row" className="job-area">
                     <div className="job-area-line" title={areas.join(", ")}>
-                      <span>{job.query.boundary ? `Drawn area · ${areaSummary}` : areas.length > 1 ? areaSummary : areas[0]}</span>
+                      <span>{job.query.boundary ? `Drawn area: ${areaSummary}` : areas.length > 1 ? areaSummary : areas[0]}</span>
                       {areas.length > 1 && <span className="job-area-count">{areas.length} sections</span>}
                     </div>
 
@@ -231,15 +278,19 @@ export function JobsDialog({
                     <span>{Number(distanceText(roads.distance, units, 3))} {display.distanceLabel}</span>
                     <span className="job-muted">{Number((roads.fraction * 100).toFixed(1))}%</span>
                   </td>
-                  <td className="job-group-start">
+                  <td className="job-group-start job-status-cell">
+                    <div className="job-status-line">
                     <span className={`job-status status-${job.status}`}>
                       <span className="job-status-dot" aria-hidden="true" />
                       {busy ? pending.action === "cancel" ? "Cancelling…" : pending.action === "delete" ? "Deleting…" : "Opening…" : status}
                     </span>
-                    {job.status === "running" && percentage !== null && <span className="job-status-progress">{percentage}%</span>}
+                    {job.status === "running" && <span className="job-status-progress">
+                      {progressText}
+                    </span>}
+                    </div>
                   </td>
                   <td className="job-number">
-                    {hasSavedResults(job) ? job.groupCount?.toLocaleString() ?? "—" : <span className="job-muted">—</span>}
+                    {hasSavedResults(job) ? job.groupCount?.toLocaleString() ?? "—" : job.status === "running" && job.progress.foundHikes !== undefined ? job.progress.foundHikes.toLocaleString() : <span className="job-muted">—</span>}
                   </td>
                   <td className="job-number">{job.status === "queued" ? "—" : elapsed(job.progress.elapsedMs)}</td>
 
@@ -279,40 +330,35 @@ export function JobsDialog({
                         {job.status === "running" && <div className="job-search-progress">
                           <p>{job.progress.stage === "preparing" ? "Preparing trail data" : job.progress.stage === "saving" ? "Saving results" : `Searching ${job.progress.currentRegion?.name ?? "trails"}`}</p>
                           <progress aria-label="Within-region search progress" max={job.progress.totalSearchPoints || undefined} value={job.progress.totalSearchPoints ? (job.progress.completedSearchPoints ?? 0) : undefined} />
-                          <p>{job.progress.completedRegions.length} of {job.progress.totalRegions} regions finished</p>
+                          <p>{progressText}</p>
                         </div>}
                         {job.status === "queued" && <p>Queue position {job.queuePosition ?? "—"}</p>}
                         {job.reason && <p className="job-error">{job.reason}</p>}
                         {job.status === "interrupted" && <p>Server stopped. Copy settings to try again.</p>}
                         {["cancelled", "failed", "interrupted"].includes(job.status) && <p>Unfinished results were discarded.</p>}
                         {hasSavedResults(job) && <p>{job.groupCount === 0 ? "No qualifying hikes were found by this search." : `${job.groupCount?.toLocaleString() ?? "Saved"} hikes available.`}</p>}
-                        <p className="job-muted">Storage: {storage(job.storageBytes)} · Job {job.id}</p>
+                        <p className="job-muted">Storage: {storage(job.storageBytes)}</p>
+                        <p className="job-muted">Job {job.id}</p>
                       </div>
                     </div>
                   </td>
                 </tr>
-                {confirmDelete === job.id && <tr className="job-delete-row">
-                  <td colSpan={11}>
-                    <div className="delete-confirm" role="alert">
-                      <p>Delete “{title}” and its saved results?</p>
-                      <button type="button" disabled={busy} onClick={() => { onAction(job, "delete"); setConfirmDelete(null); }}>Delete job</button>
-                      <button type="button" autoFocus disabled={busy} onClick={() => { setConfirmDelete(null); document.getElementById(`job-delete-${job.id}`)?.focus(); }}>Keep job</button>
-                    </div>
-                  </td>
-                </tr>}
+
               </Fragment>
             );
           })}
           </tbody>
         </table>}
       </div>
-      <footer className="jobs-storage">
-        <span>{jobs.length} jobs{hasOlder || hasNewer ? " on this page" : ""} · {storage(jobs.reduce((bytes, job) => bytes + job.storageBytes, 0))}</span>
-        {(hasNewer || hasOlder) && <nav aria-label="Job history pages">
+      {(hasNewer || hasOlder) && <footer className="jobs-pagination">
+        <nav aria-label="Job history pages">
           <button type="button" disabled={loading || !hasNewer} onClick={onNewer}>Newer jobs</button>
           <button type="button" disabled={loading || !hasOlder} onClick={onOlder}>Older jobs</button>
-        </nav>}
-      </footer>
+        </nav>
+      </footer>}
+      {deletingJob && <DeleteJobDialog job={deletingJob} area={jobAreaSummary(deletingJob, catalogSections)}
+        onClose={() => setConfirmDelete(null)}
+        onDelete={() => { onAction(deletingJob, "delete"); setConfirmDelete(null); }} />}
     </dialog>
   );
 }

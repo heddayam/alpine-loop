@@ -66,6 +66,8 @@ async function saveRoutes(chosen: (typeof selections)[number]) {
     const route = selection.describe(saved.route);
     route.summary.id = hash(`${chosen.section.id}/${saved.route.id}`);
     store.add({ route, groupId: hash(`${chosen.section.id}/${saved.groupId}`) });
+    progress.foundHikes = store.counts.groupCount;
+    if (Date.now() - lastProgress >= 100) { send(); lastProgress = Date.now(); }
   } });
   return used;
 }
@@ -76,6 +78,7 @@ async function completeRegion(chosen: (typeof selections)[number]) {
   // The graph and each circuit's witnesses can be collected before parsing
   // geometry. Closed graph walks plus matching trail endpoints prove drawing continuity.
   const used = await saveRoutes(chosen);
+  progress.foundHikes = store.counts.groupCount;
   await verify();
   progress.stage = 'saving'; send();
   if (used.size) {
