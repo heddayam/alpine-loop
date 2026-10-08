@@ -44,13 +44,17 @@
   --sans: "IBM Plex Sans", Arial, Helvetica, sans-serif;
   font-family: var(--sans);
   font-size: 13px;
-  color: #252a29;
+  color: #252a2e;
   background: #fff;
   font-synthesis: none;
-  --muted: #5f6764;
-  --line: #ccd1ce;
-  --ink: #303835;
-  --surface: #f1f3f2;
+  --muted: #606970;
+  --line: #cdd3d8;
+  --ink: #30383d;
+  --surface: #f2f4f5;
+  --control-border: #96a2aa;
+  --control-hover: #e9edf0;
+  --action: #245b78;
+  --action-hover: #1d4b63;
   --selection: #fbeef2;
   --active-route: #d93664;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -76,7 +80,7 @@ button,
 .button,
 input,
 select {
-  border: 1px solid #929c96;
+  border: 1px solid var(--control-border);
   border-radius: 0;
   background: #fff;
   padding: 5px 8px;
@@ -93,7 +97,7 @@ button,
 }
 button:hover,
 .button:hover {
-  background: #e8ece9;
+  background: var(--control-hover);
 }
 button:disabled {
   opacity: 0.45;
@@ -101,7 +105,7 @@ button:disabled {
 }
 :focus { outline: none; }
 a {
-  color: #285d89;
+  color: var(--action);
 }
 input,
 select {
@@ -112,7 +116,10 @@ input[type="checkbox"] {
   height: 14px;
   margin: 0;
   flex-shrink: 0;
-  accent-color: var(--ink);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--action);
 }
 h2,
 h3,
@@ -123,11 +130,11 @@ h4 {
 .primary,
 .primary:hover {
   color: #fff;
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--action);
+  border-color: var(--action);
 }
 .primary:hover {
-  background: #18251e;
+  background: var(--action-hover);
 }
 .text-button {
   border: 0;
@@ -161,8 +168,8 @@ h4 {
   min-height: 36px;
   flex-shrink: 0;
   padding: 4px 9px;
-  border-bottom: 1px solid #1e3029;
-  background: #263d33;
+  border-bottom: 1px solid #1f4d66;
+  background: var(--action);
   color: #f4f3ed;
 }
 .app-header h1 {
@@ -183,16 +190,16 @@ h4 {
   font-size: 12px;
   padding: 3px 8px;
   white-space: nowrap;
-  border-color: #718579;
+  border-color: #7d9caa;
   background: transparent;
 }
 .app-header nav button:hover {
-  background: #355245;
+  background: #3d6d86;
 }
 .header-count {
   margin-left: 5px;
   padding-left: 6px;
-  border-left: 1px solid #718579;
+  border-left: 1px solid #7d9caa;
   font-size: 11px;
 }
 .query-bar {
@@ -348,7 +355,7 @@ h4 {
   gap: 8px;
   padding: 4px 6px;
   min-height: 27px;
-  border: 1px solid #929c96;
+  border: 1px solid var(--control-border);
   background: #fff;
   list-style: none;
   font-size: 12px;
@@ -489,7 +496,7 @@ label.area-row:hover {
 .results-panel {
   grid-column: 1;
   grid-row: 1;
-  border-right: 1px solid #9caaa0;
+  border-right: 1px solid var(--control-border);
   background: #fff;
 }
 .browser-panel {
@@ -576,10 +583,11 @@ label.area-row:hover {
   border-left: 0;
 }
 .view-toggle [aria-pressed="true"] {
-  background: var(--ink);
+  background: var(--action);
   color: #fff;
-  border-color: var(--ink);
+  border-color: var(--action);
 }
+.view-toggle [aria-pressed="true"]:hover { background: var(--action-hover); }
 .results-sort {
   display: flex;
   align-items: center;
@@ -676,7 +684,7 @@ label.area-row:hover {
   max-height: min(440px, 62%);
   overflow-y: auto;
   scrollbar-width: thin;
-  border-top: 1px solid #9caaa0;
+  border-top: 1px solid var(--control-border);
 }
 .close-hike {
   float: right;
@@ -758,7 +766,7 @@ label.area-row:hover {
   fill: var(--muted);
 }
 .profile-grid {
-  stroke: #e0e4e1;
+  stroke: #e1e6ea;
   stroke-width: 0.7;
 }
 .profile-elevation-tick {
@@ -821,7 +829,7 @@ label.area-row:hover {
 .map-panel,
 .map-placeholder,
 .maplibregl-map {
-  background: #e8ece4;
+  background: var(--surface);
 }
 .map-panel .map-canvas {
   position: absolute;
@@ -914,7 +922,7 @@ label.area-row:hover {
 }
 .hike-marker {
   --marker-size: 10px;
-  --marker-fill: #fafbf8;
+  --marker-fill: #fafbfc;
   --marker-ring: var(--ink);
   --marker-ring-width: 1.5px;
   width: max(28px, var(--marker-size));
@@ -1259,12 +1267,12 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   min-height: 27px;
-  border: 1px solid #929c96;
+  border: 1px solid var(--control-border);
   background: #fff;
   padding-left: 7px;
 }
-.grade-trigger.enabled { background: #e8ece9; border-color: #607366; }
-.grade-trigger:not(.enabled) { color: #7a817d; background: var(--surface); border-color: var(--line); }
+.grade-trigger.enabled { background: var(--control-hover); border-color: var(--control-border); }
+.grade-trigger:not(.enabled) { color: #7c858d; background: var(--surface); border-color: var(--line); }
 .grade-trigger button {
   display: flex;
   align-items: center;
