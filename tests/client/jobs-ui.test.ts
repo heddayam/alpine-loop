@@ -63,6 +63,7 @@ const location = (id: string, x: number, y = 0): RouteLocation => ({
   trailNames: [],
   distance: 1000,
   gain: 100,
+  roadDistance: 0,
   repetition: 0,
 });
 

@@ -105,7 +105,7 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
         // Only small extents cross the API; shared trail drawings are read once.
         const shapes = new Map<string, Bounds>();
         return rows.map(row => {
-          const { id, startId, startName, startPosition, trailNames, distance, gain, repetition, groupId } = choice(row);
+          const { id, startId, startName, startPosition, trailNames, distance, gain, repetition, roadDistance, groupId } = choice(row);
           const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
           const steps = JSON.parse(row.steps) as StoredRoute['sections'];
           if (!steps.length) throw new Error('Saved route drawing is missing');
@@ -131,7 +131,7 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
             bounds[2] = Math.max(bounds[2], extent[2]);
             bounds[3] = Math.max(bounds[3], extent[3]);
           }
-          return { id, startId, startName, startPosition, trailNames, distance, gain, repetition, groupId, bounds };
+          return { id, startId, startName, startPosition, trailNames, distance, gain, repetition, roadDistance, groupId, bounds };
         });
       },
       paths(bounds: Bounds): RoutePath[] {

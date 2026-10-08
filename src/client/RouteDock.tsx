@@ -137,7 +137,7 @@ export function RouteDock({
   onProfileHover: (position: Position | null) => void;
   onClose: () => void;
 }) {
-  const [sort, setSort] = useState<"distance" | "gain" | "stem">(
+  const [sort, setSort] = useState<"distance" | "gain" | "stem" | "roadDistance">(
     "distance",
   );
   const [descending, setDescending] = useState(false);
@@ -211,6 +211,7 @@ export function RouteDock({
           <option value="distance">Distance</option>
           <option value="gain">Elev. Gain</option>
           <option value="stem">Stem</option>
+          <option value="roadDistance">Road distance</option>
         </select>
         <button
           type="button"

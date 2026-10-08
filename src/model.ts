@@ -140,7 +140,7 @@ export type JobResults = {
   order: SortOrder;
   selectionNote: string;
 };
-export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance' | 'gain' | 'repetition'> & { bounds: Bounds };
+export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance' | 'gain' | 'repetition' | 'roadDistance'> & { bounds: Bounds };
 /** Each shared physical trail is drawn once, with its preferred hikes in distance order. */
 export type RoutePath = { id: string; routeIds: string[]; geometry: [number, number][] };
 export type SearchProgress = {

@@ -579,6 +579,9 @@ label.area-row:hover {
   font-size: 11px;
   border-color: var(--line);
 }
+.results-sort select:focus-visible {
+  outline: none;
+}
 .sort-direction {
   padding: 3px 0;
   border: 0;
