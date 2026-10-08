@@ -1,0 +1,200 @@
+{
+  "date": "2026-10-07",
+  "scope": "Read-only audit of dependencies, startup, browser downloads, running app processes and local disk usage. No application changes, dependency installations, process stops or data deletions.",
+  "checkout": {
+    "head": "922f4c972993ddf2c24dde9d783bf739ae08f23b",
+    "branch": "codex/containerize-local-app",
+    "dirty": true,
+    "concurrentBuildObserved": true,
+    "maintainedSourceFiles": 52,
+    "maintainedSourceLines": 9557
+  },
+  "findings": [
+    {
+      "priority": 1,
+      "title": "Exclude browser-only dependencies from the Docker runtime",
+      "source": [
+        "package.json",
+        "Dockerfile:8",
+        "Dockerfile:13"
+      ],
+      "evidence": "npm prune --omit=dev retains MapLibre, React and React DOM, although the server imports none of these and Vite already bundles the frontend. The installed package-lock dependency closures contain 27 client-exclusive packages totaling 48,544,743 file bytes, after excluding shared server dependencies and nested node_modules from individual sizes.",
+      "proposal": "Move maplibre-gl, react and react-dom to devDependencies, update the lockfile, and let the existing production prune omit their exclusive dependencies. Keep polyclip-ts in runtime dependencies because src/boundary.ts imports it on the server.",
+      "expectedSaving": "Approximately 48.5 MB of unpacked runtime files on this installation; actual compressed image-layer savings require a Docker build measurement.",
+      "validationNeeded": "Build the image and verify server startup, drawn-boundary search validation and static frontend loading."
+    },
+    {
+      "priority": 2,
+      "title": "Serve precompressed browser scripts and styles",
+      "source": [
+        "src/server.ts:85",
+        "vite.config.ts"
+      ],
+      "evidence": "GET with Accept-Encoding: br, gzip returned uncompressed JavaScript with Content-Length 1064702 and no Content-Encoding. Map and worker scripts together contain 1,572,667 raw bytes. Compressing those exact built files locally produced 430,962 gzip bytes or 352,764 Brotli bytes.",
+      "proposal": "Generate .br/.gz siblings for text assets during the build using node:zlib and enable the existing @fastify/static preCompressed option. No additional runtime package is required. Avoid recompressing WOFF2 files.",
+      "expectedSaving": "About 1.22 MB / 78% of these two scripts' cold-transfer bytes with Brotli. This is a byte reduction, not a measured load-time or JavaScript parse-time improvement; local loopback makes timing impact smaller than hosted delivery.",
+      "additionalEvidence": "The catalog response is 735,008 uncompressed bytes, versus 241,695 gzip or 137,567 Brotli bytes in an offline compression experiment. Catalog compression would need a separate API response strategy.",
+      "validationNeeded": "Verify compressed and fallback HTTP responses, Content-Encoding, Vary: Accept-Encoding, and unchanged decoded content.",
+      "reference": "https://github.com/fastify/fastify-static#precompressed"
+    },
+    {
+      "priority": 3,
+      "title": "Avoid dependency reinstall after a manual npm ci",
+      "source": [
+        "scripts/start.mjs:54",
+        "scripts/start.mjs:60"
+      ],
+      "evidence": "Startup trusts a custom node_modules/.alpine-lock stamp written only by this launcher. A manual npm ci recreates node_modules without this stamp, so the next npm start invokes npm ci again even when the dependency tree is current.",
+      "proposal": "Record the fingerprint after successful package installation, or validate npm's installed metadata against the project lockfile before deciding to reinstall. Continue detecting actual lockfile changes or missing dependencies.",
+      "expectedSaving": "One complete redundant installation after manual npm ci; download savings depend on the npm cache. The installed tree currently occupies about 135 MiB on disk.",
+      "validationNeeded": "Check fresh installation, manual npm ci followed by npm start, lockfile changes and missing required files."
+    },
+    {
+      "priority": 4,
+      "title": "Reduce container healthcheck frequency",
+      "source": [
+        "compose.yaml:11",
+        "compose.yaml:12"
+      ],
+      "evidence": "The healthcheck launches a fresh Node process and HTTP request every 10 seconds: 8,640 launches per day of continuous container operation. docker ps returned no running containers during this audit, so this is configured overhead rather than current native-app overhead.",
+      "proposal": "Use a 30-60 second interval if slower unhealthy-state detection is acceptable. Retain readiness checks.",
+      "expectedSaving": "At 60 seconds, 7,200 fewer Node process launches per day when containerized; CPU and energy savings were not measured."
+    },
+    {
+      "priority": 5,
+      "title": "Check build-output existence without reading file contents",
+      "source": [
+        "scripts/start.mjs:9",
+        "scripts/start.mjs:42"
+      ],
+      "evidence": "The exists helper uses readFile, including for every cached build output. Current outputs total roughly 2.43 MB across 57 files.",
+      "proposal": "Use filesystem stat/access for output existence; keep content hashing for actual build inputs.",
+      "expectedSaving": "A few MB of unnecessary file reads on native startup; low priority."
+    }
+  ],
+  "diskOnlyOpportunities": {
+    "maintainerCacheBytes": 12994184533,
+    "maintainerCacheNote": "Not used by the running app. Files in progressive-feasibility/shared-sources remain referenced by active preparation manifests; deleting them would cause future preparation to download again.",
+    "retainedJobBytes": 5001249280,
+    "retainedJobNote": "Includes a large legacy result. History is intentionally retained until manual deletion; do not automatically clean it up. No database was opened for this audit.",
+    "preparedBackupBytes": 392314468,
+    "localReleaseArtifactBytes": 210695855,
+    "intermediatePreparationBytes": 78883527,
+    "note": "Review backup/release/intermediate retention before removal. These are disk savings, not demonstrated runtime speedups. No files were deleted."
+  },
+  "alreadyEfficient": [
+    "All six direct application dependencies have an actual use; browser-only runtime packaging is the removable excess, not the frontend functionality.",
+    "One native app server was observed, with no active jobs and no running Docker containers. A later ps snapshot reported 30,752 KiB RSS and 0.0% CPU; this is a point-in-time observation, not a sustained benchmark.",
+    "Map worker count is already one, search workers run only during jobs, and the search memory watchdog is cleared afterward.",
+    "Idle or hidden browser job polling backs off to 15 seconds; active visible job polling uses one second.",
+    "The installed pinned catalog is reused; prepared sections are downloaded on demand. Runtime section assets total 138,934,836 bytes.",
+    "Browser asset inventory showed only the two Latin UI font subsets loading; Latin Extended subsets did not load in the inspected view.",
+    "Static assets have ETags and return 304 Not Modified for a matching validator. max-age=0 causes revalidation, not necessarily a complete redownload. Long immutable caching on fingerprinted /assets files is a minor optional improvement; keep index.html revalidated.",
+    "The public basemap has four terrain sources with differing tileSize values used by four relief layers. They are intentional visual passes; duplicated source URLs alone do not justify removing them."
+  ],
+  "limitations": [
+    "Dedicated Chrome performance trace tools were unavailable and the in-app browser's read-only evaluator did not expose performance entries. No Core Web Vitals, long-task, GPU or request-duration claims are made.",
+    "Compression numbers are offline experiments on current files, not deployed compression measurements.",
+    "A concurrent build changed fingerprinted filenames during the audit. Byte sizes and source behavior were inspected after that build; no running server was restarted.",
+    "No app tests were run because this audit changed no application code."
+  ],
+  "primaryReferences": [
+    "https://github.com/fastify/fastify-static#precompressed",
+    "https://github.com/fastify/fastify-static#managing-cache-control-headers",
+    "https://styles.maptoolkit.org/hiking.json"
+  ],
+  "implementation": {
+    "date": "2026-10-07",
+    "status": "implemented and verified",
+    "changes": [
+      "Moved React, React DOM and MapLibre to build-only dependencies, retaining polyclip-ts for server boundary validation.",
+      "Generated Brotli (quality 9) and gzip siblings for text build assets using Node built-ins, and enabled static compression negotiation.",
+      "Cached fingerprinted assets immutably for one year while preserving fresh HTML and API metadata.",
+      "Added a postinstall dependency fingerprint so manual npm ci is reused by npm start.",
+      "Used stat metadata for cached build-output existence checks.",
+      "Changed container healthchecks to 60 seconds with five-second startup checks.",
+      "Included existing public font license in container build inputs."
+    ],
+    "measurements": {
+      "previousContainerRuntimeDependencyBytes": 64835612,
+      "optimizedContainerRuntimeDependencyBytes": 16261089,
+      "removedRuntimeDependencyBytes": 48574523,
+      "containerImageBytes": 86142919,
+      "mapAndWorkerRawBytes": 1572667,
+      "mapAndWorkerBrotliBytes": 386532,
+      "steadyStateHealthcheckLaunchesPerDay": 1440,
+      "maintainedSourceFiles": 53,
+      "maintainedSourceLines": 9600
+    },
+    "validation": {
+      "build": "passed",
+      "typecheck": "passed",
+      "startupFixtureChecks": "2 passed",
+      "staticNegotiation": "passed Brotli/gzip/identity decoding, cache policy, missing assets and fresh API/HTML",
+      "appFlows": "19 passed; localhost fixture test rerun with network access after sandbox timeout",
+      "boundaryChecks": "3 passed",
+      "manualInstall": "Actual offline npm ci in temporary native checkout recorded its stamp; ensureDependencies did not reinstall",
+      "container": "Built and ran as non-root with temporary fixture and no live volume; verified frontend dependency absence, drawn-boundary search, completed hike, GPX and font license",
+      "compose": "Configuration validated on Docker Compose v5.1.2",
+      "native": {
+        "nativeURL": "http://127.0.0.1:3000",
+        "savedJobsPreserved": 15,
+        "activeJobs": 0,
+        "transfers": [
+          {
+            "file": "Map-Bu_PjCOQ.js",
+            "encoding": "br",
+            "bytes": 256477
+          },
+          {
+            "file": "Map-Bu_PjCOQ.js",
+            "encoding": "gzip",
+            "bytes": 285566
+          },
+          {
+            "file": "Map-Bu_PjCOQ.js",
+            "encoding": "identity",
+            "bytes": 1064702
+          },
+          {
+            "file": "index-C1t_Vgbu.js",
+            "encoding": "br",
+            "bytes": 85441
+          },
+          {
+            "file": "index-C1t_Vgbu.js",
+            "encoding": "gzip",
+            "bytes": 91746
+          },
+          {
+            "file": "index-C1t_Vgbu.js",
+            "encoding": "identity",
+            "bytes": 288360
+          },
+          {
+            "file": "maplibre-gl-worker-C24SsKwV.js",
+            "encoding": "br",
+            "bytes": 130055
+          },
+          {
+            "file": "maplibre-gl-worker-C24SsKwV.js",
+            "encoding": "gzip",
+            "bytes": 144368
+          },
+          {
+            "file": "maplibre-gl-worker-C24SsKwV.js",
+            "encoding": "identity",
+            "bytes": 507965
+          }
+        ]
+      },
+      "diffCheck": "passed"
+    },
+    "dataPolicy": "Caches, backups, downloaded trail sections and saved-job files were not deleted. The idle native server was gracefully restarted; all 15 saved jobs retained their IDs and statuses.",
+    "notes": [
+      "Brotli quality 9 keeps build cost modest; achieved transfer reduction is about 75%, below the audit experiment with default quality 11.",
+      "Catalog API compression was an additional measurement, not one of the selected implementation changes; API responses retain no-store.",
+      "Existing concurrent app edits were preserved. Temporary task worktree archived and verification container automatically removed."
+    ]
+  }
+}

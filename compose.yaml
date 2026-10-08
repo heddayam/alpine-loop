@@ -9,7 +9,8 @@ services:
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/jobs/active').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"]
-      interval: 10s
+      interval: 60s
+      start_interval: 5s
       timeout: 5s
       start_period: 130s
       retries: 3

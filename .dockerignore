@@ -13,3 +13,6 @@
 !scripts/run.mjs
 !scripts/install-data.mjs
 !scripts/data-release.json
+!scripts/stamp-install.mjs
+!public/
+!public/**

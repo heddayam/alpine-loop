@@ -44,6 +44,14 @@ allows only image inputs, so local jobs, datasets, source caches and secrets do
 not enter the build context. The pinned official base supports Linux ARM64 and
 amd64. Application hosting is still deferred.
 
+React and MapLibre are build dependencies; the runtime retains only server
+packages and the bundled frontend. Builds generate Brotli/gzip versions of text
+assets, and fingerprinted assets use a one-year immutable browser cache while
+HTML and API metadata stay fresh. Healthchecks run every 60 seconds after
+startup, with five-second checks during the startup grace period. Native
+`npm ci` records its installation so the next `npm start` reuses it; startup
+checks build-output metadata rather than reading every output file.
+
 ## Network failures, restarts and updates
 
 The catalog URL and SHA-256 are pinned in `scripts/data-release.json`. A verified

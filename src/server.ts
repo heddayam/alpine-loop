@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { resolve } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gpx, readDataset } from './dataset.js';
 import { createJobs, parseQuery, RequestError } from './jobs.js';
@@ -64,7 +64,14 @@ export async function createApp(directory: string, clientDirectory?: string, job
     const route = jobs.route(request.params.id, request.params.routeId, revision(request.query.revision));
     return reply.type('application/gpx+xml').header('Content-Disposition', 'attachment; filename="alpine-loop.gpx"').send(gpx(route));
   });
-  if (clientDirectory) await app.register(fastifyStatic, { root: clientDirectory });
+  if (clientDirectory) await app.register(fastifyStatic, {
+    root: clientDirectory,
+    preCompressed: true,
+    setHeaders(reply, path) {
+      if (relative(clientDirectory, path).startsWith(`assets${sep}`))
+        reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+    },
+  });
   return app;
 }
 
