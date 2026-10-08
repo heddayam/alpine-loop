@@ -12,23 +12,33 @@ export function validGradeLimits(value: unknown): value is GradeLimits {
 export type ProfileSample = { distance: number; position: Position };
 
 /** Horizontal distance uses the same Earth diameter as prepared trail lengths. */
+function horizontalDistance(a: Position, b: Position): number {
+  const radians = Math.PI / 180;
+  const from = a[1] * radians, to = b[1] * radians;
+  const h = Math.sin((to - from) / 2) ** 2 + Math.cos(from) * Math.cos(to)
+    * Math.sin(((b[0] - a[0]) * radians) / 2) ** 2;
+  return 12742017.6 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
 export function elevationSamples(geometry: Position[]): ProfileSample[] {
   let distance = 0;
-  const radians = Math.PI / 180;
   return geometry.map((position, index) => {
     const previous = geometry[index - 1];
-    if (previous) {
-      const a = previous[1] * radians;
-      const b = position[1] * radians;
-      const h =
-        Math.sin((b - a) / 2) ** 2 +
-        Math.cos(a) *
-          Math.cos(b) *
-          Math.sin(((position[0] - previous[0]) * radians) / 2) ** 2;
-      distance += 12742017.6 * Math.asin(Math.min(1, Math.sqrt(h)));
-    }
+    if (previous) distance += horizontalDistance(previous, position);
     return { distance, position };
   });
+}
+
+/** Packed cumulative distance/elevation pairs for search; unknown height is NaN. */
+export function elevationProfile(geometry: Position[]): Float64Array {
+  const profile = new Float64Array(geometry.length * 2);
+  let distance = 0;
+  for (let i = 0; i < geometry.length; i++) {
+    if (i) distance += horizontalDistance(geometry[i - 1]!, geometry[i]!);
+    profile[i * 2] = distance;
+    profile[i * 2 + 1] = geometry[i]![2] ?? NaN;
+  }
+  return profile;
 }
 
 function finitePosition(position: Position): Position {
@@ -108,53 +118,61 @@ export type GradeExposure = {
  * Unknown elevations invalidate the result. Each interval is integrated exactly:
  * window ends move linearly between shifted elevation vertices, and threshold
  * crossings solve rise - threshold * run = 0 (also at clipped endpoints).
+ * Packed input avoids per-point objects in search. Limits permit early rejection;
+ * null then means either unknown/invalid elevation or an exceeded budget.
  */
 export function gradeExposure(
-  samples: ProfileSample[],
+  samples: ProfileSample[] | Float64Array,
   thresholds: { uphill: number; downhill: number },
+  limits?: GradeLimits,
 ): GradeExposure | null {
   const result: GradeExposure = {
     uphill: { total: 0, longest: 0 },
     downhill: { total: 0, longest: 0 },
   };
-  if (!samples.length || samples[0]!.distance !== 0) return null;
+  const profile = samples instanceof Float64Array ? samples : new Float64Array(samples.length * 2);
+  if (!(samples instanceof Float64Array)) for (let i = 0; i < samples.length; i++) {
+    profile[i * 2] = samples[i]!.distance;
+    profile[i * 2 + 1] = samples[i]!.position[2] ?? NaN;
+  }
+  if (!profile.length || profile.length % 2 || profile[0] !== 0) return null;
   if (!Number.isFinite(thresholds.uphill) || thresholds.uphill < 0 ||
       !Number.isFinite(thresholds.downhill) || thresholds.downhill < 0) return null;
-  for (let i = 0; i < samples.length; i++) {
-    const sample = samples[i]!;
-    if (!Number.isFinite(sample.distance) || !Number.isFinite(sample.position[2]) ||
-        (i > 0 && sample.distance < samples[i - 1]!.distance)) return null;
+  for (let i = 0; i < profile.length; i += 2) {
+    if (!Number.isFinite(profile[i]) || !Number.isFinite(profile[i + 1]) ||
+        (i > 0 && profile[i]! < profile[i - 2]!)) return null;
   }
-  const length = samples.at(-1)!.distance;
+  const count = profile.length / 2, length = profile[profile.length - 2]!;
   if (!length) return result;
-  const breaks = new Set([0, length]);
-  for (const sample of samples) {
-    for (const value of [sample.distance - 50, sample.distance + 50]) {
-      if (value > 0 && value < length) breaks.add(value);
-    }
-  }
-  const points = [...breaks].sort((a, b) => a - b);
-  // At an interior interval's midpoint, duplicates can never cause a zero run.
-  const slope = (distance: number) => {
-    const i = sampleIndex(samples, distance);
-    const a = samples[i - 1]!;
-    const b = samples[i]!;
-    return (b.position[2]! - a.position[2]!) / (b.distance - a.distance);
-  };
+  // The two streams of shifted vertices are already sorted. Merge them while
+  // advancing both window ends once through the profile: O(n), no sort or lookup.
+  let minus = 0, plus = 0, before = 1, after = 1, left = 0;
+  const directions = ["uphill", "downhill"] as const;
+  const fractions = { uphill: thresholds.uphill / 100, downhill: thresholds.downhill / 100 };
   const runs = { uphill: 0, downhill: 0 };
-  for (let i = 1; i < points.length; i++) {
-    const left = points[i - 1]!;
-    const right = points[i]!;
+  while (left < length) {
+    while (minus < count && profile[minus * 2]! - 50 <= left) minus++;
+    while (plus < count && profile[plus * 2]! + 50 <= left) plus++;
+    const right = Math.min(length, minus < count ? profile[minus * 2]! - 50 : Infinity,
+      plus < count ? profile[plus * 2]! + 50 : Infinity);
     const center = (left + right) / 2;
     const start = Math.max(0, center - 50);
     const end = Math.min(length, center + 50);
-    const rise = elevationPosition(samples, end)![2]! - elevationPosition(samples, start)![2]!;
-    const startSlope = start === 0 ? 0 : slope(start);
-    const endSlope = end === length ? 0 : slope(end);
+    while (before < count - 1 && profile[before * 2]! < start) before++;
+    while (after < count - 1 && profile[after * 2]! < end) after++;
+    const startSlope = start === 0 ? 0 : (profile[before * 2 + 1]! - profile[before * 2 - 1]!)
+      / (profile[before * 2]! - profile[before * 2 - 2]!);
+    const endSlope = end === length ? 0 : (profile[after * 2 + 1]! - profile[after * 2 - 1]!)
+      / (profile[after * 2]! - profile[after * 2 - 2]!);
+    const startHeight = start === 0 ? profile[1]! : profile[before * 2 - 1]!
+      + (start - profile[before * 2 - 2]!) * startSlope;
+    const endHeight = end === length ? profile[profile.length - 1]! : profile[after * 2 - 1]!
+      + (end - profile[after * 2 - 2]!) * endSlope;
+    const rise = endHeight - startHeight;
     const runSlope = Number(end < length) - Number(start > 0);
-    for (const direction of ["uphill", "downhill"] as const) {
+    for (const direction of directions) {
       const sign = direction === "uphill" ? 1 : -1;
-      const threshold = thresholds[direction] / 100;
+      const threshold = fractions[direction];
       const value = sign * rise - threshold * (end - start);
       const derivative = sign * (endSlope - startSlope) - threshold * runSlope;
       const atLeft = value + derivative * (left - center);
@@ -172,8 +190,11 @@ export function gradeExposure(
       result[direction].total += distance;
       runs[direction] += distance;
       result[direction].longest = Math.max(result[direction].longest, runs[direction]);
+      if (limits && (result[direction].total > limits[direction].total
+        || result[direction].longest > limits[direction].longest)) return null;
       if (to < right) runs[direction] = 0;
     }
+    left = right;
   }
   return result;
 }

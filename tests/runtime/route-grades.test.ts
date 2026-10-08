@@ -130,4 +130,16 @@ describe('route grade constraints', () => {
     const absent = await routeGradeCheck(network.graph, (async function* () {})(), unlimited());
     expect(() => absent(route([0]))).toThrow(/missing.*geometry/i);
   });
+
+  it('keeps successive route decisions independent after rejection', async () => {
+    const network = fixture([{ from: 0, to: 1, coordinates: [position(0, 0, 0), position(100, 0, 40)] }]);
+    const limits = unlimited();
+    limits.uphill.total = 0;
+    const check = await routeGradeCheck(network.graph, network.geometry(), limits);
+    for (let i = 0; i < 3; i++) {
+      expect(check(route([0]))).toBe(false);
+      expect(check(route([1]))).toBe(true);
+      expect(check(route([]))).toBe(false);
+    }
+  });
 });

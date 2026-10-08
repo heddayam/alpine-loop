@@ -1,0 +1,195 @@
+{
+  "date": "2026-10-08T06:36:05.415Z",
+  "baselineRevision": "a6b755812d4d81d51deddbc76ae2de286e5356a5",
+  "optimizedRevision": "072149b + grade.ts and route-grades.ts optimization",
+  "method": "Fresh process per case; fixed prepared dataset and queries; 40% of one core; dataset selection, profile preparation and solving included, storage excluded. Single observations, not repeated medians.",
+  "caution": "Grade-disabled cases also improved 3–5%; wall time and peak RSS vary between runs.",
+  "observations": [
+    {
+      "id": "horse-lake",
+      "gradesEnabled": false,
+      "routeCount": 4,
+      "routesHash": "ba5683e6e15b6ca912f8c26d87381fb217d7ca3299a280d099cecb5ae7cd03ce",
+      "sameResults": true,
+      "sameSearch": true,
+      "sections": [
+        {
+          "id": "mountain-70611e49c04901ed37bd793e",
+          "starts": 5,
+          "expansions": 8185397
+        }
+      ],
+      "before": {
+        "elapsedMs": 9731.702792,
+        "cpuMs": 4651.19,
+        "gradePreparationMs": 0.0007079999999746178,
+        "gradeCheckMs": 0,
+        "gradeCalls": 0,
+        "peakRssBytes": 312836096
+      },
+      "after": {
+        "elapsedMs": 9311.543,
+        "cpuMs": 4520.507,
+        "gradePreparationMs": 0.0002910000000042601,
+        "gradeCheckMs": 0,
+        "gradeCalls": 0,
+        "peakRssBytes": 311672832
+      }
+    },
+    {
+      "id": "horse-lake",
+      "gradesEnabled": true,
+      "routeCount": 4,
+      "routesHash": "54f67382b76a317f6e01e3603aac03266bafa829731254f39c6d1a59a492340f",
+      "sameResults": true,
+      "sameSearch": true,
+      "sections": [
+        {
+          "id": "mountain-70611e49c04901ed37bd793e",
+          "starts": 5,
+          "expansions": 8174931
+        }
+      ],
+      "before": {
+        "elapsedMs": 16305.064166999999,
+        "cpuMs": 7645.75,
+        "gradePreparationMs": 674.2165,
+        "gradeCheckMs": 2437.1477869999935,
+        "gradeCalls": 1361,
+        "peakRssBytes": 321175552
+      },
+      "after": {
+        "elapsedMs": 10145.035209,
+        "cpuMs": 5073.537,
+        "gradePreparationMs": 595.914,
+        "gradeCheckMs": 274.1937639999976,
+        "gradeCalls": 1361,
+        "peakRssBytes": 337756160
+      }
+    },
+    {
+      "id": "teanaway",
+      "gradesEnabled": false,
+      "routeCount": 8,
+      "routesHash": "f1379a759bf9a41d6277eac76aedeb08dfedf967ec0853c051642e1fb74b86e0",
+      "sameResults": true,
+      "sameSearch": true,
+      "sections": [
+        {
+          "id": "mountain-70611e49c04901ed37bd793e",
+          "starts": 257,
+          "expansions": 14512064
+        }
+      ],
+      "before": {
+        "elapsedMs": 16861.422083999998,
+        "cpuMs": 7542.313,
+        "gradePreparationMs": 0.0003329999999550637,
+        "gradeCheckMs": 0,
+        "gradeCalls": 0,
+        "peakRssBytes": 291045376
+      },
+      "after": {
+        "elapsedMs": 15950.899625,
+        "cpuMs": 7236.338,
+        "gradePreparationMs": 0.00037500000001955414,
+        "gradeCheckMs": 0,
+        "gradeCalls": 0,
+        "peakRssBytes": 325582848
+      }
+    },
+    {
+      "id": "teanaway",
+      "gradesEnabled": true,
+      "routeCount": 2,
+      "routesHash": "f95d30333610deff11a86ab5cdb3a74a6be328ef4390334258bfb2e361c48510",
+      "sameResults": true,
+      "sameSearch": true,
+      "sections": [
+        {
+          "id": "mountain-70611e49c04901ed37bd793e",
+          "starts": 257,
+          "expansions": 14512037
+        }
+      ],
+      "before": {
+        "elapsedMs": 19919.916250000002,
+        "cpuMs": 9205.544,
+        "gradePreparationMs": 650.169625,
+        "gradeCheckMs": 940.6640879999859,
+        "gradeCalls": 1552,
+        "peakRssBytes": 335937536
+      },
+      "after": {
+        "elapsedMs": 16471.826208000002,
+        "cpuMs": 7716.568,
+        "gradePreparationMs": 578.2247500000001,
+        "gradeCheckMs": 64.11936000000264,
+        "gradeCalls": 1552,
+        "peakRssBytes": 341884928
+      }
+    },
+    {
+      "id": "olympics",
+      "gradesEnabled": false,
+      "routeCount": 38,
+      "routesHash": "fb000e33aaa27622bf729a0dfa2d22820bddbd75a635e9eac3940aa17a0b8826",
+      "sameResults": true,
+      "sameSearch": true,
+      "sections": [
+        {
+          "id": "mountain-bcb514054a1fdcb6bcf393a1",
+          "starts": 879,
+          "expansions": 1682075
+        }
+      ],
+      "before": {
+        "elapsedMs": 3603.6852080000003,
+        "cpuMs": 2065.889,
+        "gradePreparationMs": 0.00033299999999769625,
+        "gradeCheckMs": 0,
+        "gradeCalls": 0,
+        "peakRssBytes": 188055552
+      },
+      "after": {
+        "elapsedMs": 3476.071417,
+        "cpuMs": 1980.529,
+        "gradePreparationMs": 0.0003750000000053433,
+        "gradeCheckMs": 0,
+        "gradeCalls": 0,
+        "peakRssBytes": 184926208
+      }
+    },
+    {
+      "id": "olympics",
+      "gradesEnabled": true,
+      "routeCount": 22,
+      "routesHash": "b598196e4bb9cd5e630935d292f1823422f68579f1c0a66e6eb83e97952a6da4",
+      "sameResults": true,
+      "sameSearch": true,
+      "sections": [
+        {
+          "id": "mountain-bcb514054a1fdcb6bcf393a1",
+          "starts": 879,
+          "expansions": 1680096
+        }
+      ],
+      "before": {
+        "elapsedMs": 37793.35604200001,
+        "cpuMs": 15838.422,
+        "gradePreparationMs": 377.61075,
+        "gradeCheckMs": 13302.81768600007,
+        "gradeCalls": 20713,
+        "peakRssBytes": 266436608
+      },
+      "after": {
+        "elapsedMs": 7573.886834,
+        "cpuMs": 3702.121,
+        "gradePreparationMs": 347.21520799999996,
+        "gradeCheckMs": 1464.2924999999382,
+        "gradeCalls": 20713,
+        "peakRssBytes": 270680064
+      }
+    }
+  ]
+}
