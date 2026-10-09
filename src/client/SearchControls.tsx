@@ -406,40 +406,53 @@ export function SearchControls({
           <button ref={optionsButton} type="button" className="options-trigger"
             aria-expanded={optionsOpen} aria-controls={optionsId} onClick={() => {
               const left = options.current!.getBoundingClientRect().left;
-              setOptionsOffset(Math.max(9 - left, Math.min(0, window.innerWidth - 357 - left)));
+              setOptionsOffset(Math.max(9 - left, Math.min(0, window.innerWidth - 309 - left)));
               setOptionsOpen(!optionsOpen);
             }}>
             More options <span aria-hidden="true">▾</span>
           </button>
           {optionsOpen && <div className="options-popover" id={optionsId} style={{ left: optionsOffset }}
             role="group" aria-label="Approach and road limits">
-            <label className="option-heading">
-              <input type="checkbox" checked={draft.approachEnabled}
-                onChange={event => update({ approachEnabled: event.target.checked })} />
-              Limit approach distance
-            </label>
-            <p>{draft.approachEnabled
-              ? "The approach is walked out and back. Both limits below apply to its one-way distance."
-              : "Longer approaches are allowed within the total hike distance."}</p>
+            <div className="option-title">
+              <label className="option-heading">
+                <input type="checkbox" checked={draft.approachEnabled}
+                  onChange={event => update({ approachEnabled: event.target.checked })} />
+                Limit approach distance
+              </label>
+              <button type="button" className="options-info" aria-label="About approach limits" aria-describedby={`${optionsId}-approach-info`}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+                  <circle cx="7" cy="7" r="5.5" /><path d="M7 6.5v4M7 3.5v.5" strokeLinecap="round" />
+                </svg>
+                <span className="option-tooltip" role="tooltip" id={`${optionsId}-approach-info`}>
+                  The approach is walked out and back. Both limits apply to its one-way distance. Uncheck to allow longer approaches within the hike distance. Enabled limits apply to your next search.
+                </span>
+              </button>
+            </div>
             <fieldset className="options-fields" disabled={!draft.approachEnabled} aria-label="Approach limits">
               <Maximum id="stem" name="Approach distance" unit={display.distanceLabel}
                 step={0.5} value={draft.stem} onChange={(stem) => update({ stem })} />
               <Maximum id="stem-percent" name="Share of total hike" unit="%"
                 step={5} max={100} value={draft.stemPercent} onChange={(stemPercent) => update({ stemPercent })} />
             </fieldset>
-            <label className="option-heading">
-              <input type="checkbox" checked={draft.roadsEnabled}
-                onChange={event => update({ roadsEnabled: event.target.checked })} />
-              Limit road walking
-            </label>
-            <p>{draft.roadsEnabled
-              ? "Total distance walked on roads, including any repeated sections."
-              : "More road walking is allowed within the total hike distance."}</p>
+            <div className="option-title">
+              <label className="option-heading">
+                <input type="checkbox" checked={draft.roadsEnabled}
+                  onChange={event => update({ roadsEnabled: event.target.checked })} />
+                Limit road walking
+              </label>
+              <button type="button" className="options-info" aria-label="About road walking limits" aria-describedby={`${optionsId}-roads-info`}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+                  <circle cx="7" cy="7" r="5.5" /><path d="M7 6.5v4M7 3.5v.5" strokeLinecap="round" />
+                </svg>
+                <span className="option-tooltip" role="tooltip" id={`${optionsId}-roads-info`}>
+                  Total distance walked on roads, including repeated sections. Uncheck to allow more road walking within the hike distance. Enabled limits apply to your next search.
+                </span>
+              </button>
+            </div>
             <fieldset className="options-fields" disabled={!draft.roadsEnabled} aria-label="Road limits">
               <Maximum id="road-distance" name="Road distance" unit={display.distanceLabel}
                 step={0.1} value={draft.roadDistance} onChange={(roadDistance) => update({ roadDistance })} />
             </fieldset>
-            <p className="options-note">Enabled limits apply to your next search, even with this popup closed.</p>
           </div>}
         </div>
         <GradeLimitsControl
