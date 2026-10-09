@@ -217,7 +217,7 @@ export function JobsDialog({
               <th scope="col">Search area</th>
               <th scope="col" className="job-number">Distance <span className="job-unit">{display.distanceLabel}</span></th>
               <th scope="col" className="job-number">Gain <span className="job-unit">{display.elevationLabel}</span></th>
-              <th scope="col" className="job-number">Max stem</th>
+              <th scope="col" className="job-number" title="One-way approach walked again on the return">Max approach</th>
               <th scope="col" className="job-number">Max roads</th>
               <th scope="col" className="job-group-start">Status</th>
               <th scope="col" className="job-number">Hikes</th>
@@ -319,7 +319,7 @@ export function JobsDialog({
                         <h3>Search settings</h3>
                         <p>{areas.join(", ")}</p>
                         {job.query.boundary && <p>Starting points inside the boundary; hikes may extend outside.</p>}
-                        <p>Stem up to {Number(distanceText(stemLimit(job.query), units, 3))} {display.distanceLabel}{job.query.repetition !== undefined && ` and ${Number((job.query.repetition * 100).toFixed(1))}%`}; roads up to {Number(distanceText(roads.distance, units, 3))} {display.distanceLabel} and {Number((roads.fraction * 100).toFixed(1))}%.</p>
+                        <p>One-way approach up to {Number(distanceText(stemLimit(job.query), units, 3))} {display.distanceLabel}{job.query.repetition !== undefined && ` and ${Number((job.query.repetition * 100).toFixed(1))}% of the hike`}; roads up to {Number(distanceText(roads.distance, units, 3))} {display.distanceLabel} and {Number((roads.fraction * 100).toFixed(1))}%.</p>
                         {job.query.grades && (["uphill", "downhill"] as const).map(direction => {
                           const limit = job.query.grades![direction];
                           return <p key={direction}>{direction === "uphill" ? "Uphill" : "Downhill"} above {limit.above}%: {Number(distanceText(limit.total, units, 3))} {display.distanceLabel} total, {Number(distanceText(limit.longest, units, 3))} {display.distanceLabel} longest stretch.</p>;

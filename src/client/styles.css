@@ -686,10 +686,19 @@ label.area-row:hover {
   scrollbar-width: thin;
   border-top: 1px solid var(--control-border);
 }
-.close-hike {
-  float: right;
-  margin: 7px 8px 0 6px;
+.back-to-results {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 7px 8px 0;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--action);
+  font-size: 11px;
 }
+.back-to-results:hover { background: transparent; text-decoration: underline; }
+.back-to-results:focus-visible, .options-trigger:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .route-detail {
   padding: 7px 8px 9px;
 }
@@ -1261,6 +1270,25 @@ dialog::backdrop {
 }
 
 .numeric-field[data-unit="%"] .stepped-number { width: 80px; }
+
+.search-options { position: relative; }
+.options-trigger { min-height: 27px; padding: 4px 7px; font-size: 12px; }
+.options-trigger[aria-expanded="true"] { background: var(--control-hover); }
+.options-trigger span { margin-left: 7px; }
+.options-popover {
+  position: absolute;
+  top: calc(100% + 3px);
+  z-index: 800;
+  width: 348px;
+  max-width: calc(100vw - 18px);
+  padding: 12px;
+  border: 1px solid var(--control-border);
+  background: #fff;
+  box-shadow: 0 3px 10px #0002;
+}
+.options-popover p { margin: 4px 0 10px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.options-fields { display: flex; gap: 20px; margin-bottom: 14px; }
+.options-popover .options-note { margin: 12px 0 0; font-size: 11px; }
 
 .grade-limits { position: relative; }
 .grade-trigger {

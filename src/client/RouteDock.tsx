@@ -57,7 +57,7 @@ function RouteDetails({
           </dd>
         </div>
         <div>
-          <dt>Stem</dt>
+          <dt title="One-way approach walked again on the return">Approach</dt>
           <dd>
             {distanceText(stemDistance(route), units)} <small>{display.distanceLabel}</small>
           </dd>
@@ -114,7 +114,6 @@ export function RouteDock({
   onClear,
   onRetry,
   onProfileHover,
-  onClose,
 }: {
   job: JobSnapshot;
   regionNames: string[];
@@ -133,7 +132,6 @@ export function RouteDock({
   onClear: () => void;
   onRetry: () => void;
   onProfileHover: (position: Position | null) => void;
-  onClose: () => void;
 }) {
   const [sort, setSort] = useState<"distance" | "gain" | "stem" | "roadDistance">(
     "distance",
@@ -169,14 +167,6 @@ export function RouteDock({
             </> : regionNames[0]}
           </h2>
           <span className="result-count">{total.toLocaleString()} routes</span>
-          <button
-            className="close-button"
-            type="button"
-            aria-label="Close results"
-            onClick={onClose}
-          >
-            ×
-          </button>
         </div>
         <p className="saved-request">{requestSummary(job.query, units)}</p>
       </header>
@@ -215,7 +205,7 @@ export function RouteDock({
         >
           <option value="distance">Distance</option>
           <option value="gain">Elev. Gain</option>
-          <option value="stem">Stem</option>
+          <option value="stem">Approach distance</option>
           <option value="roadDistance">Road distance</option>
         </select>
         <button
@@ -257,8 +247,8 @@ export function RouteDock({
                   <span title="Elevation gain">
                     {elevationText(route.gain, units)} <small>{display.elevationLabel}</small>
                   </span>
-                  <span>
-                    {distanceText(stemDistance(route), units)} <small>{display.distanceLabel} stem</small>
+                  <span title="One-way approach walked again on the return">
+                    {distanceText(stemDistance(route), units)} <small>{display.distanceLabel} approach</small>
                   </span>
                 </span>
               </button>
@@ -278,12 +268,11 @@ export function RouteDock({
       {selectedId && (
         <div className="route-inspector" aria-label="Selected hike">
           <button
-            className="close-button close-hike"
+            className="back-to-results"
             type="button"
-            aria-label="Close hike details"
             onClick={onClear}
           >
-            ×
+            <span aria-hidden="true">←</span> Back to results
           </button>
           {selected ? (
             <RouteDetails

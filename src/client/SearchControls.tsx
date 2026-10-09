@@ -1,4 +1,4 @@
-import { useRef, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { CatalogView } from "../data-format.js";
 import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type SearchQuery } from "../model.js";
 import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
@@ -168,7 +168,7 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
     minGain > maxGain
   ) {
     throw new Error(
-      "Use a positive maximum distance and ordered, nonnegative distance and elevation gain ranges. Stem and road distance must be zero or greater; stem percentage must be between 0 and 100.",
+      "Use a positive maximum distance and ordered, nonnegative distance and elevation gain ranges. In More options, approach and road distance must be zero or greater; approach percentage must be between 0 and 100.",
     );
   }
   let grades: GradeLimits | undefined;
@@ -297,6 +297,33 @@ export function SearchControls({
   onDrawBoundary: () => void;
 }) {
   const drawButton = useRef<HTMLButtonElement>(null);
+  const options = useRef<HTMLDivElement>(null);
+  const optionsButton = useRef<HTMLButtonElement>(null);
+  const optionsId = useId();
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optionsOffset, setOptionsOffset] = useState(0);
+  useEffect(() => {
+    if (!optionsOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !options.current?.contains(event.target)) setOptionsOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOptionsOpen(false);
+      optionsButton.current?.focus();
+    };
+    const resize = () => setOptionsOpen(false);
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    window.addEventListener("resize", resize);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", resize);
+    };
+  }, [optionsOpen]);
+  useEffect(() => { if (disabled) setOptionsOpen(false); }, [disabled]);
   const update = (change: Partial<SearchDraft>) =>
     onChange({ ...draft, ...change });
   const display = unitsFor(units);
@@ -365,33 +392,34 @@ export function SearchControls({
           value={draft.gain}
           onChange={(gain) => update({ gain })}
         />
-        <Maximum
-          id="stem"
-          name="Stem distance"
-          unit={display.distanceLabel}
-          title="One-way approach distance walked again on the return"
-          step={1}
-          value={draft.stem}
-          onChange={(stem) => update({ stem })}
-        />
-        <Maximum
-          id="stem-percent"
-          name="Stem"
-          unit="%"
-          title="One-way stem as a percentage of the full hike; both stem limits apply"
-          step={5}
-          max={100}
-          value={draft.stemPercent}
-          onChange={(stemPercent) => update({ stemPercent })}
-        />
-        <Maximum
-          id="road-distance"
-          name="Road distance"
-          unit={display.distanceLabel}
-          step={1}
-          value={draft.roadDistance}
-          onChange={(roadDistance) => update({ roadDistance })}
-        />
+        <div className="search-options" ref={options} onBlur={event => {
+          if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) setOptionsOpen(false);
+        }}>
+          <button ref={optionsButton} type="button" className="options-trigger"
+            aria-expanded={optionsOpen} aria-controls={optionsId} onClick={() => {
+              const left = options.current!.getBoundingClientRect().left;
+              setOptionsOffset(Math.max(9 - left, Math.min(0, window.innerWidth - 357 - left)));
+              setOptionsOpen(!optionsOpen);
+            }}>
+            More options <span aria-hidden="true">▾</span>
+          </button>
+          {optionsOpen && <div className="options-popover" id={optionsId} style={{ left: optionsOffset }}
+            role="group" aria-label="Approach and road limits">
+            <h3>Approach to the loop</h3>
+            <p>The approach is walked out and back. Both limits below apply to its one-way distance.</p>
+            <div className="options-fields">
+              <Maximum id="stem" name="Approach distance" unit={display.distanceLabel}
+                step={0.5} value={draft.stem} onChange={(stem) => update({ stem })} />
+              <Maximum id="stem-percent" name="Share of total hike" unit="%"
+                step={5} max={100} value={draft.stemPercent} onChange={(stemPercent) => update({ stemPercent })} />
+            </div>
+            <h3>Road walking</h3>
+            <p>Total distance walked on roads, including any repeated sections.</p>
+            <Maximum id="road-distance" name="Road distance" unit={display.distanceLabel}
+              step={0.1} value={draft.roadDistance} onChange={(roadDistance) => update({ roadDistance })} />
+            <p className="options-note">These limits apply even when More options is closed.</p>
+          </div>}
+        </div>
         <GradeLimitsControl
           value={draft.grades ?? convertDraft(initialDraft, "imperial", units).grades!}
           units={units}

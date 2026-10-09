@@ -198,6 +198,10 @@ export function App() {
     setSelectedId(null);
     focusedRouteId.current = null;
   };
+  const backToResults = () => {
+    clearSelection();
+    requestAnimationFrame(() => document.getElementById("results-heading")?.focus());
+  };
   const localURL = (id?: string) => {
     const url = new URL(window.location.href);
     if (id) url.searchParams.set("job", id);
@@ -760,10 +764,9 @@ export function App() {
             onScope={setResultScope}
             onSelect={pickRoute}
             onPreview={setHoveredId}
-            onClear={clearSelection}
+            onClear={backToResults}
             onRetry={() => setRouteRetry((value) => value + 1)}
             onProfileHover={profileCursor.set}
-            onClose={closeResults}
           />
         )}
         {viewedJob && (
