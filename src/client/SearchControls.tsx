@@ -424,7 +424,7 @@ export function SearchControls({
                   <circle cx="7" cy="7" r="5.5" /><path d="M7 6.5v4M7 3.5v.5" strokeLinecap="round" />
                 </svg>
                 <span className="option-tooltip" role="tooltip" id={`${optionsId}-approach-info`}>
-                  The approach is walked out and back. Both limits apply to its one-way distance. Uncheck to allow longer approaches within the hike distance. Enabled limits apply to your next search.
+                  The approach is walked out and back. Both limits apply to its one-way distance. Uncheck to allow longer approaches within the hike distance.
                 </span>
               </button>
             </div>
@@ -445,7 +445,7 @@ export function SearchControls({
                   <circle cx="7" cy="7" r="5.5" /><path d="M7 6.5v4M7 3.5v.5" strokeLinecap="round" />
                 </svg>
                 <span className="option-tooltip" role="tooltip" id={`${optionsId}-roads-info`}>
-                  Total distance walked on roads, including repeated sections. Uncheck to allow more road walking within the hike distance. Enabled limits apply to your next search.
+                  Total distance walked on roads, including repeated sections. Uncheck to allow more road walking within the hike distance.
                 </span>
               </button>
             </div>
