@@ -26,7 +26,7 @@ setWorkerUrl(workerUrl);
 // One local search already uses the CPU; Safari otherwise starts up to three map workers.
 setWorkerCount(1);
 const empty = { type: "FeatureCollection" as const, features: [] };
-const PATHS_MIN_ZOOM = 9;
+const PATHS_MIN_ZOOM = 8;
 // Match MapMaker's "Blured" preset while keeping its non-Latin font fallbacks.
 const bluredWeights: Record<string, string> = {
   "Ysabeau Regular": "Regular",
@@ -279,6 +279,19 @@ export function HikeMap({
         id: "search-boundary-outline", type: "line", source: "search-boundary",
         paint: { "line-color": "#557f9b", "line-width": 2, "line-dasharray": [3, 2] },
       });
+      const colors = getComputedStyle(container.current!);
+      const resultColor = colors.getPropertyValue("--action").trim();
+      const routeColor = colors.getPropertyValue("--active-route").trim();
+      // Keep alternatives legible on terrain, with the focused hike above them.
+      instance.addLayer({
+        id: "result-paths-background", type: "line", source: "result-paths", minzoom: PATHS_MIN_ZOOM,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 8, 3.5, 12, 4.5, 16, 5],
+          "line-opacity": 0.75,
+        },
+      }, firstLabel);
       instance.addLayer({
         id: "result-paths",
         type: "line",
@@ -286,8 +299,8 @@ export function HikeMap({
         minzoom: PATHS_MIN_ZOOM,
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#626d78",
-          "line-width": 2,
+          "line-color": resultColor,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.5, 12, 2.5, 16, 3],
           "line-opacity": 1,
         },
       }, firstLabel);
@@ -295,7 +308,6 @@ export function HikeMap({
         id: "result-paths-hit", type: "line", source: "result-paths", minzoom: PATHS_MIN_ZOOM,
         paint: { "line-width": 8, "line-opacity": 0 },
       }, firstLabel);
-      const routeColor = getComputedStyle(container.current!).getPropertyValue("--active-route").trim();
       instance.addLayer({
         id: "result-paths-preview", type: "line", source: "result-paths", minzoom: PATHS_MIN_ZOOM,
         filter: ["==", ["get", "id"], ""],
