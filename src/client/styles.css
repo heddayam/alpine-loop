@@ -1287,7 +1287,17 @@ dialog::backdrop {
   box-shadow: 0 3px 10px #0002;
 }
 .options-popover p { margin: 4px 0 10px; color: var(--muted); font-size: 12px; line-height: 1.4; }
-.options-fields { display: flex; gap: 20px; margin-bottom: 14px; }
+.option-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.limit-switch { display: flex; align-items: center; gap: 6px; border: 0; padding: 2px 0; background: transparent; color: var(--muted); font-size: 11px; }
+.limit-switch:hover { background: transparent; color: var(--action); }
+.limit-switch:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.switch-track { position: relative; width: 28px; height: 16px; border-radius: 10px; background: #8c979e; }
+.switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+.limit-switch[aria-checked="true"] .switch-track { background: var(--action); }
+.limit-switch[aria-checked="true"] .switch-track::after { left: 14px; }
+.options-fields { display: flex; gap: 20px; margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+.options-fields:disabled { opacity: 0.45; }
+.options-fields input:disabled { background: var(--surface); }
 .options-popover .options-note { margin: 12px 0 0; font-size: 11px; }
 
 .grade-limits { position: relative; }

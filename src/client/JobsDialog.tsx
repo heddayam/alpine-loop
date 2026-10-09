@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { JobRegion, JobSnapshot, SearchQuery } from "../model.js";
 import { DEFAULT_ROAD_LIMITS } from "../model.js";
-import { distanceText, elevationText, stemLimit, unitsFor, type UnitSystem } from "./units.js";
+import { distanceText, elevationText, hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
 export const activeJob = (job: JobSnapshot) =>
   job.status === "queued" || job.status === "running";
@@ -271,12 +271,16 @@ export function JobsDialog({
                   <td className="job-number">{Number(distanceText(job.query.distance[0], units))}–{Number(distanceText(job.query.distance[1], units))}</td>
                   <td className="job-number">{elevationText(job.query.gain[0], units)}–{elevationText(job.query.gain[1], units)}</td>
                   <td className="job-number job-limit">
+                    {hasApproachLimit(job.query) ? <>
                     <span>{Number(distanceText(stemLimit(job.query), units, 3))} {display.distanceLabel}</span>
                     <span className="job-muted">{job.query.repetition !== undefined ? `${Number((job.query.repetition * 100).toFixed(1))}%` : "—"}</span>
+                    </> : <span className="job-muted">Off</span>}
                   </td>
                   <td className="job-number job-limit">
+                    {hasRoadLimit(job.query) ? <>
                     <span>{Number(distanceText(roads.distance, units, 3))} {display.distanceLabel}</span>
                     <span className="job-muted">{Number((roads.fraction * 100).toFixed(1))}%</span>
+                    </> : <span className="job-muted">Off</span>}
                   </td>
                   <td className="job-group-start job-status-cell">
                     <div className="job-status-line">
@@ -319,7 +323,11 @@ export function JobsDialog({
                         <h3>Search settings</h3>
                         <p>{areas.join(", ")}</p>
                         {job.query.boundary && <p>Starting points inside the boundary; hikes may extend outside.</p>}
-                        <p>One-way approach up to {Number(distanceText(stemLimit(job.query), units, 3))} {display.distanceLabel}{job.query.repetition !== undefined && ` and ${Number((job.query.repetition * 100).toFixed(1))}% of the hike`}; roads up to {Number(distanceText(roads.distance, units, 3))} {display.distanceLabel} and {Number((roads.fraction * 100).toFixed(1))}%.</p>
+                        <p>{hasApproachLimit(job.query)
+                          ? `One-way approach up to ${Number(distanceText(stemLimit(job.query), units, 3))} ${display.distanceLabel}${job.query.repetition !== undefined ? ` and ${Number((job.query.repetition * 100).toFixed(1))}% of the hike` : ""}.`
+                          : "Approach limits off."} {hasRoadLimit(job.query)
+                          ? `Roads up to ${Number(distanceText(roads.distance, units, 3))} ${display.distanceLabel} and ${Number((roads.fraction * 100).toFixed(1))}%.`
+                          : "Road walking limit off."}</p>
                         {job.query.grades && (["uphill", "downhill"] as const).map(direction => {
                           const limit = job.query.grades![direction];
                           return <p key={direction}>{direction === "uphill" ? "Uphill" : "Downhill"} above {limit.above}%: {Number(distanceText(limit.total, units, 3))} {display.distanceLabel} total, {Number(distanceText(limit.longest, units, 3))} {display.distanceLabel} longest stretch.</p>;

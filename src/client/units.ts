@@ -1,4 +1,5 @@
 import type { SearchQuery } from "../model.js";
+import { DEFAULT_ROAD_LIMITS } from "../model.js";
 
 export type UnitSystem = "imperial" | "metric";
 const systems = {
@@ -27,6 +28,12 @@ export const stemDistance = (route: { distance: number; repetition: number }) =>
 /** Older saved searches limited the stem proportionally, so this is their upper bound. */
 export const stemLimit = (query: SearchQuery) =>
   query.stem ?? query.distance[1] * (query.repetition ?? 0);
+export const hasApproachLimit = (query: SearchQuery) =>
+  query.stem !== undefined || query.repetition !== 1;
+export const hasRoadLimit = (query: SearchQuery) => {
+  const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
+  return roads.distance < query.distance[1] || roads.fraction < 1;
+};
 
 export function readUnitSystem(): UnitSystem {
   try {
