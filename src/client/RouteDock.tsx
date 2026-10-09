@@ -2,13 +2,10 @@ import { useMemo, useState } from "react";
 import { routeName } from "../route-name.js";
 import type {
   JobSnapshot,
-  Position,
   RouteLocation,
-  RouteView,
 } from "../model.js";
-import { ElevationProfile } from "./ElevationProfile.js";
 import { FixedList } from "./FixedList.js";
-import { requestSummary, savedResultsURL } from "./JobsDialog.js";
+import { requestSummary } from "./JobsDialog.js";
 import {
   distanceText,
   elevationText,
@@ -17,85 +14,7 @@ import {
   type UnitSystem,
 } from "./units.js";
 
-const startName = (route: RouteView) => {
-  const position = `${route.startPosition[1].toFixed(5)}, ${route.startPosition[0].toFixed(5)}`;
-  return !route.startName
-    ? position
-    : /^(Trail entrance|Mapped parking access)$/.test(route.startName)
-      ? `${route.startName} (${position})`
-      : route.startName;
-};
-
-function RouteDetails({
-  route,
-  job,
-  units,
-  onProfileHover,
-}: {
-  route: RouteView;
-  job: JobSnapshot;
-  units: UnitSystem;
-  onProfileHover: (position: Position | null) => void;
-}) {
-  const display = unitsFor(units);
-  return (
-    <section className="route-detail" aria-label="Route details">
-      <h2 id="route-detail-heading" tabIndex={-1}>
-        {routeName(route)}
-      </h2>
-      <dl className="detail-metrics">
-        <div>
-          <dt>Distance</dt>
-          <dd>
-            {distanceText(route.distance, units)} <small>{display.distanceLabel}</small>
-          </dd>
-        </div>
-        <div>
-          <dt>Elev. Gain</dt>
-          <dd>
-            {elevationText(route.gain, units)} <small>{display.elevationLabel}</small>
-          </dd>
-        </div>
-        <div>
-          <dt>Stem</dt>
-          <dd>
-            {distanceText(stemDistance(route), units)} <small>{display.distanceLabel}</small>
-          </dd>
-        </div>
-      </dl>
-      <div className="route-secondary">
-        <p className="road-detail">
-          Roads: {distanceText(route.roadDistance, units, 2)} {display.distanceLabel} (
-          {((100 * route.roadDistance) / route.distance).toFixed(1)}%)
-        </p>
-        <a
-          className="gpx-download"
-          href={savedResultsURL(
-            job,
-            `routes/${encodeURIComponent(route.id)}.gpx`,
-            `units=${units}`,
-          )}
-          download
-        >
-          Download GPX
-        </a>
-      </div>
-      <ElevationProfile key={route.id} route={route} units={units} onHover={onProfileHover} />
-      <div className="starting-point">
-        <h3>Start</h3>
-        <p>{startName(route)}</p>
-      </div>
-      {!!route.trailNames.length && (
-        <details className="trail-names">
-          <summary>Trails ({new Set(route.trailNames).size})</summary>
-          <p>{[...new Set(route.trailNames)].join(", ")}</p>
-        </details>
-      )}
-    </section>
-  );
-}
-
-/** The comparison list and selected walk share one dock and independent scroll areas. */
+/** The comparison list remains available while a hike is inspected on the map. */
 export function RouteDock({
   job,
   regionNames,
@@ -105,16 +24,11 @@ export function RouteDock({
   total,
   scope,
   selectedId,
-  selected,
   loadingMap,
-  routeError,
   onScope,
   onSelect,
   onPreview,
   onClear,
-  onRetry,
-  onProfileHover,
-  onClose,
 }: {
   job: JobSnapshot;
   regionNames: string[];
@@ -124,16 +38,11 @@ export function RouteDock({
   total: number;
   scope: "view" | "all" | ReadonlySet<string>;
   selectedId: string | null;
-  selected: RouteView | null;
   loadingMap: boolean;
-  routeError: string;
   onScope: (scope: "view" | "all") => void;
   onSelect: (id: string) => void;
   onPreview: (id: string | null) => void;
   onClear: () => void;
-  onRetry: () => void;
-  onProfileHover: (position: Position | null) => void;
-  onClose: () => void;
 }) {
   const [sort, setSort] = useState<"distance" | "gain" | "stem" | "roadDistance">(
     "distance",
@@ -169,14 +78,6 @@ export function RouteDock({
             </> : regionNames[0]}
           </h2>
           <span className="result-count">{total.toLocaleString()} routes</span>
-          <button
-            className="close-button"
-            type="button"
-            aria-label="Close results"
-            onClick={onClose}
-          >
-            ×
-          </button>
         </div>
         <p className="saved-request">{requestSummary(job.query, units)}</p>
       </header>
@@ -215,7 +116,7 @@ export function RouteDock({
         >
           <option value="distance">Distance</option>
           <option value="gain">Elev. Gain</option>
-          <option value="stem">Stem</option>
+          <option value="stem">Approach distance</option>
           <option value="roadDistance">Road distance</option>
         </select>
         <button
@@ -257,8 +158,8 @@ export function RouteDock({
                   <span title="Elevation gain">
                     {elevationText(route.gain, units)} <small>{display.elevationLabel}</small>
                   </span>
-                  <span>
-                    {distanceText(stemDistance(route), units)} <small>{display.distanceLabel} stem</small>
+                  <span title="One-way approach walked again on the return">
+                    {distanceText(stemDistance(route), units)} <small>{display.distanceLabel} approach</small>
                   </span>
                 </span>
               </button>
@@ -275,37 +176,6 @@ export function RouteDock({
           </p>
         )}
       </div>
-      {selectedId && (
-        <div className="route-inspector" aria-label="Selected hike">
-          <button
-            className="close-button close-hike"
-            type="button"
-            aria-label="Close hike details"
-            onClick={onClear}
-          >
-            ×
-          </button>
-          {selected ? (
-            <RouteDetails
-              route={selected}
-              job={job}
-              units={units}
-              onProfileHover={onProfileHover}
-            />
-          ) : (
-            <div className="route-loading">
-              <p role={routeError ? "alert" : "status"}>
-                {routeError || "Loading hike details…"}
-              </p>
-              {routeError && (
-                <button type="button" onClick={onRetry}>
-                  Retry
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </aside>
   );
 }

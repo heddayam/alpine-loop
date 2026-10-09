@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SearchQuery } from "../../src/model.js";
+import { validateQuery } from "../../src/engine/search.js";
 import {
   draftForQuery,
   initialDraft,
@@ -19,7 +20,7 @@ describe("editable search constraints", () => {
       effort: "deep",
       roads: { distance: 1232.994, fraction: 0.35 },
     };
-    const editableQuery = { ...query, repetition: 1, includeUnknown: true, roads: { ...query.roads!, fraction: 1 } };
+    const editableQuery = { ...query, repetition: 1, includeUnknown: true };
     const draft = draftForQuery(query);
     expect(queryForDraft(draft)).toEqual(editableQuery);
     let converted = draft;
@@ -114,6 +115,63 @@ describe("editable search constraints", () => {
     expect(queryForDraft(edited)).toMatchObject({ grades: { uphill: { total: 1609.344 } } });
     const off = { ...draft, grades: { ...draft.grades!, enabled: false } };
     expect(convertDraft(off, "imperial", "metric").grades?.uphill.total).toBe("0.823");
+  });
+
+  it("disables approach and road constraints independently without changing the hike ranges", () => {
+    const draft = { ...initialDraft, sections: ["fixture"] };
+    const original = queryForDraft(draft);
+    const approachOff = queryForDraft({ ...draft, approachEnabled: false });
+    expect(approachOff).not.toHaveProperty("stem");
+    expect(approachOff.repetition).toBe(1);
+    expect(approachOff.roads).toEqual(original.roads);
+    const roadsOff = queryForDraft({ ...draft, roadsEnabled: false });
+    expect(roadsOff.roads).toEqual({ distance: original.distance[1], fraction: 1 });
+    expect(roadsOff.stem).toBe(original.stem);
+    expect(roadsOff.repetition).toBe(original.repetition);
+    for (const query of [approachOff, roadsOff]) {
+      expect(query.distance).toEqual(original.distance);
+      expect(query.gain).toEqual(original.gain);
+      expect(() => validateQuery(query)).not.toThrow();
+    }
+  });
+
+  it("retains a saved road percentage through edits, units, and temporary disabling", () => {
+    const query: SearchQuery = {
+      sections: ["fixture"], distance: [5000, 10000], gain: [0, 1000],
+      stem: 500, repetition: 0.2, roads: { distance: 1000, fraction: 0.1 }, includeUnknown: true,
+    };
+    const draft = draftForQuery(query);
+    const disabled = convertDraft({ ...draft, roadsEnabled: false }, "imperial", "metric");
+    expect(queryForDraft(disabled, "metric").roads).toEqual({ distance: 10000, fraction: 1 });
+    expect(queryForDraft({ ...disabled, roadsEnabled: true }, "metric").roads).toEqual(query.roads);
+    expect(queryForDraft({ ...draft, roadDistance: "0.5" }).roads).toEqual({ distance: 0.5 * 1609.344, fraction: 0.1 });
+  });
+
+  it("ignores inactive invalid fields but restores and validates retained limits when enabled", () => {
+    const disabled = { ...initialDraft, sections: ["fixture"], approachEnabled: false, roadsEnabled: false };
+    expect(() => queryForDraft({ ...disabled, stem: "", stemPercent: "invalid", roadDistance: "-1" })).not.toThrow();
+    expect(() => queryForDraft({ ...disabled, approachEnabled: true, stem: "" })).toThrow();
+    expect(() => queryForDraft({ ...disabled, roadsEnabled: true, roadDistance: "" })).toThrow();
+    const retained = { ...disabled, stem: "1.25", stemPercent: "12.5", roadDistance: "0.35" };
+    const metric = convertDraft(retained, "imperial", "metric");
+    expect(metric).toMatchObject({ approachEnabled: false, roadsEnabled: false });
+    const enabled = queryForDraft({ ...metric, approachEnabled: true, roadsEnabled: true }, "metric");
+    expect(enabled.stem).toBe(1.25 * 1609.344);
+    expect(enabled.repetition).toBe(0.125);
+    expect(enabled.roads?.distance).toBe(0.35 * 1609.344);
+  });
+
+  it("restores disabled saved settings and keeps the road allowance tied to the maximum hike distance", () => {
+    const draft = { ...initialDraft, sections: ["fixture"], approachEnabled: false, roadsEnabled: false };
+    const query = queryForDraft(draft);
+    const saved = draftForQuery(query);
+    expect(saved).toMatchObject({ approachEnabled: false, roadsEnabled: false });
+    expect(queryForDraft(convertDraft(saved, "imperial", "metric"), "metric")).toEqual(query);
+    const longer = queryForDraft({ ...saved, distance: [saved.distance[0], "20"] });
+    expect(longer.roads).toEqual({ distance: 20 * 1609.344, fraction: 1 });
+    expect(queryForDraft({ ...saved, approachEnabled: true, roadsEnabled: true })).toMatchObject({
+      stem: 2 * 1609.344, repetition: 0.2, roads: { distance: 0.5 * 1609.344, fraction: 1 },
+    });
   });
 
 });

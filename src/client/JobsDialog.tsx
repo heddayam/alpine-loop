@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { JobRegion, JobSnapshot, SearchQuery } from "../model.js";
 import { DEFAULT_ROAD_LIMITS } from "../model.js";
-import { distanceText, elevationText, stemLimit, unitsFor, type UnitSystem } from "./units.js";
+import { distanceText, elevationText, hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
 export const activeJob = (job: JobSnapshot) =>
   job.status === "queued" || job.status === "running";
@@ -192,7 +192,7 @@ export function JobsDialog({
         </button>
       </header>
       <div className="jobs-list" ref={list}>
-        {loading && <p role="status">Loading jobs…</p>}
+        {loading && !jobs.length && <p role="status">Loading jobs…</p>}
         {error && (
           <div className="job-error" role="alert">
             <p>{error}</p>
@@ -202,7 +202,7 @@ export function JobsDialog({
           </div>
         )}
         {!jobs.length && !loading && <p className="empty-state">No jobs yet.</p>}
-        {!!jobs.length && <table className="jobs-table" aria-label="Search jobs">
+        {!!jobs.length && <table className="jobs-table" aria-label="Search jobs" aria-busy={loading || undefined}>
           <colgroup>
             <col className="jobs-expand-col" /><col className="jobs-area-col" />
             <col className="jobs-distance-col" /><col className="jobs-gain-col" />
@@ -217,7 +217,7 @@ export function JobsDialog({
               <th scope="col">Search area</th>
               <th scope="col" className="job-number">Distance <span className="job-unit">{display.distanceLabel}</span></th>
               <th scope="col" className="job-number">Gain <span className="job-unit">{display.elevationLabel}</span></th>
-              <th scope="col" className="job-number">Max stem</th>
+              <th scope="col" className="job-number" title="One-way approach walked again on the return">Max approach</th>
               <th scope="col" className="job-number">Max roads</th>
               <th scope="col" className="job-group-start">Status</th>
               <th scope="col" className="job-number">Hikes</th>
@@ -271,12 +271,16 @@ export function JobsDialog({
                   <td className="job-number">{Number(distanceText(job.query.distance[0], units))}–{Number(distanceText(job.query.distance[1], units))}</td>
                   <td className="job-number">{elevationText(job.query.gain[0], units)}–{elevationText(job.query.gain[1], units)}</td>
                   <td className="job-number job-limit">
+                    {hasApproachLimit(job.query) ? <>
                     <span>{Number(distanceText(stemLimit(job.query), units, 3))} {display.distanceLabel}</span>
                     <span className="job-muted">{job.query.repetition !== undefined ? `${Number((job.query.repetition * 100).toFixed(1))}%` : "—"}</span>
+                    </> : <span className="job-muted">Off</span>}
                   </td>
                   <td className="job-number job-limit">
+                    {hasRoadLimit(job.query) ? <>
                     <span>{Number(distanceText(roads.distance, units, 3))} {display.distanceLabel}</span>
                     <span className="job-muted">{Number((roads.fraction * 100).toFixed(1))}%</span>
+                    </> : <span className="job-muted">Off</span>}
                   </td>
                   <td className="job-group-start job-status-cell">
                     <div className="job-status-line">
@@ -299,16 +303,18 @@ export function JobsDialog({
                     {", "}{new Date(job.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
                   </time></td>
                   <td className="job-group-start"><div className="job-actions">
-                    {hasSavedResults(job) && <button type="button" className="job-results" disabled={busy} onClick={() => onView(job)}>View results</button>}
+                    <button type="button" className={activeJob(job) ? "job-cancel" : "job-results"}
+                      disabled={busy || (activeJob(job) ? job.canManage === false : !hasSavedResults(job))}
+                      onClick={() => activeJob(job) ? onAction(job, "cancel") : onView(job)}>
+                      {activeJob(job) ? "Cancel" : "View results"}
+                    </button>
                     <div className="job-secondary-actions">
                     <button type="button" className="job-icon-button" aria-label="Copy settings" title="Copy settings" disabled={busy} onClick={() => onCopy(job)}>
                       <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="9" rx="1" /><path d="M3 11H2V2h8v1" /></svg>
                     </button>
-                    {job.canManage !== false && (activeJob(job)
-                      ? <button type="button" className="job-cancel" disabled={busy} onClick={() => onAction(job, "cancel")}>Cancel</button>
-                      : <button type="button" id={`job-delete-${job.id}`} className="job-icon-button" aria-label="Delete" title="Delete job" disabled={busy} onClick={() => setConfirmDelete(job.id)}>
+                    <button type="button" id={`job-delete-${job.id}`} className="job-icon-button" aria-label="Delete" title="Delete job" disabled={busy || activeJob(job) || job.canManage === false} onClick={() => setConfirmDelete(job.id)}>
                         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M6 4V2h4v2M4 4l1 10h6l1-10M7 6v5M9 6v5" /></svg>
-                      </button>)}
+                    </button>
                     </div>
                   </div></td>
                 </tr>
@@ -319,7 +325,11 @@ export function JobsDialog({
                         <h3>Search settings</h3>
                         <p>{areas.join(", ")}</p>
                         {job.query.boundary && <p>Starting points inside the boundary; hikes may extend outside.</p>}
-                        <p>Stem up to {Number(distanceText(stemLimit(job.query), units, 3))} {display.distanceLabel}{job.query.repetition !== undefined && ` and ${Number((job.query.repetition * 100).toFixed(1))}%`}; roads up to {Number(distanceText(roads.distance, units, 3))} {display.distanceLabel} and {Number((roads.fraction * 100).toFixed(1))}%.</p>
+                        <p>{hasApproachLimit(job.query)
+                          ? `One-way approach up to ${Number(distanceText(stemLimit(job.query), units, 3))} ${display.distanceLabel}${job.query.repetition !== undefined ? ` and ${Number((job.query.repetition * 100).toFixed(1))}% of the hike` : ""}.`
+                          : "Approach limits off."} {hasRoadLimit(job.query)
+                          ? `Roads up to ${Number(distanceText(roads.distance, units, 3))} ${display.distanceLabel} and ${Number((roads.fraction * 100).toFixed(1))}%.`
+                          : "Road walking limit off."}</p>
                         {job.query.grades && (["uphill", "downhill"] as const).map(direction => {
                           const limit = job.query.grades![direction];
                           return <p key={direction}>{direction === "uphill" ? "Uphill" : "Downhill"} above {limit.above}%: {Number(distanceText(limit.total, units, 3))} {display.distanceLabel} total, {Number(distanceText(limit.longest, units, 3))} {display.distanceLabel} longest stretch.</p>;

@@ -5,12 +5,12 @@ import { distanceText, elevationText, unitsFor, type UnitSystem } from "./units.
 import { elevationSamples, elevationPosition, elevationGrade } from "../grade.js";
 export { elevationSamples, elevationPosition, elevationGrade } from "../grade.js";
 
-const WIDTH = 280;
-const HEIGHT = 162;
+const WIDTH = 360;
+const HEIGHT = 124;
 const LEFT = 6;
-const RIGHT = 274;
+const RIGHT = WIDTH - 6;
 const TOP = 6;
-const BOTTOM = 140;
+const BOTTOM = HEIGHT - 22;
 
 function tickStep(range: number) {
   const magnitude = 10 ** Math.floor(Math.log10(range));
@@ -166,7 +166,6 @@ export const ElevationProfile = memo(function ElevationProfile({
             move((cursor ?? 0) + total / 100);
           else if (event.key === "ArrowLeft" || event.key === "ArrowDown")
             move((cursor ?? 0) - total / 100);
-          else if (event.key === "Escape") move(null);
           else return;
           event.preventDefault();
         }}

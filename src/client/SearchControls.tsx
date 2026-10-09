@@ -1,10 +1,11 @@
-import { useRef, type FormEvent } from "react";
+import { useId, useRef, type FormEvent } from "react";
 import type { CatalogView } from "../data-format.js";
 import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type SearchQuery } from "../model.js";
 import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
 import { SteppedNumber } from "./SteppedNumber.js";
 import { RegionPicker } from "./RegionPicker.js";
-import { stemLimit, unitsFor, type UnitSystem } from "./units.js";
+import { useAnchoredPopover } from "./useAnchoredPopover.js";
+import { hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
 const MILE = 1609.344;
 const FOOT = 0.3048;
@@ -28,9 +29,13 @@ export type SearchDraft = {
   boundary?: SearchBoundary;
   distance: [string, string];
   gain: [string, string];
+  approachEnabled: boolean;
   stem: string;
   stemPercent: string;
+  roadsEnabled: boolean;
   roadDistance: string;
+  /** Preserve proportional road limits in saved searches. */
+  roadFraction?: number;
   grades?: GradeDraft;
   /** Preserve exact limits when unit conversion rounds their displayed text. */
   exact?: {
@@ -92,6 +97,8 @@ function withMeasurements(
 
 export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"): SearchDraft {
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
+  const approachEnabled = hasApproachLimit(query);
+  const roadsEnabled = hasRoadLimit(query);
   const savedGrades = query.grades;
   const grades = savedGrades ?? {
     uphill: { above: 15, total: 0.5 * MILE, longest: 0.2 * MILE },
@@ -102,9 +109,12 @@ export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"
     ...(query.boundary ? { boundary: query.boundary.map(point => [...point]) } : {}),
     distance: ["", ""],
     gain: ["", ""],
+    approachEnabled,
     stem: "",
-    stemPercent: String((query.repetition ?? 1) * 100),
+    stemPercent: approachEnabled ? String((query.repetition ?? 1) * 100) : "20",
+    roadsEnabled,
     roadDistance: "",
+    roadFraction: roads.fraction,
     grades: {
       enabled: !!savedGrades,
       uphill: { above: String(grades.uphill.above), total: "", longest: "" },
@@ -115,8 +125,8 @@ export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"
     distanceMax: query.distance[1],
     gainMin: query.gain[0],
     gainMax: query.gain[1],
-    stem: stemLimit(query),
-    roadDistance: roads.distance,
+    stem: approachEnabled ? stemLimit(query) : 2 * MILE,
+    roadDistance: roadsEnabled ? roads.distance : 0.5 * MILE,
     uphillTotal: grades.uphill.total,
     uphillLongest: grades.uphill.longest,
     downhillTotal: grades.downhill.total,
@@ -142,14 +152,13 @@ export function convertDraft(draft: SearchDraft, from: UnitSystem, to: UnitSyste
   return withMeasurements(draft, values, to);
 }
 
-/** Validate every exposed limit before making a request; blank is never zero. */
+/** Validate every enabled limit before making a request; blank is never zero. */
 export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"): SearchQuery {
   const values = [
     ...draft.distance,
     ...draft.gain,
-    draft.stem,
-    draft.stemPercent,
-    draft.roadDistance,
+    ...(draft.approachEnabled ? [draft.stem, draft.stemPercent] : []),
+    ...(draft.roadsEnabled ? [draft.roadDistance] : []),
   ];
   const minDistance = measurement(draft, "distanceMin", units);
   const maxDistance = measurement(draft, "distanceMax", units);
@@ -162,13 +171,13 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
       (value) =>
         !value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0,
     ) ||
-    Number(draft.stemPercent) > 100 ||
+    (draft.approachEnabled && Number(draft.stemPercent) > 100) ||
     maxDistance <= 0 ||
     minDistance > maxDistance ||
     minGain > maxGain
   ) {
     throw new Error(
-      "Use a positive maximum distance and ordered, nonnegative distance and elevation gain ranges. Stem and road distance must be zero or greater; stem percentage must be between 0 and 100.",
+      "Use a positive maximum distance and ordered, nonnegative distance and elevation gain ranges. In More options, approach and road distance must be zero or greater; approach percentage must be between 0 and 100.",
     );
   }
   let grades: GradeLimits | undefined;
@@ -188,9 +197,15 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
     ...(draft.boundary ? { boundary: draft.boundary.map(point => [...point]) } : {}),
     distance: [minDistance, maxDistance],
     gain: [minGain, maxGain],
-    stem: measurement(draft, "stem", units),
-    repetition: Number(draft.stemPercent) / 100,
-    roads: { distance: measurement(draft, "roadDistance", units), fraction: 1 },
+    ...(draft.approachEnabled ? {
+      stem: measurement(draft, "stem", units),
+      repetition: Number(draft.stemPercent) / 100,
+    } : { repetition: 1 }),
+    // The hike's maximum distance is a finite, nonrestrictive road budget.
+    roads: {
+      distance: draft.roadsEnabled ? measurement(draft, "roadDistance", units) : maxDistance,
+      fraction: draft.roadsEnabled ? (draft.roadFraction ?? 1) : 1,
+    },
     includeUnknown: true,
     effort: "deep",
   };
@@ -242,7 +257,6 @@ function Maximum({
   id,
   name,
   unit,
-  title,
   value,
   step,
   max,
@@ -251,7 +265,6 @@ function Maximum({
   id: string;
   name: string;
   unit: string;
-  title?: string;
   value: string;
   step: number;
   max?: number;
@@ -259,7 +272,7 @@ function Maximum({
 }) {
   return (
     <div className="numeric-field" data-unit={unit}>
-      <label className="field-label" htmlFor={id} title={title}>
+      <label className="field-label" htmlFor={id}>
         {name} <span className="field-unit">{unit}</span>
       </label>
       <SteppedNumber
@@ -285,6 +298,7 @@ export function SearchControls({
   onChange,
   onSubmit,
   onDrawBoundary,
+  onClearResults,
 }: {
   dataset: CatalogView;
   savedSections?: { id: string; name: string }[];
@@ -295,8 +309,11 @@ export function SearchControls({
   onChange: (draft: SearchDraft) => void;
   onSubmit: (event: FormEvent) => void;
   onDrawBoundary: () => void;
+  onClearResults?: () => void;
 }) {
   const drawButton = useRef<HTMLButtonElement>(null);
+  const options = useAnchoredPopover(disabled);
+  const optionsId = useId();
   const update = (change: Partial<SearchDraft>) =>
     onChange({ ...draft, ...change });
   const display = unitsFor(units);
@@ -365,46 +382,84 @@ export function SearchControls({
           value={draft.gain}
           onChange={(gain) => update({ gain })}
         />
-        <Maximum
-          id="stem"
-          name="Stem distance"
-          unit={display.distanceLabel}
-          title="One-way approach distance walked again on the return"
-          step={1}
-          value={draft.stem}
-          onChange={(stem) => update({ stem })}
-        />
-        <Maximum
-          id="stem-percent"
-          name="Stem"
-          unit="%"
-          title="One-way stem as a percentage of the full hike; both stem limits apply"
-          step={5}
-          max={100}
-          value={draft.stemPercent}
-          onChange={(stemPercent) => update({ stemPercent })}
-        />
-        <Maximum
-          id="road-distance"
-          name="Road distance"
-          unit={display.distanceLabel}
-          step={1}
-          value={draft.roadDistance}
-          onChange={(roadDistance) => update({ roadDistance })}
-        />
         <GradeLimitsControl
           value={draft.grades ?? convertDraft(initialDraft, "imperial", units).grades!}
           units={units}
           disabled={disabled}
           onChange={(grades) => update({ grades })}
         />
-        <button
-          className="primary search-button"
-          type="submit"
-          disabled={disabled || !currentRegions}
-        >
-          {submitting ? "Submitting…" : "Search"}
-        </button>
+        <div className="search-options" ref={options.root} onBlur={options.onBlur}>
+          <button ref={options.button} type="button" className="options-trigger"
+            aria-expanded={options.open} aria-controls={optionsId} onClick={options.toggle}>
+            More options <span aria-hidden="true">▾</span>
+          </button>
+          {options.open && <div ref={options.panel} className="options-popover" id={optionsId} style={{ left: options.offset }}
+            role="group" aria-label="Approach and road limits">
+            <div className="option-title">
+              <label className="option-heading">
+                <input type="checkbox" checked={draft.approachEnabled}
+                  onChange={event => update({ approachEnabled: event.target.checked })} />
+                Limit approach distance
+              </label>
+              <button type="button" className="options-info" aria-label="About approach limits" aria-describedby={`${optionsId}-approach-info`}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+                  <circle cx="7" cy="7" r="5.5" /><path d="M7 6.5v4M7 3.5v.5" strokeLinecap="round" />
+                </svg>
+                <span className="option-tooltip" role="tooltip" id={`${optionsId}-approach-info`}>
+                  The approach is walked out and back. Both limits apply to its one-way distance. Uncheck to allow longer approaches within the hike distance.
+                </span>
+              </button>
+            </div>
+            <fieldset className="options-fields" disabled={!draft.approachEnabled} aria-label="Approach limits">
+              <Maximum id="stem" name="Approach distance" unit={display.distanceLabel}
+                step={0.5} value={draft.stem} onChange={(stem) => update({ stem })} />
+              <Maximum id="stem-percent" name="Share of total hike" unit="%"
+                step={5} max={100} value={draft.stemPercent} onChange={(stemPercent) => update({ stemPercent })} />
+            </fieldset>
+            <div className="option-title">
+              <label className="option-heading">
+                <input type="checkbox" checked={draft.roadsEnabled}
+                  onChange={event => update({ roadsEnabled: event.target.checked })} />
+                Limit road walking
+              </label>
+              <button type="button" className="options-info" aria-label="About road walking limits" aria-describedby={`${optionsId}-roads-info`}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+                  <circle cx="7" cy="7" r="5.5" /><path d="M7 6.5v4M7 3.5v.5" strokeLinecap="round" />
+                </svg>
+                <span className="option-tooltip" role="tooltip" id={`${optionsId}-roads-info`}>
+                  Total distance walked on roads, including repeated sections. Uncheck to allow more road walking within the hike distance.
+                </span>
+              </button>
+            </div>
+            <fieldset className="options-fields" disabled={!draft.roadsEnabled} aria-label="Road limits">
+              <Maximum id="road-distance" name="Road distance" unit={display.distanceLabel}
+                step={0.1} value={draft.roadDistance} onChange={(roadDistance) => update({ roadDistance })} />
+              {(draft.roadFraction ?? 1) < 1 && <p className="road-fraction-note">
+                Also limited to {Number(((draft.roadFraction ?? 1) * 100).toFixed(1))}% of the hike.
+              </p>}
+            </fieldset>
+          </div>}
+        </div>
+        <div className="search-actions">
+          <button
+            className="primary search-button"
+            type="submit"
+            disabled={disabled || !currentRegions}
+          >
+            {submitting ? "Submitting…" : "Search"}
+          </button>
+          {onClearResults && <button
+            className="clear-results"
+            type="button"
+            onClick={onClearResults}
+            title="Clear the map and results panel. This search stays in Jobs."
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+              <path d="m3 3 6 6m0-6-6 6" strokeLinecap="round" />
+            </svg>
+            Clear results
+          </button>}
+        </div>
       </fieldset>
     </form>
   );
