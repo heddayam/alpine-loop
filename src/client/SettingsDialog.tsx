@@ -192,6 +192,13 @@ export function SettingsDialog({
             </div>
           </section>
         )}
+        {dataset?.hosted && (
+          <section aria-labelledby="supported-regions-title">
+            <h3 id="supported-regions-title">Supported regions</h3>
+            <p>Choose where to search using Search area at the top of the app.</p>
+            <CatalogAreas dataset={dataset} purpose="supported" />
+          </section>
+        )}
         {!dataset?.hosted && <section aria-labelledby="trail-downloads-title">
           <h3 id="trail-downloads-title">Manage areas</h3>
           {!dataset && <p role="status">Opening trail data…</p>}

@@ -30,17 +30,21 @@ function states(dataset: CatalogView) {
   })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** One geography, row and bulk-selection policy for search and download management. */
-export function CatalogAreas({ dataset, value, onChange, disabled = false, purpose = "search" }: {
+type CatalogAreasProps = {
   dataset: CatalogView;
+  disabled?: boolean;
+} & ({ purpose: "supported"; value?: never; onChange?: never } | {
+  purpose?: "search" | "download";
   value: string[];
   onChange: (ids: string[]) => void;
-  disabled?: boolean;
-  purpose?: "search" | "download";
-}) {
+});
+
+/** Shared geography for selection, download management, and supported coverage. */
+export function CatalogAreas({ dataset, value = [], onChange, disabled = false, purpose = "search" }: CatalogAreasProps) {
   const download = purpose === "download";
+  const readOnly = purpose === "supported";
   const update = (ids: string[], checked: boolean) => {
-    if (!disabled) {
+    if (!disabled && onChange) {
       onChange(checked ? [...new Set([...value, ...ids])] : value.filter(id => !ids.includes(id)));
     }
   };
@@ -48,7 +52,7 @@ export function CatalogAreas({ dataset, value, onChange, disabled = false, purpo
     .filter(section => !download || !section.installed).map(section => section.id);
   const bulk = (ids: string[]) => {
     const all = ids.every(id => value.includes(id));
-    return ids.length > 1 && (
+    return !readOnly && ids.length > 1 && (
       <button type="button" disabled={disabled} onClick={() => update(ids, !all)}>
         {all ? "Clear" : "Select all"}
       </button>
@@ -56,19 +60,19 @@ export function CatalogAreas({ dataset, value, onChange, disabled = false, purpo
   };
   const rows = (range: Range) => <>
     {range.sections.map(section => {
-      const ready = download && section.installed;
-      const Row = ready ? "div" : "label";
+      const ready = (download || readOnly) && section.installed;
+      const Row = ready || readOnly ? "div" : "label";
       return (
         <Row className={`area-row${ready ? " area-ready" : ""}`} key={section.id} title={section.description}>
-          {ready ? <span aria-hidden="true">✓</span> : (
+          {ready || readOnly ? <span aria-hidden="true">{ready ? "✓" : "—"}</span> : (
             <input type="checkbox" checked={value.includes(section.id)} disabled={disabled}
               aria-label={`${download ? "Download " : ""}${section.name}`}
               onChange={event => update([section.id], event.target.checked)} />
           )}
           <span>{section.name}</span>
-          {download && (
+          {(download || readOnly) && (
             <span className="area-status">
-              {ready ? "Ready" : `${section.needsRepair ? "Repair, " : ""}${size(section.bytes)}`}
+              {ready ? "Ready" : readOnly ? "Temporarily unavailable" : `${section.needsRepair ? "Repair, " : ""}${size(section.bytes)}`}
             </span>
           )}
         </Row>
@@ -84,7 +88,7 @@ export function CatalogAreas({ dataset, value, onChange, disabled = false, purpo
   </>;
   return (
     <div className={`catalog-areas catalog-${purpose}`}>
-      {states(dataset).map(state => (
+      {states(readOnly ? { ...dataset, unavailable: [] } : dataset).map(state => (
         <section className="area-state" key={state.code} aria-label={state.name}>
           <header>
             <h4>{state.name}</h4>
