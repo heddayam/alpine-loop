@@ -400,6 +400,12 @@ export function SearchControls({
           value={draft.gain}
           onChange={(gain) => update({ gain })}
         />
+        <GradeLimitsControl
+          value={draft.grades ?? convertDraft(initialDraft, "imperial", units).grades!}
+          units={units}
+          disabled={disabled}
+          onChange={(grades) => update({ grades })}
+        />
         <div className="search-options" ref={options} onBlur={event => {
           if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) setOptionsOpen(false);
         }}>
@@ -455,12 +461,6 @@ export function SearchControls({
             </fieldset>
           </div>}
         </div>
-        <GradeLimitsControl
-          value={draft.grades ?? convertDraft(initialDraft, "imperial", units).grades!}
-          units={units}
-          disabled={disabled}
-          onChange={(grades) => update({ grades })}
-        />
         <button
           className="primary search-button"
           type="submit"
