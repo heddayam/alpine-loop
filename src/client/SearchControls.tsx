@@ -413,13 +413,11 @@ export function SearchControls({
           </button>
           {optionsOpen && <div className="options-popover" id={optionsId} style={{ left: optionsOffset }}
             role="group" aria-label="Approach and road limits">
-            <div className="option-heading">
-              <h3>Approach to the loop</h3>
-              <button type="button" className="limit-switch" role="switch" aria-label="Limit approach distance"
-                aria-checked={draft.approachEnabled} onClick={() => update({ approachEnabled: !draft.approachEnabled })}>
-                {draft.approachEnabled ? "On" : "Off"}<span className="switch-track" aria-hidden="true" />
-              </button>
-            </div>
+            <label className="option-heading">
+              <input type="checkbox" checked={draft.approachEnabled}
+                onChange={event => update({ approachEnabled: event.target.checked })} />
+              Limit approach distance
+            </label>
             <p>{draft.approachEnabled
               ? "The approach is walked out and back. Both limits below apply to its one-way distance."
               : "Longer approaches are allowed within the total hike distance."}</p>
@@ -429,13 +427,11 @@ export function SearchControls({
               <Maximum id="stem-percent" name="Share of total hike" unit="%"
                 step={5} max={100} value={draft.stemPercent} onChange={(stemPercent) => update({ stemPercent })} />
             </fieldset>
-            <div className="option-heading">
-              <h3>Road walking</h3>
-              <button type="button" className="limit-switch" role="switch" aria-label="Limit road walking"
-                aria-checked={draft.roadsEnabled} onClick={() => update({ roadsEnabled: !draft.roadsEnabled })}>
-                {draft.roadsEnabled ? "On" : "Off"}<span className="switch-track" aria-hidden="true" />
-              </button>
-            </div>
+            <label className="option-heading">
+              <input type="checkbox" checked={draft.roadsEnabled}
+                onChange={event => update({ roadsEnabled: event.target.checked })} />
+              Limit road walking
+            </label>
             <p>{draft.roadsEnabled
               ? "Total distance walked on roads, including any repeated sections."
               : "More road walking is allowed within the total hike distance."}</p>
