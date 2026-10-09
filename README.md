@@ -31,3 +31,7 @@ Stop the app with `docker compose down`; run the startup command again to reopen
 [App details and development](docs/app-reference.md)
 
 [Cloudflare + Azure hosting](docs/hosting.md)
+
+Development runs locally by default. Pushing to GitHub does not deploy the public
+site; a live update is a separate release. See the hosting guide for the current
+production branch and release, and `AGENTS.md` for new-session instructions.

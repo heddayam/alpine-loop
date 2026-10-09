@@ -1,5 +1,13 @@
 {
   "objective": "Replace Alpine Loop with the smallest trustworthy app that finds useful constraint-based loop hikes, proven on real Washington data.",
+  "hostingDecision": {
+    "date": "2026-10-08",
+    "delivery": "Hosted delivery is now live at https://alpineloop.org through Cloudflare Tunnel and a persistent Azure VM; this supersedes the earlier hosting deferral.",
+    "development": "Default to local development and running-app verification. Git pushes do not deploy; release when the user requests a live update or the active task includes production deployment.",
+    "lastVerifiedRelease": "041e4fc490be51e1502f99f1644aa3843dba3bab",
+    "productionSourceBranch": "codex/cloudflare-azure",
+    "reference": "docs/hosting.md records the current branch caveat, release process, storage, and verification. Inspect actual Git and VM state before releasing."
+  },
   "drawnBoundaryDecision": {
     "date": "2026-10-07",
     "userDecision": "Use one Search area label with the region selector and an adjacent Draw button. Drawing is an alternative to named regions; the entry button stays outside the dropdown and map. After drawing, show Drawn area, Redraw and Clear together. The drawing toolbar stays on the map. Only the starting point must stay inside; hikes may extend outside the drawn polygon.",
@@ -75,7 +83,6 @@
     ],
     "engineering": "Challenge raw sources, processing and storage from first principles. Prioritize robust code over patchwork tests; use targeted independent checks with restraint.",
     "deferred": [
-      "Hosted URL: user explicitly deferred hosting on 2026-09-30 to focus on an excellent local app that can be hosted later.",
       "Automatic mid-search restart resume; legacy saved jobs, current-search APIs and old prepared formats.",
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]

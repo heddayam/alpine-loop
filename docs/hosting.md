@@ -4,6 +4,44 @@ One Azure Ubuntu 24.04 VM runs the existing Docker app and a Cloudflare Tunnel.
 Cloudflare handles DNS and public HTTPS on its free plan. There are no public
 HTTP ports on the VM; SSH is restricted to the deployment computer's public IP.
 
+## Current release and development workflow
+
+Last verified live code on October 8, 2026:
+`041e4fc490be51e1502f99f1644aa3843dba3bab` (Supported regions in hosted Settings).
+The VM is `alpine-loop-01` in resource group `alpine-loop-prod`, West US 2.
+Its release directory is `/srv/alpine-loop/releases/041e4fc490be`, selected by
+`/srv/alpine-loop/current`. Confirm the symlink and running app image before a
+new deployment; this record is not a live probe.
+
+The hosting implementation is on `codex/cloudflare-azure` and has not yet been
+merged into `main`. Main includes the blue styling, but does not yet include the
+hosted runtime, deployment configuration, or supported-regions Settings section.
+Until the hosting branch is integrated, use it as the base for work that needs
+the hosted implementation. After integration, use main as the normal base for
+new `codex/` work branches.
+
+| Action | What changes |
+| --- | --- |
+| Build and run locally | The local app; Azure and public visitors are unaffected |
+| Commit, push, or merge | Git history and GitHub; the public app is unchanged |
+| Deploy a committed revision | The Azure containers serving alpineloop.org |
+| Prepare a region locally | Local generated files; hosted coverage is unchanged |
+| Publish data, update the pinned catalog, and deploy | The hosted coverage |
+
+Ordinary development starts with `npm start` (Node 24+) or local
+`docker compose up --build -d --wait`. Native launch builds changed source
+automatically; restart it after changes so server modules also reload. Before
+calling an app fix complete, build, typecheck, and check its affected browser flow.
+Native `.local-data`, local Docker's named volume, and Azure's data disk are
+separate stores. Never point parallel servers at the same jobs directory.
+
+Deploy when the user requests a live update or the active task includes a
+production release. There is no automatic GitHub deployment and no separate
+hosted staging site today. Hosted-only behavior requires hosted fixtures or an
+isolated HTTPS preview; localhost HTTP cannot exercise the HTTPS mutation rules.
+After an authorized release, verify its public behavior and record the deployed
+commit here. Documentation-only changes do not require a production rebuild.
+
 ## Starting size and costs
 
 Start with `Standard_B2ats_v2` in West US 2: two burstable CPUs and 1 GiB RAM,

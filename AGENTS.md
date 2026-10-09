@@ -27,8 +27,39 @@ do not resume their gates or carry their architecture into the replacement.
   choices, clear progress and responsive cancellation over sub-10-second results.
   Do not add machinery or truncate work solely to satisfy earlier speed targets.
 - Local launch acquires usable prepared data automatically. Users never prepare
-  OSM/elevation data or configure catalogs. Hosted delivery is deferred by the
-  user; keep a straightforward future hosting path without building it now.
+  OSM/elevation data or configure catalogs. Hosted delivery is live at
+  `https://alpineloop.org` through Cloudflare Tunnel and an Azure VM. See
+  `docs/hosting.md` for the last verified release and operator instructions.
+
+## Development and releases
+
+- Default to local development. A feature or fix request means implement, build,
+  and check the running local app. Deploy when the user requests a live-site
+  update or the current task already includes a production release; do not ask
+  again for a release already authorized in that task.
+- A new session first checks Git status, the active branch, current remote refs,
+  and `docs/hosting.md`. Do not infer the deployed version from `main` or HEAD.
+  Until integrated into main, `codex/cloudflare-azure` contains the hosted app;
+  main alone does not contain the hosting setup or all hosted UI changes.
+- Use `npm start` for native development or the local `compose.yaml`. After each
+  app fix, build, typecheck, restart/rebuild the relevant local instance, and
+  verify the affected flow in the running app. Run appropriate focused tests.
+  Do not interrupt another session's local app or run two servers against the
+  same job directory.
+- Local mode and hosted mode differ: hosted Settings shows supported coverage,
+  data installation is operator-controlled, and signed cookies isolate jobs.
+  Hosted mutation checks require HTTPS; plain localhost HTTP is not a complete
+  hosted-mode preview. Use hosted fixtures or an isolated HTTPS preview when
+  verifying those behaviors before release.
+- Committing, pushing, and merging Git changes do not deploy the site. Production
+  releases are manual and use committed source. Before releasing, compare the
+  intended changes with the commit and flag any requested edits still uncommitted.
+- Follow `docs/hosting.md` for releases. Preserve server data and secrets, verify
+  the deployed revision, health, and affected public flow, and update the last
+  verified release record. A deployment interrupts active searches.
+- Preparing region data locally does not publish it. Publish prepared assets,
+  update the pinned `scripts/data-release.json`, and deploy explicitly to change
+  hosted coverage. Never commit generated datasets or visitor histories.
 
 ## Execution
 
