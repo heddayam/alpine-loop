@@ -192,7 +192,7 @@ export function JobsDialog({
         </button>
       </header>
       <div className="jobs-list" ref={list}>
-        {loading && <p role="status">Loading jobs…</p>}
+        {loading && !jobs.length && <p role="status">Loading jobs…</p>}
         {error && (
           <div className="job-error" role="alert">
             <p>{error}</p>
@@ -202,7 +202,7 @@ export function JobsDialog({
           </div>
         )}
         {!jobs.length && !loading && <p className="empty-state">No jobs yet.</p>}
-        {!!jobs.length && <table className="jobs-table" aria-label="Search jobs">
+        {!!jobs.length && <table className="jobs-table" aria-label="Search jobs" aria-busy={loading || undefined}>
           <colgroup>
             <col className="jobs-expand-col" /><col className="jobs-area-col" />
             <col className="jobs-distance-col" /><col className="jobs-gain-col" />
@@ -303,16 +303,18 @@ export function JobsDialog({
                     {", "}{new Date(job.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
                   </time></td>
                   <td className="job-group-start"><div className="job-actions">
-                    {hasSavedResults(job) && <button type="button" className="job-results" disabled={busy} onClick={() => onView(job)}>View results</button>}
+                    <button type="button" className={activeJob(job) ? "job-cancel" : "job-results"}
+                      disabled={busy || (activeJob(job) ? job.canManage === false : !hasSavedResults(job))}
+                      onClick={() => activeJob(job) ? onAction(job, "cancel") : onView(job)}>
+                      {activeJob(job) ? "Cancel" : "View results"}
+                    </button>
                     <div className="job-secondary-actions">
                     <button type="button" className="job-icon-button" aria-label="Copy settings" title="Copy settings" disabled={busy} onClick={() => onCopy(job)}>
                       <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="9" rx="1" /><path d="M3 11H2V2h8v1" /></svg>
                     </button>
-                    {job.canManage !== false && (activeJob(job)
-                      ? <button type="button" className="job-cancel" disabled={busy} onClick={() => onAction(job, "cancel")}>Cancel</button>
-                      : <button type="button" id={`job-delete-${job.id}`} className="job-icon-button" aria-label="Delete" title="Delete job" disabled={busy} onClick={() => setConfirmDelete(job.id)}>
+                    <button type="button" id={`job-delete-${job.id}`} className="job-icon-button" aria-label="Delete" title="Delete job" disabled={busy || activeJob(job) || job.canManage === false} onClick={() => setConfirmDelete(job.id)}>
                         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M6 4V2h4v2M4 4l1 10h6l1-10M7 6v5M9 6v5" /></svg>
-                      </button>)}
+                    </button>
                     </div>
                   </div></td>
                 </tr>

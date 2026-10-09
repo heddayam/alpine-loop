@@ -35,13 +35,16 @@ const job = (status: JobSnapshot["status"]): JobSnapshot => ({
 const renderJob = (
   status: JobSnapshot["status"],
   progress: Partial<JobSnapshot["progress"]> = {},
+  query: Partial<JobSnapshot["query"]> = {},
+  options: { loading?: boolean; empty?: boolean; canManage?: boolean } = {},
 ) =>
   renderToStaticMarkup(
     createElement(JobsDialog, {
       open: true,
-      jobs: [
-        { ...job(status), progress: { ...job(status).progress, ...progress } },
+      jobs: options.empty ? [] : [
+        { ...job(status), canManage: options.canManage, query: { ...job(status).query, ...query }, progress: { ...job(status).progress, ...progress } },
       ],
+      loading: options.loading,
       regionName: () => "Cascades",
       highlightedId: null,
       error: "",
@@ -52,6 +55,10 @@ const renderJob = (
       onCopy: () => {},
       onAction: () => {},
     }),
+  );
+const action = (markup: string, name: string) =>
+  markup.match(/<button\b[^>]*>[\s\S]*?<\/button>/g)?.find(button =>
+    button.includes(`aria-label="${name}"`) || button.endsWith(`>${name}</button>`),
   );
 const location = (id: string, x: number, y = 0): RouteLocation => ({
   id,
@@ -68,6 +75,24 @@ const location = (id: string, x: number, y = 0): RouteLocation => ({
 });
 
 describe("saved-job interface boundaries", () => {
+  it("retains the job table during a completion refresh and shows loading only without rows", () => {
+    const refresh = renderJob("completed", {}, {}, { loading: true });
+    expect(refresh).not.toContain("Loading jobs…");
+    expect(refresh).toContain('aria-busy="true"');
+    expect(refresh).toContain("View results");
+    expect(renderJob("queued", {}, {}, { loading: true, empty: true })).toContain("Loading jobs…");
+  });
+  it("distinguishes disabled optional limits from zero and legacy percentage constraints", () => {
+    const off = renderJob("completed", {}, { repetition: 1, roads: { distance: 10000, fraction: 1 } });
+    expect(off.match(/>Off<\/span>/g)).toHaveLength(2);
+    for (const query of [
+      { stem: 0, repetition: 1, roads: { distance: 0, fraction: 1 } },
+      { repetition: 0.2, roads: { distance: 10000, fraction: 0.1 } },
+      { stem: 500, repetition: 1 },
+    ]) {
+      expect(renderJob("completed", {}, query)).not.toContain(">Off</span>");
+    }
+  });
   it("filters by visible starting points, including viewport edges, without changing the saved results", () => {
     const locations = [
       location("west", -122, 47),
@@ -82,18 +107,23 @@ describe("saved-job interface boundaries", () => {
     expect(locationsInView(locations, [-123, 46, -119, 49])).toEqual(locations);
     expect(locations).toHaveLength(5);
   });
-  it("exposes results and deletion only for terminal jobs and keeps zero-result completion ready", () => {
+  it("keeps action positions available, gates invalid actions, and keeps zero-result completion ready", () => {
     for (const status of ["queued", "running"] as const) {
       expect(renderJob(status)).toContain(">Cancel</button>");
       expect(renderJob(status)).not.toContain("View results");
-      expect(renderJob(status)).not.toContain('aria-label="Delete"');
+      expect(action(renderJob(status), "Delete")).toContain('disabled=""');
+      expect(action(renderJob(status), "Cancel")).not.toContain('disabled=""');
+      expect(action(renderJob(status, {}, {}, { canManage: false }), "Cancel")).toContain('disabled=""');
     }
     for (const status of ["failed", "cancelled", "interrupted"] as const) {
       expect(renderJob(status)).toContain("Unfinished results were discarded.");
       expect(renderJob(status)).toContain('aria-label="Delete"');
-      expect(renderJob(status)).not.toContain("View results");
+      expect(action(renderJob(status), "View results")).toContain('disabled=""');
+      expect(action(renderJob(status), "Delete")).not.toContain('disabled=""');
     }
     expect(renderJob("completed")).toContain("View results");
+    expect(action(renderJob("completed"), "View results")).not.toContain('disabled=""');
+    expect(action(renderJob("completed", {}, {}, { canManage: false }), "Delete")).toContain('disabled=""');
     expect(renderJob("completed")).toContain('<td class="job-number">0</td>');
     const multipleRegions = { ...job("completed"), query: { ...job("completed").query, sections: ["one", "two"] } };
     expect(jobTitle(multipleRegions, id => id === "one" ? "Olympics" : "Cascades")).toContain("Olympics, Cascades;");

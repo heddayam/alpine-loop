@@ -1,9 +1,10 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, type FormEvent } from "react";
 import type { CatalogView } from "../data-format.js";
 import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type SearchQuery } from "../model.js";
 import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
 import { SteppedNumber } from "./SteppedNumber.js";
 import { RegionPicker } from "./RegionPicker.js";
+import { useAnchoredPopover } from "./useAnchoredPopover.js";
 import { hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
 const MILE = 1609.344;
@@ -33,6 +34,8 @@ export type SearchDraft = {
   stemPercent: string;
   roadsEnabled: boolean;
   roadDistance: string;
+  /** Preserve proportional road limits in saved searches. */
+  roadFraction?: number;
   grades?: GradeDraft;
   /** Preserve exact limits when unit conversion rounds their displayed text. */
   exact?: {
@@ -111,6 +114,7 @@ export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"
     stemPercent: approachEnabled ? String((query.repetition ?? 1) * 100) : "20",
     roadsEnabled,
     roadDistance: "",
+    roadFraction: roads.fraction,
     grades: {
       enabled: !!savedGrades,
       uphill: { above: String(grades.uphill.above), total: "", longest: "" },
@@ -198,7 +202,10 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
       repetition: Number(draft.stemPercent) / 100,
     } : { repetition: 1 }),
     // The hike's maximum distance is a finite, nonrestrictive road budget.
-    roads: { distance: draft.roadsEnabled ? measurement(draft, "roadDistance", units) : maxDistance, fraction: 1 },
+    roads: {
+      distance: draft.roadsEnabled ? measurement(draft, "roadDistance", units) : maxDistance,
+      fraction: draft.roadsEnabled ? (draft.roadFraction ?? 1) : 1,
+    },
     includeUnknown: true,
     effort: "deep",
   };
@@ -250,7 +257,6 @@ function Maximum({
   id,
   name,
   unit,
-  title,
   value,
   step,
   max,
@@ -259,7 +265,6 @@ function Maximum({
   id: string;
   name: string;
   unit: string;
-  title?: string;
   value: string;
   step: number;
   max?: number;
@@ -267,7 +272,7 @@ function Maximum({
 }) {
   return (
     <div className="numeric-field" data-unit={unit}>
-      <label className="field-label" htmlFor={id} title={title}>
+      <label className="field-label" htmlFor={id}>
         {name} <span className="field-unit">{unit}</span>
       </label>
       <SteppedNumber
@@ -293,6 +298,7 @@ export function SearchControls({
   onChange,
   onSubmit,
   onDrawBoundary,
+  onClearResults,
 }: {
   dataset: CatalogView;
   savedSections?: { id: string; name: string }[];
@@ -303,35 +309,11 @@ export function SearchControls({
   onChange: (draft: SearchDraft) => void;
   onSubmit: (event: FormEvent) => void;
   onDrawBoundary: () => void;
+  onClearResults?: () => void;
 }) {
   const drawButton = useRef<HTMLButtonElement>(null);
-  const options = useRef<HTMLDivElement>(null);
-  const optionsButton = useRef<HTMLButtonElement>(null);
+  const options = useAnchoredPopover(disabled);
   const optionsId = useId();
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const [optionsOffset, setOptionsOffset] = useState(0);
-  useEffect(() => {
-    if (!optionsOpen) return;
-    const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !options.current?.contains(event.target)) setOptionsOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setOptionsOpen(false);
-      optionsButton.current?.focus();
-    };
-    const resize = () => setOptionsOpen(false);
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
-    window.addEventListener("resize", resize);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", escape);
-      window.removeEventListener("resize", resize);
-    };
-  }, [optionsOpen]);
-  useEffect(() => { if (disabled) setOptionsOpen(false); }, [disabled]);
   const update = (change: Partial<SearchDraft>) =>
     onChange({ ...draft, ...change });
   const display = unitsFor(units);
@@ -406,18 +388,12 @@ export function SearchControls({
           disabled={disabled}
           onChange={(grades) => update({ grades })}
         />
-        <div className="search-options" ref={options} onBlur={event => {
-          if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) setOptionsOpen(false);
-        }}>
-          <button ref={optionsButton} type="button" className="options-trigger"
-            aria-expanded={optionsOpen} aria-controls={optionsId} onClick={() => {
-              const left = options.current!.getBoundingClientRect().left;
-              setOptionsOffset(Math.max(9 - left, Math.min(0, window.innerWidth - 309 - left)));
-              setOptionsOpen(!optionsOpen);
-            }}>
+        <div className="search-options" ref={options.root} onBlur={options.onBlur}>
+          <button ref={options.button} type="button" className="options-trigger"
+            aria-expanded={options.open} aria-controls={optionsId} onClick={options.toggle}>
             More options <span aria-hidden="true">▾</span>
           </button>
-          {optionsOpen && <div className="options-popover" id={optionsId} style={{ left: optionsOffset }}
+          {options.open && <div ref={options.panel} className="options-popover" id={optionsId} style={{ left: options.offset }}
             role="group" aria-label="Approach and road limits">
             <div className="option-title">
               <label className="option-heading">
@@ -458,16 +434,32 @@ export function SearchControls({
             <fieldset className="options-fields" disabled={!draft.roadsEnabled} aria-label="Road limits">
               <Maximum id="road-distance" name="Road distance" unit={display.distanceLabel}
                 step={0.1} value={draft.roadDistance} onChange={(roadDistance) => update({ roadDistance })} />
+              {(draft.roadFraction ?? 1) < 1 && <p className="road-fraction-note">
+                Also limited to {Number(((draft.roadFraction ?? 1) * 100).toFixed(1))}% of the hike.
+              </p>}
             </fieldset>
           </div>}
         </div>
-        <button
-          className="primary search-button"
-          type="submit"
-          disabled={disabled || !currentRegions}
-        >
-          {submitting ? "Submitting…" : "Search"}
-        </button>
+        <div className="search-actions">
+          <button
+            className="primary search-button"
+            type="submit"
+            disabled={disabled || !currentRegions}
+          >
+            {submitting ? "Submitting…" : "Search"}
+          </button>
+          {onClearResults && <button
+            className="clear-results"
+            type="button"
+            onClick={onClearResults}
+            title="Clear the map and results panel. This search stays in Jobs."
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+              <path d="m3 3 6 6m0-6-6 6" strokeLinecap="round" />
+            </svg>
+            Clear results
+          </button>}
+        </div>
       </fieldset>
     </form>
   );

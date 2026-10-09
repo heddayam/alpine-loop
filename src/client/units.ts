@@ -1,5 +1,4 @@
-import type { SearchQuery } from "../model.js";
-import { DEFAULT_ROAD_LIMITS } from "../model.js";
+import { DEFAULT_ROAD_LIMITS, type SearchQuery } from "../model.js";
 
 export type UnitSystem = "imperial" | "metric";
 const systems = {

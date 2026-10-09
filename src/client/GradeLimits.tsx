@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId } from "react";
 import { unitsFor, type UnitSystem } from "./units.js";
 import { SteppedNumber } from "./SteppedNumber.js";
+import { useAnchoredPopover } from "./useAnchoredPopover.js";
 export type GradeDraft = {
   enabled: boolean;
   uphill: { above: string; total: string; longest: string };
@@ -13,51 +14,20 @@ export function GradeLimitsControl({ value, units, disabled, onChange }: {
   disabled: boolean;
   onChange: (value: GradeDraft) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [offset, setOffset] = useState(0);
-  const root = useRef<HTMLDivElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
+  const popover = useAnchoredPopover(disabled);
   const id = useId();
   const unit = unitsFor(units).distanceLabel;
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setOpen(false);
-      button.current?.focus();
-    };
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
-    const resize = () => setOpen(false);
-    window.addEventListener("resize", resize);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", escape);
-      window.removeEventListener("resize", resize);
-    };
-  }, [open]);
-  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   return (
-    <div className="grade-limits" ref={root} onBlur={event => {
-      if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-    }}>
+    <div className="grade-limits" ref={popover.root} onBlur={popover.onBlur}>
       <div className={`grade-trigger${value.enabled ? " enabled" : ""}`}>
         <input type="checkbox" aria-label="Enable grade limits" checked={value.enabled}
           disabled={disabled} onChange={event => onChange({ ...value, enabled: event.target.checked })} />
-        <button ref={button} type="button" disabled={disabled} aria-expanded={open}
-          aria-controls={`${id}-panel`} onClick={() => {
-            const left = root.current!.getBoundingClientRect().left;
-            setOffset(Math.max(9 - left, Math.min(0, window.innerWidth - 388 - left)));
-            setOpen(!open);
-          }}>
+        <button ref={popover.button} type="button" disabled={disabled} aria-expanded={popover.open}
+          aria-controls={`${id}-panel`} onClick={popover.toggle}>
           Grade limits <span aria-hidden="true">▾</span>
         </button>
       </div>
-      {open && <div className="grade-popover" style={{ left: offset }} id={`${id}-panel`} role="group" aria-label="Grade limits settings">
+      {popover.open && <div ref={popover.panel} className="grade-popover" style={{ left: popover.offset }} id={`${id}-panel`} role="group" aria-label="Grade limits settings">
         <div className="grade-grid">
           <span />
           <span className="grade-column" title="The distance limits apply to slopes steeper than this grade.">Max grade <span className="field-unit">%</span></span>

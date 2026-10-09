@@ -20,7 +20,7 @@ describe("editable search constraints", () => {
       effort: "deep",
       roads: { distance: 1232.994, fraction: 0.35 },
     };
-    const editableQuery = { ...query, repetition: 1, includeUnknown: true, roads: { ...query.roads!, fraction: 1 } };
+    const editableQuery = { ...query, repetition: 1, includeUnknown: true };
     const draft = draftForQuery(query);
     expect(queryForDraft(draft)).toEqual(editableQuery);
     let converted = draft;
@@ -133,6 +133,18 @@ describe("editable search constraints", () => {
       expect(query.gain).toEqual(original.gain);
       expect(() => validateQuery(query)).not.toThrow();
     }
+  });
+
+  it("retains a saved road percentage through edits, units, and temporary disabling", () => {
+    const query: SearchQuery = {
+      sections: ["fixture"], distance: [5000, 10000], gain: [0, 1000],
+      stem: 500, repetition: 0.2, roads: { distance: 1000, fraction: 0.1 }, includeUnknown: true,
+    };
+    const draft = draftForQuery(query);
+    const disabled = convertDraft({ ...draft, roadsEnabled: false }, "imperial", "metric");
+    expect(queryForDraft(disabled, "metric").roads).toEqual({ distance: 10000, fraction: 1 });
+    expect(queryForDraft({ ...disabled, roadsEnabled: true }, "metric").roads).toEqual(query.roads);
+    expect(queryForDraft({ ...draft, roadDistance: "0.5" }).roads).toEqual({ distance: 0.5 * 1609.344, fraction: 0.1 });
   });
 
   it("ignores inactive invalid fields but restores and validates retained limits when enabled", () => {

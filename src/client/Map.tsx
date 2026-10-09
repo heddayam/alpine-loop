@@ -66,8 +66,6 @@ export function HikeMap({
   previewRoute,
   selectedId,
   previewId,
-  routeNotice,
-  onRetryRoute,
   camera,
   onSelect,
   onPreview,
@@ -88,9 +86,7 @@ export function HikeMap({
   previewRoute: HikeRoute | null;
   selectedId: string | null;
   previewId: string | null;
-  routeNotice: string;
-  onRetryRoute?: () => void;
-  camera: { bounds: Bounds; revision: number; padding?: number };
+  camera: { bounds: Bounds; revision: number; padding?: number; bottomPadding?: number };
   onSelect: (id: string) => void;
   onPreview: (id: string | null) => void;
   onBoundsChange: (bounds: Bounds, userMoved: boolean) => void;
@@ -283,15 +279,6 @@ export function HikeMap({
       const resultColor = colors.getPropertyValue("--action").trim();
       const routeColor = colors.getPropertyValue("--active-route").trim();
       // Keep alternatives legible on terrain, with the focused hike above them.
-      instance.addLayer({
-        id: "result-paths-background", type: "line", source: "result-paths", minzoom: PATHS_MIN_ZOOM,
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": "#ffffff",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 8, 3.5, 12, 4.5, 16, 5],
-          "line-opacity": 0.75,
-        },
-      }, firstLabel);
       instance.addLayer({
         id: "result-paths",
         type: "line",
@@ -550,7 +537,7 @@ export function HikeMap({
     map.resize();
     const padding = camera.padding ?? 40;
     map.fitBounds(camera.bounds, {
-      padding,
+      padding: { top: padding, right: padding, bottom: camera.bottomPadding ?? padding, left: padding },
       maxZoom: 17,
       duration: 0,
     });
@@ -572,20 +559,7 @@ export function HikeMap({
           {mapError}
         </div>
       )}
-      {routeNotice && (
-        <div
-          className="map-notice preview-notice"
-          role={onRetryRoute ? "alert" : "status"}
-        >
-          <p>{routeNotice}</p>
-          {onRetryRoute && (
-            <button type="button" onClick={onRetryRoute}>
-              Retry drawing
-            </button>
-          )}
-        </div>
-      )}
-      {pathsError && !mapError && !routeNotice && (
+      {pathsError && !mapError && (
         <div className="map-notice preview-notice" role="alert">
           <p>{pathsError}</p>
           <button type="button" onClick={() => setPathsRetry((value) => value + 1)}>Retry</button>

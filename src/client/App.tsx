@@ -37,6 +37,7 @@ import { request } from "./request.js";
 import { useJobs } from "./useJobs.js";
 import { RouteCache } from "./RouteCache.js";
 import { RouteDock } from "./RouteDock.js";
+import { RouteCard } from "./RouteCard.js";
 import {
   SearchControls,
   initialDraft,
@@ -93,6 +94,7 @@ export function App() {
     bounds: Bounds;
     revision: number;
     padding?: number;
+    bottomPadding?: number;
   }>();
   const jobHistory = useJobs();
   const { jobs } = jobHistory;
@@ -120,6 +122,8 @@ export function App() {
   const [routeError, setRouteError] = useState("");
   const [routeRetry, setRouteRetry] = useState(0);
   const focusedRouteId = useRef<string | null>(null);
+  const browserPanel = useRef<HTMLElement>(null);
+  const routeCard = useRef<HTMLElement>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingDownload, setPendingDownload] = useState<{
@@ -171,13 +175,14 @@ export function App() {
   const visibleBoundary = showSearchArea ? draft.boundary : viewedJob?.query.boundary;
   const regionName = (id: string) =>
     dataset?.sections.find((section) => section.id === id)?.name ?? id;
-  const moveTo = (bounds: Bounds, padding = 40) =>
+  const moveTo = (bounds: Bounds, padding = 40, bottomPadding?: number) =>
     setCamera((current) => ({
       bounds,
       revision: (current?.revision ?? 0) + 1,
       padding,
+      bottomPadding,
     }));
-  const frameHikes = (bounds: Bounds) => {
+  const frameHikes = (bounds: Bounds, bottomPadding?: number) => {
     // Leave nearby terrain visible without making the margin depend on screen size.
     const longitudeMargin = (bounds[2] - bounds[0]) * 0.15;
     const latitudeMargin = (bounds[3] - bounds[1]) * 0.15;
@@ -186,11 +191,15 @@ export function App() {
       bounds[1] - latitudeMargin,
       bounds[2] + longitudeMargin,
       bounds[3] + latitudeMargin,
-    ]);
+    ], 40, bottomPadding);
   };
   const fitRoute = (id: string) => {
     const route = locations.find((route) => route.id === id);
-    if (route) frameHikes(route.bounds);
+    if (route) {
+      const cardHeight = routeCard.current?.getBoundingClientRect().height ?? 0;
+      const mapHeight = browserPanel.current?.getBoundingClientRect().height ?? 0;
+      frameHikes(route.bounds, Math.min(cardHeight + 64, mapHeight * 0.65));
+    }
   };
   const clearSelection = () => {
     setHoveredId(null);
@@ -200,7 +209,7 @@ export function App() {
   };
   const backToResults = () => {
     clearSelection();
-    requestAnimationFrame(() => document.getElementById("results-heading")?.focus());
+    requestAnimationFrame(() => document.getElementById(resultsCollapsed ? "results-toggle" : "results-heading")?.focus());
   };
   const localURL = (id?: string) => {
     const url = new URL(window.location.href);
@@ -323,13 +332,6 @@ export function App() {
       setGeometry(route);
       if (selectedId === route.id) {
         setSelected(route);
-        if (focusedRouteId.current !== route.id) {
-          focusedRouteId.current = route.id;
-          fitRoute(route.id);
-          requestAnimationFrame(() =>
-            document.getElementById("route-detail-heading")?.focus(),
-          );
-        }
       }
     };
     setRouteError("");
@@ -367,6 +369,12 @@ export function App() {
     selectedId,
     routeRetry,
   ]);
+  useEffect(() => {
+    if (!selected || focusedRouteId.current === selected.id) return;
+    focusedRouteId.current = selected.id;
+    // Measure the mounted card so the full walk fits above it.
+    fitRoute(selected.id);
+  }, [selected]);
   const copySettings = (job: JobSnapshot) => {
     setDrawingBoundary(false);
     viewOperation.current?.abort();
@@ -662,6 +670,7 @@ export function App() {
     }
     focusedRouteId.current = null;
     setSelected(null);
+    setRouteError("");
     setSelectedId(id);
   };
   const runningCount = jobs.filter((job) => job.status === "running").length;
@@ -718,6 +727,10 @@ export function App() {
             units={units}
             onChange={changeDraft}
             onSubmit={(event) => void launch(event)}
+            onClearResults={viewedJob ? () => {
+              closeResults();
+              requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".search-button")?.focus());
+            } : undefined}
             onDrawBoundary={() => {
               clearSelection();
               setShowSearchArea(true);
@@ -758,19 +771,16 @@ export function App() {
             total={locations.length}
             scope={resultScope}
             selectedId={selectedId}
-            selected={selected}
             loadingMap={!mapBounds}
-            routeError={routeError}
             onScope={setResultScope}
             onSelect={pickRoute}
             onPreview={setHoveredId}
             onClear={backToResults}
-            onRetry={() => setRouteRetry((value) => value + 1)}
-            onProfileHover={profileCursor.set}
           />
         )}
         {viewedJob && (
           <button
+            id="results-toggle"
             className="collapse-results"
             type="button"
             aria-controls="results-panel"
@@ -785,7 +795,7 @@ export function App() {
             <span aria-hidden="true">{resultsCollapsed ? "›" : "‹"}</span>
           </button>
         )}
-        <section className="browser-panel" aria-label="Browse hikes">
+        <section ref={browserPanel} className="browser-panel" aria-label="Browse hikes">
           {mapDataset && camera ? (
             <Suspense
               fallback={
@@ -811,16 +821,6 @@ export function App() {
                 previewRoute={hoveredId && activeRoute?.id === hoveredId ? activeRoute : null}
                 selectedId={selectedId}
                 previewId={hoveredId}
-                routeNotice={
-                  selectedId
-                    ? routeError || (!selected ? "Loading route…" : "")
-                    : ""
-                }
-                onRetryRoute={
-                  routeError
-                    ? () => setRouteRetry((value) => value + 1)
-                    : undefined
-                }
                 camera={camera}
                 onSelect={(id) => {
                   if (
@@ -861,6 +861,19 @@ export function App() {
             </Suspense>
           ) : (
             <div className="map-placeholder" />
+          )}
+          {viewedJob && selectedId && !drawingBoundary && (
+            <RouteCard
+              key={selectedId}
+              ref={routeCard}
+              route={selected}
+              job={viewedJob}
+              units={units}
+              error={routeError}
+              onClose={backToResults}
+              onRetry={() => setRouteRetry((value) => value + 1)}
+              onProfileHover={profileCursor.set}
+            />
           )}
         </section>
       </main>
