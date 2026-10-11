@@ -142,6 +142,7 @@ export function JobsDialog({
   onNewer?: () => void;
 }) {
   const display = unitsFor(units);
+  const maximumDistance = (meters: number) => `≤${Number(distanceText(meters, units, 3))} ${display.distanceLabel}`;
   const dialog = useRef<HTMLDialogElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -233,6 +234,24 @@ export function JobsDialog({
             const title = jobTitle(job, regionName);
             const areas = job.query.sections.map((id) => jobRegionName(job, id, regionName));
             const areaSummary = jobAreaSummary(job, catalogSections);
+            const criteria: [string, string][] = [
+              ["Distance", `${distanceText(job.query.distance[0], units)}–${distanceText(job.query.distance[1], units)} ${display.distanceLabel}`],
+              ["Elevation gain", `${elevationText(job.query.gain[0], units)}–${elevationText(job.query.gain[1], units)} ${display.elevationLabel}`],
+              ["Approach distance", job.query.stem === undefined ? "Off" : maximumDistance(job.query.stem)],
+              ["Approach fraction", job.query.repetition === undefined ? "Off" : `≤${Number((job.query.repetition * 100).toFixed(1))}%`],
+              ["Road distance", hasRoadLimit(job.query) ? maximumDistance(roads.distance) : "Off"],
+            ];
+            if (roads.fraction < 1) criteria.push(["Saved road share limit", `≤${Number((roads.fraction * 100).toFixed(1))}%`]);
+            if (job.query.grades) {
+              for (const direction of ["uphill", "downhill"] as const) {
+                const limit = job.query.grades[direction];
+                const name = direction === "uphill" ? "Uphill" : "Downhill";
+                criteria.push(
+                  [`${name} total distance`, `${maximumDistance(limit.total)} on grades >${limit.above}%`],
+                  [`${name} longest stretch`, `${maximumDistance(limit.longest)} on grades >${limit.above}%`],
+                );
+              }
+            }
             const isExpanded = expanded === job.id;
             const percentage = job.progress.totalSearchPoints
               ? Math.floor(100 * (job.progress.completedSearchPoints ?? 0) / job.progress.totalSearchPoints)
@@ -279,7 +298,7 @@ export function JobsDialog({
                   <td className="job-number job-limit">
                     {hasRoadLimit(job.query) ? <>
                     <span>{Number(distanceText(roads.distance, units, 3))} {display.distanceLabel}</span>
-                    <span className="job-muted">{Number((roads.fraction * 100).toFixed(1))}%</span>
+                    {roads.fraction < 1 && <span className="job-muted">{Number((roads.fraction * 100).toFixed(1))}%</span>}
                     </> : <span className="job-muted">Off</span>}
                   </td>
                   <td className="job-group-start job-status-cell">
@@ -321,34 +340,23 @@ export function JobsDialog({
                 <tr id={`job-details-${job.id}`} className="job-detail-row" hidden={!isExpanded}>
                   <td colSpan={11}>
                     <div className="job-detail-content">
+                      <table className="detail-metrics job-criteria-table" aria-label="Search criteria">
+                        <thead><tr><th scope="col">Search criterion</th><th scope="col">Value</th></tr></thead>
+                        <tbody>
+                          {criteria.map(([name, value]) => <tr key={name}>
+                            <th scope="row">{name}</th><td>{value}</td>
+                          </tr>)}
+                        </tbody>
+                      </table>
                       <div>
-                        <h3>Search settings</h3>
-                        <p>{areas.join(", ")}</p>
+                        {areas.length > 1 && <p><span className="job-muted">Sections:</span> {areas.join(", ")}</p>}
                         {job.query.boundary && <p>Starting points inside the boundary; hikes may extend outside.</p>}
-                        <p>{hasApproachLimit(job.query)
-                          ? `One-way approach up to ${Number(distanceText(stemLimit(job.query), units, 3))} ${display.distanceLabel}${job.query.repetition !== undefined ? ` and ${Number((job.query.repetition * 100).toFixed(1))}% of the hike` : ""}.`
-                          : "Approach limits off."} {hasRoadLimit(job.query)
-                          ? `Roads up to ${Number(distanceText(roads.distance, units, 3))} ${display.distanceLabel} and ${Number((roads.fraction * 100).toFixed(1))}%.`
-                          : "Road walking limit off."}</p>
-                        {job.query.grades && (["uphill", "downhill"] as const).map(direction => {
-                          const limit = job.query.grades![direction];
-                          return <p key={direction}>{direction === "uphill" ? "Uphill" : "Downhill"} above {limit.above}%: {Number(distanceText(limit.total, units, 3))} {display.distanceLabel} total, {Number(distanceText(limit.longest, units, 3))} {display.distanceLabel} longest stretch.</p>;
-                        })}
-                      </div>
-                      <div>
-                        <h3>{job.status === "running" || job.status === "queued" ? "Progress" : "Outcome"}</h3>
-                        {job.status === "running" && <div className="job-search-progress">
-                          <p>{job.progress.stage === "preparing" ? "Preparing trail data" : job.progress.stage === "saving" ? "Saving results" : `Searching ${job.progress.currentRegion?.name ?? "trails"}`}</p>
-                          <progress aria-label="Within-region search progress" max={job.progress.totalSearchPoints || undefined} value={job.progress.totalSearchPoints ? (job.progress.completedSearchPoints ?? 0) : undefined} />
-                          <p>{progressText}</p>
-                        </div>}
                         {job.status === "queued" && <p>Queue position {job.queuePosition ?? "—"}</p>}
                         {job.reason && <p className="job-error">{job.reason}</p>}
                         {job.status === "interrupted" && <p>Server stopped. Copy settings to try again.</p>}
                         {["cancelled", "failed", "interrupted"].includes(job.status) && <p>Unfinished results were discarded.</p>}
-                        {hasSavedResults(job) && <p>{job.groupCount === 0 ? "No qualifying hikes were found by this search." : `${job.groupCount?.toLocaleString() ?? "Saved"} hikes available.`}</p>}
-                        <p className="job-muted">Storage: {storage(job.storageBytes)}</p>
-                        <p className="job-muted">Job {job.id}</p>
+                        <p className="job-muted">Size {storage(job.storageBytes)}</p>
+                        <p className="job-muted">Job <code>{job.id}</code></p>
                       </div>
                     </div>
                   </td>

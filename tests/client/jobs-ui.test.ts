@@ -130,9 +130,14 @@ describe("saved-job interface boundaries", () => {
     expect(jobTitle(multipleRegions, id => id)).not.toContain("[object Object]");
     expect(renderJob("completed")).not.toContain("Search deeper");
     expect(renderJob("completed")).not.toContain("Standard search");
-    expect(renderJob("completed")).toContain(
-      "No qualifying hikes were found by this search.",
-    );
+    expect(renderJob("completed")).not.toContain("hikes available.");
+    expect(renderJob("completed")).not.toContain("Search settings");
+    expect(renderJob("completed")).toContain('aria-label="Search criteria"');
+    expect(renderJob("completed")).toContain('<th scope="row">Distance</th><td>0.0–6.2 mi</td>');
+    expect(renderJob("completed")).toContain('<th scope="row">Elevation gain</th><td>0–3,281 ft</td>');
+    expect(renderJob("completed")).toContain('<th scope="row">Approach distance</th><td>Off</td>');
+    expect(renderJob("completed")).toContain('<th scope="row">Approach fraction</th><td>≤20%</td>');
+    expect(renderJob("completed")).not.toContain("Graph expansions");
     expect(renderJob("queued")).toContain("Queue position 2");
     const measured = renderJob("running", {
       totalSearchPoints: 100,
@@ -147,17 +152,13 @@ describe("saved-job interface boundaries", () => {
     expect(live).toContain('<td class="job-number">37</td>');
     expect(live).not.toContain("View results");
     expect(renderJob("failed", { foundHikes: 37 })).not.toContain('<td class="job-number">37</td>');
-    expect(measured).toContain('value="25"');
-    expect(measured).toContain('max="100"');
-    expect(measured.match(/Region 2 of 5, 25%/g)).toHaveLength(2);
+    expect(measured.match(/Region 2 of 5, 25%/g)).toHaveLength(1);
     expect(measured).not.toContain("regions finished");
     expect(renderJob("running", { stage: "saving", completedRegions: ["cascades"] })).toContain("Saving results");
     expect(measured).not.toContain("planned search steps");
     expect(measured).not.toContain("fully explored");
     expect(renderJob("completed")).not.toContain("fully explored");
-    expect(renderJob("running")).toContain(
-      'aria-label="Within-region search progress"',
-    );
+    expect(renderJob("running")).not.toContain('<th scope="row">Section work units</th>');
   });
   it("summarizes prepared state and mountain groups without guessing unknown sections", () => {
     const sections = [
