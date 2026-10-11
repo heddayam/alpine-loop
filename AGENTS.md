@@ -23,6 +23,8 @@ do not resume their gates or carry their architecture into the replacement.
   qualification, drive-time service, or steepness controls in the first release.
 - Focus on desktop UI for now. Challenge each element's purpose, position,
   wording and appearance against the user's next decision.
+- Never use middle-dot separators in UI text or proposed UI designs. Use commas,
+  plain wording, or spacing instead.
 - Longer searches are acceptable. Prioritize thorough exploration, useful route
   choices, clear progress and responsive cancellation over sub-10-second results.
   Do not add machinery or truncate work solely to satisfy earlier speed targets.

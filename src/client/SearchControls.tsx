@@ -433,7 +433,7 @@ export function SearchControls({
             </div>
             <fieldset className="options-fields" disabled={!draft.roadsEnabled} aria-label="Road limits">
               <Maximum id="road-distance" name="Road distance" unit={display.distanceLabel}
-                step={0.1} value={draft.roadDistance} onChange={(roadDistance) => update({ roadDistance })} />
+                step={0.5} value={draft.roadDistance} onChange={(roadDistance) => update({ roadDistance })} />
               {(draft.roadFraction ?? 1) < 1 && <p className="road-fraction-note">
                 Also limited to {Number(((draft.roadFraction ?? 1) * 100).toFixed(1))}% of the hike.
               </p>}

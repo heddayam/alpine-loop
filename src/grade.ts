@@ -86,6 +86,39 @@ export function elevationPosition(
   return position;
 }
 
+/** A selected interval follows route order, regardless of the click order.
+ * Interpolate its boundaries once, then visit only the selected vertices for
+ * both the map highlight and ascent/descent. Never bridge missing heights.
+ */
+export function elevationSelection(samples: ProfileSample[], from: number, to: number) {
+  const total = samples.at(-1)?.distance ?? 0;
+  if (!total || !Number.isFinite(from) || !Number.isFinite(to)) return null;
+  const start = Math.max(0, Math.min(total, Math.min(from, to)));
+  const end = Math.max(0, Math.min(total, Math.max(from, to)));
+  if (end <= start) return null;
+  const geometry = [elevationPosition(samples, start)!];
+  for (let i = sampleIndex(samples, start); i < samples.length && samples[i]!.distance < end; i++) {
+    if (samples[i]!.distance > start) geometry.push(samples[i]!.position);
+  }
+  geometry.push(elevationPosition(samples, end)!);
+  let gain = 0, loss = 0;
+  let known = Number.isFinite(geometry[0]![2]);
+  for (let i = 1; i < geometry.length; i++) {
+    const a = geometry[i - 1]![2], b = geometry[i]![2];
+    if (!Number.isFinite(a) || !Number.isFinite(b)) known = false;
+    else {
+      gain += Math.max(0, b! - a!);
+      loss += Math.max(0, a! - b!);
+    }
+  }
+  return {
+    start, end, distance: end - start, geometry,
+    gain: known ? gain : null,
+    loss: known ? loss : null,
+    grade: known ? 100 * (geometry.at(-1)![2]! - geometry[0]![2]!) / (end - start) : null,
+  };
+}
+
 /** Signed rise/run over a 100 m window, clipped at the walk's endpoints. */
 export function elevationGrade(
   samples: ProfileSample[],

@@ -38,6 +38,7 @@ import { useJobs } from "./useJobs.js";
 import { RouteCache } from "./RouteCache.js";
 import { RouteDock } from "./RouteDock.js";
 import { RouteCard } from "./RouteCard.js";
+import { useRouteStars } from "./useRouteStars.js";
 import {
   SearchControls,
   initialDraft,
@@ -108,12 +109,14 @@ export function App() {
     action: string;
   } | null>(null);
   const [viewedJob, setViewedJob] = useState<JobSnapshot>();
+  const stars = useRouteStars(viewedJob);
   const [locations, setLocations] = useState<RouteLocation[]>([]);
   const [mapBounds, setMapBounds] = useState<Bounds>();
   const [resultScope, setResultScope] = useState<
     "view" | "all" | ReadonlySet<string>
   >("view");
   const [selected, setSelected] = useState<RouteView | null>(null);
+  const [hoveredTrail, setHoveredTrail] = useState<string | null>(null);
   const profileCursor = useMemo(createProfileCursor, []);
   const routeCache = useRef(new RouteCache());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -164,6 +167,7 @@ export function App() {
             : [],
     [locations, resultScope, mapBounds],
   );
+  const starredLocations = useMemo(() => locations.filter(route => stars.ids.has(route.id)), [locations, stars.ids]);
   useEffect(() => {
     setHoveredId(null);
   }, [visibleLocations]);
@@ -202,6 +206,7 @@ export function App() {
     }
   };
   const clearSelection = () => {
+    setHoveredTrail(null);
     setHoveredId(null);
     setSelected(null);
     setSelectedId(null);
@@ -670,6 +675,7 @@ export function App() {
     }
     focusedRouteId.current = null;
     setSelected(null);
+    setHoveredTrail(null);
     setRouteError("");
     setSelectedId(id);
   };
@@ -768,9 +774,14 @@ export function App() {
             units={units}
             hidden={resultsCollapsed}
             routes={visibleLocations}
+            starredRoutes={starredLocations}
+            starsCollapsed={stars.collapsed}
+            onToggleStars={stars.toggleCollapsed}
+            onToggleStar={stars.toggle}
             total={locations.length}
             scope={resultScope}
             selectedId={selectedId}
+            previewId={hoveredId}
             loadingMap={!mapBounds}
             onScope={setResultScope}
             onSelect={pickRoute}
@@ -817,6 +828,7 @@ export function App() {
                 routes={drawingBoundary ? [] : locations}
                 pathsURL={viewedJob && !drawingBoundary ? savedResultsURL(viewedJob, "paths") : undefined}
                 profileCursor={profileCursor}
+                hoveredTrail={hoveredTrail}
                 selectedRoute={selected}
                 previewRoute={hoveredId && activeRoute?.id === hoveredId ? activeRoute : null}
                 selectedId={selectedId}
@@ -870,9 +882,12 @@ export function App() {
               job={viewedJob}
               units={units}
               error={routeError}
+              starred={stars.ids.has(selectedId)}
+              onToggleStar={() => stars.toggle(selectedId)}
               onClose={backToResults}
               onRetry={() => setRouteRetry((value) => value + 1)}
               onProfileHover={profileCursor.set}
+              onTrailHover={setHoveredTrail}
             />
           )}
         </section>

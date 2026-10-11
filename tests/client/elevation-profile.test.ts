@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { HikeRoute, Position } from "../../src/model.js";
+import { elevationSelection } from "../../src/grade.js";
 import {
   ElevationProfile,
   elevationGrade,
@@ -31,6 +32,51 @@ const route = (geometry: Position[]): HikeRoute => ({
 });
 
 describe("distance-indexed saved elevation geometry", () => {
+  it("measures a selected rolling stretch at interpolated boundaries in route order", () => {
+    const geometry = [point(0, 0), point(100 / DEGREE, 20), point(200 / DEGREE, 10), point(300 / DEGREE, 30)];
+    const samples = elevationSamples(geometry);
+    const selected = elevationSelection(samples, 50, 250)!;
+    expect(selected.distance).toBe(200);
+    expect(selected.gain).toBeCloseTo(20, 7);
+    expect(selected.loss).toBeCloseTo(10, 7);
+    expect(selected.grade).toBeCloseTo(5, 7);
+    expect(selected.geometry.map(position => position[2])).toEqual([
+      expect.closeTo(10, 7), 20, 10, expect.closeTo(20, 7),
+    ]);
+    expect(elevationSelection(samples, 250, 50)).toEqual(selected);
+    const backward = elevationSelection(elevationSamples([...geometry].reverse()), 50, 250)!;
+    expect(backward.grade).toBeCloseTo(-5, 7);
+    expect(backward.gain).toBeCloseTo(10, 7);
+    expect(backward.loss).toBeCloseTo(20, 7);
+    const whole = elevationSelection(samples, -100, 400)!;
+    expect(whole.gain).toBe(40);
+    expect(whole.loss).toBe(10);
+  });
+
+  it("retains map geometry but withholds all elevation statistics across unknown heights", () => {
+    const samples = elevationSamples([point(0, 0), point(100 / DEGREE, 10), point(200 / DEGREE), point(300 / DEGREE, 30), point(400 / DEGREE, 40)]);
+    const selected = elevationSelection(samples, 50, 350)!;
+    expect(selected.geometry).toHaveLength(5);
+    expect(selected.gain).toBeNull();
+    expect(selected.loss).toBeNull();
+    expect(selected.grade).toBeNull();
+    expect(elevationSelection(samples, 10, 50)!.grade).toBeCloseTo(10, 7);
+    expect(elevationSelection(samples, 310, 350)!.grade).toBeCloseTo(10, 7);
+  });
+
+  it("rejects empty selections and preserves separate passages along a repeated trail", () => {
+    const samples = elevationSamples([point(0, 0), point(100 / DEGREE, 10), point(0, 0)]);
+    expect(elevationSelection(samples, 0, 0)).toBeNull();
+    expect(elevationSelection(samples, NaN, 100)).toBeNull();
+    expect(elevationSelection([], 0, 100)).toBeNull();
+    expect(elevationSelection(elevationSamples([point(0, 0), point(0, 10)]), 0, 100)).toBeNull();
+    const selection = elevationSelection(samples, 0, 200)!;
+    expect(selection.geometry).toHaveLength(3);
+    expect(selection.gain).toBe(10);
+    expect(selection.loss).toBeCloseTo(10, 7);
+    expect(selection.grade).toBeCloseTo(0, 7);
+  });
+
   it("measures horizontal distance without letting elevation or reported metrics stretch the profile", () => {
     const geometry: Position[] = [point(0, 0), point(1, 100000), point(2, 0)];
     const samples = elevationSamples(geometry);

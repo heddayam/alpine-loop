@@ -72,6 +72,7 @@ export function HikeMap({
   onBoundsChange,
   onBrowse,
   profileCursor,
+  hoveredTrail,
   boundary,
   drawingBoundary,
   onFinishBoundary,
@@ -92,6 +93,7 @@ export function HikeMap({
   onBoundsChange: (bounds: Bounds, userMoved: boolean) => void;
   onBrowse: (ids: string[]) => void;
   profileCursor: ProfileCursor;
+  hoveredTrail: string | null;
   boundary?: SearchBoundary;
   drawingBoundary: boolean;
   onFinishBoundary: (boundary: SearchBoundary) => string | null;
@@ -258,6 +260,7 @@ export function HikeMap({
         data: empty,
       });
       instance.addSource("route", { type: "geojson", data: empty });
+      instance.addSource("profile-selection", { type: "geojson", data: empty });
       instance.addSource("preview-route", { type: "geojson", data: empty });
       instance.addSource("result-paths", { type: "geojson", data: empty });
       instance.addSource("search-boundary", { type: "geojson", data: empty });
@@ -326,6 +329,11 @@ export function HikeMap({
           "line-width": 4,
           "line-opacity": 1,
         },
+      }, firstLabel);
+      instance.addLayer({
+        id: "profile-selection", type: "line", source: "profile-selection",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": routeColor, "line-width": 8, "line-opacity": 0.65 },
       }, firstLabel);
       const pathAt = (point: { x: number; y: number }) => {
         const features = instance.queryRenderedFeatures(
@@ -502,13 +510,32 @@ export function HikeMap({
   }, [map, selectedRoute]);
 
   useEffect(() => {
+    if (!map) return;
+    const color = getComputedStyle(container.current!).getPropertyValue("--active-route").trim();
+    // Name hover covers every matching section, alongside the map's own segment hover.
+    map.setPaintProperty("route-background", "line-color", ["case", ["any",
+      ["boolean", ["feature-state", "hover"], false],
+      hoveredTrail ? ["==", ["get", "name"], hoveredTrail] : false,
+    ], color, "#ffffff"]);
+  }, [map, hoveredTrail]);
+
+  useEffect(() => {
     clearSegmentHover.current();
     setStartLabel(null);
   }, [selectedId, drawingBoundary]);
 
   useEffect(() => {
     if (!map) return;
-    return profileCursor.subscribe((position) => {
+    let previousSelection: Parameters<ProfileCursor["set"]>[1];
+    const source = map.getSource("profile-selection") as GeoJSONSource;
+    const unsubscribe = profileCursor.subscribe((position, selection) => {
+      if (selection !== previousSelection) {
+        previousSelection = selection;
+        source.setData(selection ? {
+          type: "Feature", properties: {},
+          geometry: { type: "LineString", coordinates: selection.map(position => [position[0], position[1]]) },
+        } : empty);
+      }
       if (!position) {
         profileMarker.current?.remove();
         profileMarker.current = null;
@@ -520,6 +547,7 @@ export function HikeMap({
           .setLngLat([position[0], position[1]]).addTo(map);
       } else profileMarker.current.setLngLat([position[0], position[1]]);
     });
+    return unsubscribe;
   }, [map, profileCursor]);
 
   useEffect(() => {
