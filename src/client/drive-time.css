@@ -1,0 +1,13 @@
+.drive-control { display: grid; gap: 5px; font-size: 12px; }
+.drive-trigger { display: flex; align-items: center; gap: 7px; width: fit-content; min-height: 27px; padding: 4px 7px; border: 1px solid var(--line); color: #7c858d; background: var(--surface); }
+.drive-trigger.drive-enabled { color: var(--ink); border-color: var(--control-border); background: var(--control-hover); }
+.drive-trigger:has(input:disabled) { opacity: 0.5; }
+.drive-fields { display: grid; gap: 5px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.drive-duration, .drive-origin-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.drive-duration input { width: 58px; padding: 4px 5px; }
+.drive-origin-actions button { padding: 4px 7px; font-size: 11px; background: transparent; }
+.drive-origin-actions button:hover { background: transparent; }
+.drive-control :is(button, input):focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.drive-note { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.drive-error { color: #a12842; font-size: 11px; line-height: 1.4; }
+.drive-fields:disabled .drive-duration { opacity: 0.5; }
