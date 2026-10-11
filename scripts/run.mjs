@@ -4,6 +4,10 @@ import release from './data-release.json' with { type: 'json' };
 import { startServer } from '../dist/server/server.js';
 import { installHostedData } from './install-hosted-data.mjs';
 
+// Native development can use an ignored .env; environment variables take precedence.
+try { process.loadEnvFile('.env'); }
+catch (error) { if (error.code !== 'ENOENT') throw error; }
+
 // Both native and container launches share this bootstrap; workers import neither.
 const controller = new AbortController();
 const stop = () => controller.abort();

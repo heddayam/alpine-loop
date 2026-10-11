@@ -79,6 +79,22 @@ justify it. Changing VM size preserves the attached data disk.
 - `/etc/alpine-loop/app.env` holds a persistent `ALPINE_SESSION_SECRET` of at least
   32 bytes. Keep it unchanged across releases and restores. It must be root-owned
   and mode 600. Never commit secrets or `docker compose config` output.
+- Optional `ARCGIS_API_KEY` in the same env file enables driving-time filtering.
+  Use an ArcGIS Location Platform key with routing service access. The key stays
+  on the server; without it, ordinary searches remain available. Native `npm start`
+  also reads the ignored root `.env`, with environment variables taking precedence.
+  Local Compose forwards the same optional key.
+- Driving areas use ArcGIS direct `solveServiceArea` for 5–60 minutes and
+  `GenerateServiceAreas` jobs for 61–240 minutes, one origin and one cutoff per
+  request. Both preserve local roads without hierarchy. The app conservatively
+  reserves each uncached submission against a
+  persistent limit of 4,500 per UTC calendar month. Failed or cancelled submissions
+  are not refunded, and deleting jobs does not reset usage. Identical areas are
+  reused for 30 minutes in a bounded memory cache. ArcGIS currently includes
+  [5,000 returned service areas per month](https://developers.arcgis.com/pricing/)
+  on Location Platform; account usage from other apps or installations is outside
+  this app's counter. Keep the key dedicated and verify account billing limits
+  before enabling the public service.
 - `/etc/alpine-loop/tunnel-token` holds the tunnel-only token. Its parent is mode
   700; the file is mode 444 so the unprivileged cloudflared container can read its
   bind-mounted secret. It is never baked into the image.

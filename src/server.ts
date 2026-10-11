@@ -5,16 +5,16 @@ import { fileURLToPath } from 'node:url';
 import { statfs } from 'node:fs/promises';
 import { gpx, readDataset } from './dataset.js';
 import { gpxFilename } from './route-name.js';
-import { createJobs, parseQuery, RequestError } from './jobs.js';
+import { createJobs, parseQuery, RequestError, type DrivingOptions } from './jobs.js';
 import { createHostedAccess, type HostingOptions } from './hosted-access.js';
 import type { JobSnapshot, ResultSort, SortOrder } from './model.js';
 import type { FastifyRequest } from 'fastify';
 
-export async function createApp(directory: string, clientDirectory?: string, jobDirectory = resolve('.local-data/jobs'), hosting: HostingOptions = {}) {
+export async function createApp(directory: string, clientDirectory?: string, jobDirectory = resolve('.local-data/jobs'), hosting: HostingOptions = {}, driving: DrivingOptions = {}) {
   const access = createHostedAccess(hosting);
   // Saved jobs remain usable even when the prepared catalog has been removed.
   let dataset = await readDataset(directory).catch(() => undefined);
-  const jobs = await createJobs(directory, jobDirectory);
+  const jobs = await createJobs(directory, jobDirectory, driving);
   // Old immutable results lack per-trail names. Retain only one section's names,
   // never its graph, and share concurrent reads. New jobs save names themselves.
   let trailNames: { key: string; pending: Promise<(string | null)[] | undefined> } | undefined;
@@ -52,14 +52,18 @@ export async function createApp(directory: string, clientDirectory?: string, job
     }
   });
   const visitor = (request: FastifyRequest) => access?.visitor(request);
-  const view = (request: FastifyRequest, job: JobSnapshot) => access
-    ? { ...job, canManage: jobs.authorize(job.id, access.visitor(request)) } : job;
+  const view = (request: FastifyRequest, job: JobSnapshot) => {
+    if (!access) return job;
+    const canManage = jobs.authorize(job.id, access.visitor(request));
+    return { ...job, canManage, query: !canManage && job.query.driveTime
+      ? { ...job.query, driveTime: { minutes: job.query.driveTime.minutes } } : job.query };
+  };
   const requireDownloads = () => {
     if (access) throw new RequestError('Trail data is installed by the site administrator. This area is currently unavailable for new searches.', 503);
   };
   app.get('/health', async () => ({ status: 'ok' }));
   app.get('/api/catalog', async () => {
-    const catalog = await (await availableData()).view();
+    const catalog = { ...await (await availableData()).view(), driveTimeAvailable: jobs.driveTimeAvailable };
     return access ? { ...catalog, hosted: true } : catalog;
   });
   app.post('/api/coverage', async request => (await availableData()).coverage(parseQuery(request.body)));

@@ -16,6 +16,15 @@ export function parseQuery(value: unknown): SearchQuery {
     const error = boundaryError(query.boundary);
     if (error) throw new RequestError(error, 400);
   }
+  if (query.driveTime !== undefined) {
+    const drive = query.driveTime;
+    if (!drive || !Number.isSafeInteger(drive.minutes) || drive.minutes < 5 || drive.minutes > 240 ||
+      !Array.isArray(drive.origin) || drive.origin.length !== 2 ||
+      !drive.origin.every(value => typeof value === 'number' && Number.isFinite(value)) ||
+      Math.abs(drive.origin[0]) > 180 || Math.abs(drive.origin[1]) > 85) {
+      throw new RequestError('Choose a driving origin on the map and a whole number of minutes from 5 to 240.', 400);
+    }
+  }
   if (query.effort !== undefined && query.effort !== 'deep') throw new RequestError('Submit a search using the current search settings.', 400);
   const range = (values: unknown, length: number): values is number[] => Array.isArray(values)
     && values.length === length && values.every(number => typeof number === 'number' && Number.isFinite(number));
@@ -45,6 +54,7 @@ export function parseQuery(value: unknown): SearchQuery {
       downhill: { above: query.grades.downhill.above, total: query.grades.downhill.total, longest: query.grades.downhill.longest },
     } } : {}),
     ...(query.boundary ? { boundary: query.boundary.map(point => [...point]) } : {}),
+    ...(query.driveTime ? { driveTime: { minutes: query.driveTime.minutes, origin: [...query.driveTime.origin!] } } : {}),
     ...(query.stem === undefined ? {} : { stem: query.stem }),
     ...(query.repetition === undefined ? {} : { repetition: query.repetition }),
     includeUnknown: query.includeUnknown, roads: { distance: roads.distance, fraction: roads.fraction } };
@@ -57,13 +67,16 @@ import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
 import type { JobHistoryPage, JobInputs, JobProgress, JobSnapshot, ResultSort, SortOrder } from './model.js';
 import { createRouteStore } from './route-store.js';
+import { createDriveTime } from './drive-time.js';
+
+export type DrivingOptions = Omit<Parameters<typeof createDriveTime>[0], 'reserve'>;
 
 export type JobWorkerEvent = { type: 'progress'; progress: JobProgress; inputs?: JobInputs }
   | { type: 'done'; progress: JobProgress; counts: { routeCount: number; groupCount: number } };
 const terminal = (job: JobSnapshot) => job.status !== 'running' && job.status !== 'queued';
 
 /** Metadata has one owner. A result file is published only after its worker exits successfully. */
-export async function createJobs(dataDirectory: string, directory: string) {
+export async function createJobs(dataDirectory: string, directory: string, drivingOptions: DrivingOptions = {}) {
   await mkdir(directory, { recursive: true });
   const owner = new DatabaseSync(join(directory, 'owner.sqlite'));
   try { owner.exec('BEGIN EXCLUSIVE'); }
@@ -81,7 +94,15 @@ export async function createJobs(dataDirectory: string, directory: string) {
   try {
   db.exec(`PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;
     CREATE TABLE IF NOT EXISTS jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL, status TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS job_inputs (id TEXT PRIMARY KEY, facts TEXT NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS job_inputs (id TEXT PRIMARY KEY, facts TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS driving_usage (month TEXT PRIMARY KEY, used INTEGER NOT NULL);`);
+  const driving = createDriveTime({ ...drivingOptions, reserve: () => {
+    // Count before submission, including ambiguous failures. Deletion never refunds paid work.
+    const month = new Date().toISOString().slice(0, 7);
+    const row = db.prepare(`INSERT INTO driving_usage VALUES (?, 1)
+      ON CONFLICT(month) DO UPDATE SET used = used + 1 WHERE used < 4500 RETURNING used`).get(month);
+    if (!row) throw new RequestError('The monthly driving-area allowance has been reached. Try again next month or turn off the driving filter.', 429);
+  } });
   if (!db.prepare('PRAGMA table_info(jobs)').all().some(column => column.name === 'status')) db.exec("ALTER TABLE jobs ADD COLUMN status TEXT NOT NULL DEFAULT ''");
   if (!db.prepare('PRAGMA table_info(jobs)').all().some(column => column.name === 'visitor')) db.exec('ALTER TABLE jobs ADD COLUMN visitor TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status, position)');
@@ -115,6 +136,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
     }
   };
   const restore = (job: JobSnapshot, status: 'failed' | 'cancelled' | 'interrupted', reason: string) => {
+    if (job.startedAt) job.progress.elapsedMs = Date.now() - Date.parse(job.startedAt);
     job.status = published(job) ? 'completed' : status;
     job.finishedAt = new Date().toISOString(); delete job.queuePosition;
     job.reason = published(job) ? `${reason} Existing results were kept.` : reason;
@@ -143,7 +165,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
     }
   }
   let closed = false;
-  let active: { id: string; worker: Worker; finished: Promise<void> } | undefined;
+  let active: { id: string; controller: AbortController; worker?: Worker; finished: Promise<void> } | undefined;
   let pumping = false;
   function snapshot(id: string, includeInputs = true): JobSnapshot {
     const job = find(id);
@@ -157,6 +179,9 @@ export async function createJobs(dataDirectory: string, directory: string) {
     return job;
   }
   async function run(job: JobSnapshot) {
+    const controller = new AbortController();
+    active = { id: job.id, controller, finished: Promise.resolve() };
+    if (job.query.driveTime) job.progress.stage = 'driving';
     job.status = 'running'; job.startedAt = new Date().toISOString(); delete job.queuePosition; save(job);
     currentProgress = structuredClone(job);
     let persistedAt = Date.now();
@@ -164,13 +189,21 @@ export async function createJobs(dataDirectory: string, directory: string) {
     let worker: Worker;
     const revision = 0;
     try {
+      const driveArea = job.query.driveTime
+        ? await driving.resolve({ minutes: job.query.driveTime.minutes, origin: job.query.driveTime.origin! }, controller.signal)
+        : undefined;
+      controller.signal.throwIfAborted();
       worker = new Worker(new URL('./search-worker.js', import.meta.url), {
-        workerData: { directory: dataDirectory, query: job.query, resultPath: resultPath(job.id, true) },
+        workerData: { directory: dataDirectory, query: job.query, driveArea, resultPath: resultPath(job.id, true) },
         resourceLimits: { maxOldGenerationSizeMb: 256 },
       });
+      active!.worker = worker;
     } catch (error) {
-      restore(job, 'failed', error instanceof Error ? error.message : 'Could not start this job.');
-      await discard(job.id, job); currentProgress = undefined; return;
+      const current = find(job.id);
+      if (current.status === 'running') restore(current, closed ? 'interrupted' : 'failed', error instanceof Error ? error.message : 'Could not start this job.');
+      await discard(job.id, current);
+      if (active?.id === job.id) active = undefined;
+      currentProgress = undefined; return;
     }
     const finished = new Promise<void>(resolve => {
       worker.on('message', (event: JobWorkerEvent) => {
@@ -193,7 +226,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
         resolve();
       });
     });
-    active = { id: job.id, worker, finished };
+    // pump owns the full lifetime promise, including drive-area resolution and cleanup.
     // Worker heap limits exclude native buffers and SQLite; RSS includes the whole backend.
     const memoryGuard = setInterval(() => {
       if (process.memoryUsage.rss() <= 768 * 1024 * 1024 || failure) return;
@@ -215,7 +248,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
         if (current.status === 'running' && !closed) {
           const completed = { ...current, ...counts, storageBytes, status: 'completed' as const,
             resultsRevision: revision,
-            progress: done.progress, finishedAt: new Date().toISOString() };
+            progress: { ...done.progress, elapsedMs: Date.now() - Date.parse(current.startedAt!) }, finishedAt: new Date().toISOString() };
           db.exec('BEGIN');
           try { save(completed); db.exec('COMMIT'); }
           catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error; }
@@ -257,7 +290,9 @@ export async function createJobs(dataDirectory: string, directory: string) {
     try { return read(store); } finally { store.close(); }
   }
   return {
+    driveTimeAvailable: driving.available,
     start(query: SearchQuery, visitor?: string): JobSnapshot {
+      if (query.driveTime && !driving.available) throw new RequestError('Driving areas are temporarily unavailable. Turn off the driving filter to search.', 503);
       if (visitor) {
         const own = Number(db.prepare("SELECT COUNT(*) AS count FROM jobs WHERE visitor = ? AND status IN ('queued', 'running')").get(visitor)!.count);
         if (own >= 2) throw new RequestError('You already have two searches waiting or running. Wait for one to finish or cancel it before submitting another.', 429);
@@ -319,7 +354,7 @@ export async function createJobs(dataDirectory: string, directory: string) {
       }
       restore(job, 'cancelled', 'Cancelled before completion.');
       const running = active?.id === id ? active : undefined;
-      if (running) { await running.worker.terminate(); await running.finished; }
+      if (running) { running.controller.abort(); await running.worker?.terminate(); await running.finished; }
       await discard(id, job); startPump(); return job;
     },
     async delete(id: string) {
@@ -341,7 +376,8 @@ export async function createJobs(dataDirectory: string, directory: string) {
         if (job.status === 'running') {
           restore(job, 'interrupted', 'The app closed before this search finished.');
         }
-        await current.worker.terminate(); await current.finished; await discard(current.id, find(current.id));
+        current.controller.abort();
+        await current.worker?.terminate(); await current.finished; await discard(current.id, find(current.id));
       }
       while (pumping) await new Promise(resolve => setTimeout(resolve, 1));
       db.close(); await release();

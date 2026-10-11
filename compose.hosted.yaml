@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     environment:
       ALPINE_HOSTED: '1'
+      ARCGIS_API_KEY: ${ARCGIS_API_KEY:-}
       ALPINE_SESSION_SECRET: ${ALPINE_SESSION_SECRET:?Set a persistent session secret of at least 32 bytes}
     volumes:
       - /srv/alpine-loop/data:/app/.local-data

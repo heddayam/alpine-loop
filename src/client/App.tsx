@@ -28,7 +28,7 @@ import {
   storage,
 } from "./JobsDialog.js";
 
-import { boundaryBounds, boundarySections } from "../boundary.js";
+import { areaBounds, boundaryBounds, boundarySections } from "../boundary.js";
 import type { SearchBoundary } from "../model.js";
 import { SettingsDialog } from "./SettingsDialog.js";
 import { locationsInView } from "./clusters.js";
@@ -64,7 +64,8 @@ const savedMap = (job: JobSnapshot): CatalogView | undefined =>
     ? {
         id: `saved-${job.id}`,
         name: "Saved search",
-        bounds: job.query.boundary ? boundaryBounds(job.query.boundary) : combinedBounds(job.inputs.sections),
+        bounds: (job.inputs.driveArea && areaBounds(job.inputs.driveArea.geometry)) ??
+          (job.query.boundary ? boundaryBounds(job.query.boundary) : combinedBounds(job.inputs.sections)),
         sourceDate: job.inputs.version,
         attribution: [],
         limitations: [],
@@ -89,6 +90,8 @@ export function App() {
   const [draft, setDraft] = useState(() => convertDraft(initialDraft, "imperial", units));
   const regions = draft.sections;
   const [drawingBoundary, setDrawingBoundary] = useState(false);
+  const [choosingDriveOrigin, setChoosingDriveOrigin] = useState(false);
+  const [driveOriginReturn, setDriveOriginReturn] = useState(0);
   const [showSearchArea, setShowSearchArea] = useState(true);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
   const [camera, setCamera] = useState<{
@@ -177,6 +180,8 @@ export function App() {
     [showSearchArea, viewedJob, dataset],
   );
   const visibleBoundary = showSearchArea ? draft.boundary : viewedJob?.query.boundary;
+  const visibleDriveArea = !showSearchArea ? viewedJob?.inputs?.driveArea?.geometry : undefined;
+  const visibleDriveOrigin = showSearchArea ? (draft.driveTime?.enabled ? draft.driveTime.origin : undefined) : viewedJob?.query.driveTime?.origin;
   const regionName = (id: string) =>
     dataset?.sections.find((section) => section.id === id)?.name ?? id;
   const moveTo = (bounds: Bounds, padding = 40, bottomPadding?: number) =>
@@ -236,6 +241,7 @@ export function App() {
     localURL();
   };
   const openResults = async (job: JobSnapshot) => {
+    setChoosingDriveOrigin(false);
     setDrawingBoundary(false);
     if (!hasSavedResults(job)) {
       setHighlightedJob(job.id);
@@ -381,6 +387,7 @@ export function App() {
     fitRoute(selected.id);
   }, [selected]);
   const copySettings = (job: JobSnapshot) => {
+    setChoosingDriveOrigin(false);
     setDrawingBoundary(false);
     viewOperation.current?.abort();
     setPendingJob(null);
@@ -429,8 +436,13 @@ export function App() {
   const changeDraft = (next: SearchDraft) => {
     if (busy || downloading || choosingDownload) return;
     setDraft(next);
+    if (!next.driveTime?.enabled) setChoosingDriveOrigin(false);
     setError("");
     setShowSearchArea(true);
+    if (!choosingDriveOrigin && next.driveTime?.enabled && next.driveTime.origin && next.driveTime.origin !== draft.driveTime?.origin) {
+      const [lon, lat] = next.driveTime.origin;
+      moveTo([Math.max(-180, lon - 0.1), Math.max(-85, lat - 0.1), Math.min(180, lon + 0.1), Math.min(85, lat + 0.1)]);
+    }
     if (next.sections !== draft.sections && !next.boundary) {
       const sections = dataset?.sections.filter((section) =>
         next.sections.includes(section.id),
@@ -496,7 +508,7 @@ export function App() {
   };
   const launch = async (event: FormEvent) => {
     event.preventDefault();
-    if (!regions.length || busy || downloading || pendingDownload) return;
+    if (!regions.length || busy || downloading || pendingDownload || choosingDriveOrigin) return;
     let query: SearchQuery;
     try {
       query = queryForDraft(draft, units);
@@ -732,12 +744,21 @@ export function App() {
             submitting={busy}
             units={units}
             onChange={changeDraft}
+            choosingDriveOrigin={choosingDriveOrigin}
+            driveOriginReturn={driveOriginReturn}
+            onChooseDriveOrigin={() => {
+              setDrawingBoundary(false);
+              clearSelection();
+              setShowSearchArea(true);
+              setChoosingDriveOrigin(true);
+            }}
             onSubmit={(event) => void launch(event)}
             onClearResults={viewedJob ? () => {
               closeResults();
               requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".search-button")?.focus());
             } : undefined}
             onDrawBoundary={() => {
+              setChoosingDriveOrigin(false);
               clearSelection();
               setShowSearchArea(true);
               setError("");
@@ -822,6 +843,18 @@ export function App() {
                     : (viewedJob?.query.sections ?? regions)
                 }
                 boundary={visibleBoundary}
+                driveArea={visibleDriveArea}
+                driveOrigin={visibleDriveOrigin}
+                choosingDriveOrigin={choosingDriveOrigin}
+                onDriveOrigin={(origin) => {
+                  changeDraft({ ...draft, driveTime: { ...draft.driveTime!, origin } });
+                  setChoosingDriveOrigin(false);
+                  setDriveOriginReturn(value => value + 1);
+                }}
+                onCancelDriveOrigin={() => {
+                  setChoosingDriveOrigin(false);
+                  setDriveOriginReturn(value => value + 1);
+                }}
                 drawingBoundary={drawingBoundary}
                 onFinishBoundary={finishBoundary}
                 onCancelBoundary={() => setDrawingBoundary(false)}
@@ -893,8 +926,10 @@ export function App() {
         </section>
       </main>
       <footer className="workspace-status">
-        {(drawingBoundary || visibleBoundary) && <p className="scope-note">
+        {(drawingBoundary || visibleBoundary || (!showSearchArea ? viewedJob?.query.driveTime : draft.driveTime?.enabled)) && <p className="scope-note">
           {drawingBoundary ? "Draw within the prepared regions outlined on the map."
+            : (!showSearchArea ? viewedJob?.query.driveTime : draft.driveTime?.enabled)
+              ? "Estimated driving time filters starting points in the search area. Hikes may extend outside."
             : "Search uses starting points inside the drawn boundary. Map movement does not change scope."}
         </p>}
         {downloading ? (
@@ -920,7 +955,7 @@ export function App() {
                 : currentJob.status === "queued"
                   ? `Queued, position ${currentJob.queuePosition ?? "—"}`
                   : currentJob.status === "running"
-                    ? `${currentJob.progress.stage === "saving" ? "Saving" : "Searching"}, ${elapsed(currentJob.progress.elapsedMs)}, ${currentJob.progress.completedRegions.length}/${currentJob.progress.totalRegions} regions`
+                    ? `${currentJob.progress.stage === "driving" ? "Calculating driving area" : currentJob.progress.stage === "preparing" ? "Preparing trails" : currentJob.progress.stage === "saving" ? "Saving" : "Searching"}, ${elapsed(currentJob.progress.elapsedMs)}, ${currentJob.progress.completedRegions.length}/${currentJob.progress.totalRegions} regions`
                     : currentJob.status[0]!.toUpperCase() +
                       currentJob.status.slice(1)}
             </span>

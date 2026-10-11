@@ -74,6 +74,11 @@ export function HikeMap({
   profileCursor,
   hoveredTrail,
   boundary,
+  driveArea,
+  driveOrigin,
+  choosingDriveOrigin = false,
+  onDriveOrigin,
+  onCancelDriveOrigin,
   drawingBoundary,
   onFinishBoundary,
   onCancelBoundary,
@@ -95,6 +100,11 @@ export function HikeMap({
   profileCursor: ProfileCursor;
   hoveredTrail: string | null;
   boundary?: SearchBoundary;
+  driveArea?: Boundary;
+  driveOrigin?: [number, number];
+  choosingDriveOrigin?: boolean;
+  onDriveOrigin: (origin: [number, number]) => void;
+  onCancelDriveOrigin: () => void;
   drawingBoundary: boolean;
   onFinishBoundary: (boundary: SearchBoundary) => string | null;
   onCancelBoundary: () => void;
@@ -117,6 +127,9 @@ export function HikeMap({
     onBoundsChange,
     onBrowse,
     drawingBoundary,
+    choosingDriveOrigin,
+    onDriveOrigin,
+    onCancelDriveOrigin,
   });
   callbacks.current = {
     onSelect,
@@ -126,6 +139,9 @@ export function HikeMap({
     onBoundsChange,
     onBrowse,
     drawingBoundary,
+    choosingDriveOrigin,
+    onDriveOrigin,
+    onCancelDriveOrigin,
   };
 
   useEffect(() => {
@@ -264,6 +280,9 @@ export function HikeMap({
       instance.addSource("preview-route", { type: "geojson", data: empty });
       instance.addSource("result-paths", { type: "geojson", data: empty });
       instance.addSource("search-boundary", { type: "geojson", data: empty });
+      instance.addSource("driving-area", { type: "geojson", data: empty,
+        attribution: 'Driving area: <a href="https://www.esri.com/">Powered by Esri</a>' });
+      instance.addSource("driving-origin", { type: "geojson", data: empty });
       instance.addLayer({
         id: "sections-outline",
         type: "line",
@@ -277,6 +296,14 @@ export function HikeMap({
       instance.addLayer({
         id: "search-boundary-outline", type: "line", source: "search-boundary",
         paint: { "line-color": "#557f9b", "line-width": 2, "line-dasharray": [3, 2] },
+      });
+      instance.addLayer({
+        id: "driving-area-outline", type: "line", source: "driving-area",
+        paint: { "line-color": "#245B78", "line-width": 2, "line-dasharray": [2, 2] },
+      });
+      instance.addLayer({
+        id: "driving-origin-point", type: "circle", source: "driving-origin",
+        paint: { "circle-radius": 5, "circle-color": "#245B78", "circle-stroke-color": "#fff", "circle-stroke-width": 2 },
       });
       const colors = getComputedStyle(container.current!);
       const resultColor = colors.getPropertyValue("--action").trim();
@@ -363,7 +390,7 @@ export function HikeMap({
       };
       clearSegmentHover.current = clearHover;
       instance.on("mousemove", (event) => {
-        if (callbacks.current.drawingBoundary) return;
+        if (callbacks.current.drawingBoundary || callbacks.current.choosingDriveOrigin) return;
         if (instance.isMoving()) return;
         // Marker events bubble through the map; the trail beneath must not take their hover.
         if (event.originalEvent.target instanceof Element
@@ -387,9 +414,13 @@ export function HikeMap({
           }
         });
       });
-      instance.on("movestart", () => { clearHover(); setStartLabel(null); callbacks.current.onPreview(null); });
-      instance.on("mouseout", () => { clearHover(); callbacks.current.onPreview(null); });
+      instance.on("movestart", () => { clearHover(); if (callbacks.current.choosingDriveOrigin) instance.getCanvas().style.cursor = "crosshair"; setStartLabel(null); callbacks.current.onPreview(null); });
+      instance.on("mouseout", () => { clearHover(); if (callbacks.current.choosingDriveOrigin) instance.getCanvas().style.cursor = "crosshair"; callbacks.current.onPreview(null); });
       instance.on("click", (event) => {
+        if (callbacks.current.choosingDriveOrigin) {
+          callbacks.current.onDriveOrigin([event.lngLat.lng, event.lngLat.lat]);
+          return;
+        }
         if (callbacks.current.drawingBoundary) return;
         const id = pathAt(event.point)?.properties.id;
         if (typeof id === "string") {
@@ -443,6 +474,33 @@ export function HikeMap({
       ? { type: "Feature", properties: {}, geometry: boundaryGeometry(boundary) } : empty);
     map.setPaintProperty("sections-outline", "line-opacity", drawingBoundary ? 0.5 : boundary ? 0.25 : 0.9);
   }, [map, boundary, drawingBoundary]);
+
+  useEffect(() => {
+    if (!map) return;
+    (map.getSource("driving-area") as GeoJSONSource).setData(driveArea && !drawingBoundary
+      ? { type: "Feature", properties: {}, geometry: driveArea } : empty);
+    (map.getSource("driving-origin") as GeoJSONSource).setData(driveOrigin && !drawingBoundary
+      ? { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: driveOrigin } } : empty);
+  }, [map, driveArea, driveOrigin, drawingBoundary]);
+
+  useEffect(() => {
+    if (!map || !choosingDriveOrigin) return;
+    const canvas = map.getCanvas();
+    clearSegmentHover.current();
+    setStartLabel(null);
+    canvas.style.cursor = "crosshair";
+    canvas.focus();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); callbacks.current.onCancelDriveOrigin(); }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const center = map.getCenter();
+        callbacks.current.onDriveOrigin([center.lng, center.lat]);
+      }
+    };
+    canvas.addEventListener("keydown", key);
+    return () => { canvas.style.cursor = ""; canvas.removeEventListener("keydown", key); };
+  }, [map, choosingDriveOrigin]);
 
   useEffect(() => {
     if (!map) return;
@@ -576,12 +634,16 @@ export function HikeMap({
       <div className="map-canvas" ref={container} />
       <MapCoordinates map={map} />
       <HikeMarkers map={map} routes={routes} selectedId={selectedId} previewId={previewId}
-        disabled={drawingBoundary} onSelect={onSelect} onPreview={onPreview} onBrowse={onBrowse}
+        disabled={drawingBoundary || choosingDriveOrigin} onSelect={onSelect} onPreview={onPreview} onBrowse={onBrowse}
         onInspect={name => { clearSegmentHover.current(); setStartLabel(name); }} />
-      {!drawingBoundary && (startLabel || segmentLabel?.routeId === selectedId) && (
+      {!drawingBoundary && !choosingDriveOrigin && (startLabel || segmentLabel?.routeId === selectedId) && (
         <div className="map-segment-label">{startLabel || segmentLabel?.name}</div>
       )}
       {drawingBoundary && <BoundaryDrawing map={map} onFinish={onFinishBoundary} onCancel={onCancelBoundary} />}
+      {choosingDriveOrigin && <div className="boundary-toolbar" aria-label="Choose driving origin">
+        <p role="status">Choose where you’ll drive from. Click the map, or press Enter to use the center.</p>
+        <button type="button" className="text-button" onClick={onCancelDriveOrigin}>Cancel <kbd>Esc</kbd></button>
+      </div>}
       {mapError && (
         <div className="map-notice preview-notice" role="alert">
           {mapError}

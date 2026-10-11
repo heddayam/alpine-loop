@@ -1,4 +1,4 @@
-import { intersection, type Geom } from 'polyclip-ts';
+import { intersection, union, type Geom } from 'polyclip-ts';
 import type { Boundary } from './data-format.js';
 import type { Bounds, Position, SearchBoundary } from './model.js';
 
@@ -40,15 +40,41 @@ export function boundaryError(value: unknown): string | null {
   return Math.abs(area) <= 1e-12 ? 'Draw a boundary with a nonzero area.' : null;
 }
 
-export function pointInBoundary(point: Position, vertices: SearchBoundary): boolean {
+function pointInRing(point: Position, vertices: SearchBoundary, includeEdge = true): boolean {
   let inside = false;
   for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
     const a = vertices[j]!, b = vertices[i]!;
-    if (onSegment(point, a, b)) return true;
+    if (onSegment(point, a, b)) return includeEdge;
     if ((a[1] > point[1]) !== (b[1] > point[1]) &&
       point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
   }
   return inside;
+}
+
+export const pointInBoundary = (point: Position, vertices: SearchBoundary) => pointInRing(point, vertices);
+
+/** Preserve islands and holes; all polygon edges qualify, including hole edges. */
+export const pointInArea = (point: Position, area: Boundary) => area.coordinates.some(polygon =>
+  pointInRing(point, polygon[0] as SearchBoundary) &&
+  !polygon.slice(1).some(hole => pointInRing(point, hole as SearchBoundary, false)));
+
+/** Save only the driving area within prepared search scope, never widen an empty intersection. */
+export function restrictDriveArea(area: Boundary, sections: { boundary: Boundary }[], boundary?: SearchBoundary): Boundary {
+  const scopes = sections.map(section => section.boundary.coordinates as Geom);
+  if (!scopes.length) return { type: 'MultiPolygon', coordinates: [] };
+  const scope = union(scopes[0]!, ...scopes.slice(1));
+  const coordinates = intersection(area.coordinates as Geom, scope,
+    ...(boundary ? [boundaryGeometry(boundary).coordinates as Geom] : []));
+  return { type: 'MultiPolygon', coordinates };
+}
+
+export function areaBounds(area: Boundary): Bounds | undefined {
+  let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+  for (const polygon of area.coordinates) for (const point of polygon[0]!) {
+    west = Math.min(west, point[0]!); south = Math.min(south, point[1]!);
+    east = Math.max(east, point[0]!); north = Math.max(north, point[1]!);
+  }
+  return Number.isFinite(west) ? [west, south, east, north] : undefined;
 }
 
 export const boundaryBounds = (vertices: SearchBoundary): Bounds => [

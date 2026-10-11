@@ -1,11 +1,11 @@
-import type { SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
+import type { Boundary, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
 import type { HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import type { WorkBudget } from './work-budget.js';
 import { openSections } from './sections.js';
-import { boundarySections, pointInBoundary } from './boundary.js';
+import { boundarySections, pointInBoundary, pointInArea } from './boundary.js';
 import { routeName } from './route-name.js';
 
 /** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
@@ -33,12 +33,14 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     }
     return { sections: required.map(section => section.id), missing, bytes };
   }
-  async function starts(query: SearchQuery) {
+  async function starts(query: SearchQuery, driveArea?: Boundary) {
+    if (query.driveTime && !driveArea) throw new Error('The driving area must be resolved before searching.');
     const result = [];
     for (const section of selected(query)) {
       const records = await sections.read<SectionStarts>(section, 'starts');
       const eligible = records.filter(([start, position]) => (query.includeUnknown || start.access === 'public') &&
-        (!query.boundary || pointInBoundary(position, query.boundary))).map(([start]) => start);
+        (!query.boundary || pointInBoundary(position, query.boundary)) &&
+        (!driveArea || pointInArea(position, driveArea))).map(([start]) => start);
       result.push({ section, eligible });
     }
     return result;

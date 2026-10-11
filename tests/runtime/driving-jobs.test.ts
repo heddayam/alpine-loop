@@ -64,7 +64,7 @@ describe('driving filters through the actual app and search worker', () => {
   it('filters holes and disconnected areas before choosing a start, allows hiking outside, and retains immutable compact results', async () => {
     const source = await fixture({ startCount: 3, startNodes: [0, 1, 2] });
     const api = provider([
-      rectangle(-122.0006, 47.0499, -122.0004, 47.0501).reverse(), // Hole excludes the otherwise preferred start 0.
+      rectangle(-122.0006, 47.04995, -122.0004, 47.0501).reverse(), // Hole excludes the otherwise preferred start 0.
       rectangle(-123, 47.0499, -121, 48),
       rectangle(-121.9991, 47.0494, -121.9989, 47.0496), // Disconnected island includes start 2.
     ]);

@@ -2,6 +2,8 @@ services:
   app:
     build: .
     init: true
+    environment:
+      ARCGIS_API_KEY: ${ARCGIS_API_KEY:-}
     ports:
       - "127.0.0.1:${ALPINE_PORT:-3000}:3000"
     volumes:

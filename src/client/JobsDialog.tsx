@@ -28,7 +28,7 @@ export const storage = (bytes: number) =>
     : `${(bytes / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`;
 export const requestSummary = (query: SearchQuery, units: UnitSystem = "imperial") => {
   const display = unitsFor(units);
-  return `${distanceText(query.distance[0], units)}–${distanceText(query.distance[1], units)} ${display.distanceLabel}, ${elevationText(query.gain[0], units)}–${elevationText(query.gain[1], units)} ${display.elevationLabel} Elev. Gain`;
+  return `${query.driveTime ? `${query.driveTime.minutes} min driving area, ` : ""}${distanceText(query.distance[0], units)}–${distanceText(query.distance[1], units)} ${display.distanceLabel}, ${elevationText(query.gain[0], units)}–${elevationText(query.gain[1], units)} ${display.elevationLabel} Elev. Gain`;
 };
 export const jobRegionName = (
   job: JobSnapshot,
@@ -242,6 +242,7 @@ export function JobsDialog({
               ["Road distance", hasRoadLimit(job.query) ? maximumDistance(roads.distance) : "Off"],
             ];
             if (roads.fraction < 1) criteria.push(["Saved road share limit", `≤${Number((roads.fraction * 100).toFixed(1))}%`]);
+            if (job.query.driveTime) criteria.unshift(["Driving area", `${job.query.driveTime.minutes} minutes, typical conditions`]);
             if (job.query.grades) {
               for (const direction of ["uphill", "downhill"] as const) {
                 const limit = job.query.grades[direction];
@@ -256,7 +257,7 @@ export function JobsDialog({
             const percentage = job.progress.totalSearchPoints
               ? Math.floor(100 * (job.progress.completedSearchPoints ?? 0) / job.progress.totalSearchPoints)
               : null;
-            const progressText = job.progress.stage === "saving"
+            const progressText = job.progress.stage === "driving" ? "Calculating driving area" : job.progress.stage === "saving"
               ? "Saving results"
               : job.progress.currentRegion
                 ? `Region ${job.progress.completedRegions.length + (job.progress.completedRegions.includes(job.progress.currentRegion.id) ? 0 : 1)} of ${job.progress.totalRegions}${percentage !== null ? `, ${percentage}%` : ""}`
@@ -285,6 +286,7 @@ export function JobsDialog({
                       <span>{job.query.boundary ? `Drawn area: ${areaSummary}` : areas.length > 1 ? areaSummary : areas[0]}</span>
                       {areas.length > 1 && <span className="job-area-count">{areas.length} sections</span>}
                     </div>
+                    {job.query.driveTime && <span className="job-muted">{job.query.driveTime.minutes} min driving area</span>}
 
                   </th>
                   <td className="job-number">{Number(distanceText(job.query.distance[0], units))}–{Number(distanceText(job.query.distance[1], units))}</td>

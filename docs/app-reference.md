@@ -47,6 +47,37 @@ walking permission. A vehicle-closed track can remain walkable without creating
 a start at its trail junction. Mapped road contacts
 do not certify legal parking or current road conditions.
 
+**Driving time** optionally narrows either selected regions or a drawn area.
+Enable its checkbox and set a whole-number limit from 5 to 240 minutes in the
+popover. Choose a starting location on the map, or explicitly use your browser's
+location. Choosing on the map closes the popover and enters a labeled selection
+mode. Enter chooses the map center and Escape cancels; either returns to the
+popover for review. Cancellation retains the previous origin.
+Disabling the filter retains the draft origin and time. Panning never changes
+the origin or search scope.
+
+The queued search calculates its driving area before exploring trails; it does
+not issue preview requests while editing. Every considered hike start must be
+inside the driving polygon and the selected search area. Hikes can extend outside
+the driving polygon. ArcGIS uses average road speeds without live traffic, with
+a passenger-car profile that allows legal unpaved roads. Origins must locate on
+the road network within 500 m. Road data and polygon generalization make this an
+estimate, rather than an exact journey time or proof of current road access.
+Direct requests avoid queued provider jobs for drives up to 60 minutes. Longer
+drives use provider jobs, preserving local roads; the direct endpoint would force
+road hierarchy above 60 minutes. The four-hour maximum avoids that behavior on
+the job endpoint too. The provider computes one complete driving area from the
+origin, then the app intersects it with Search area. Restricting the road network
+to the selected region would incorrectly exclude approach roads and detours.
+
+Calculation failures fail the job without broadening its search. Empty
+intersections complete with no hikes. Saved driving boundaries are clipped to
+the selected prepared area and restored without another provider call. Hosted
+shared results omit the exact origin; copying someone else's settings requires
+choosing your own origin. A chosen origin is sent to Esri only when the job runs.
+The operator configures the optional server key as described in
+[hosting](hosting.md); ordinary search works without it.
+
 ## Search jobs and results
 
 The Jobs dialog shows saved requests, FIFO queue positions, stages, current region,

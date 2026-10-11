@@ -5,15 +5,17 @@ import { solveSection } from './diversity.js';
 import { createRouteStore } from './route-store.js';
 import { createWorkBudget } from './work-budget.js';
 import { routeGradeCheck } from './route-grades.js';
-import type { JobInputs, JobProgress, Position, SearchQuery } from './model.js';
+import type { DriveArea, JobInputs, JobProgress, Position, SearchQuery } from './model.js';
+import { restrictDriveArea } from './boundary.js';
 
-const { directory, query, resultPath } = workerData as {
-  directory: string; query: SearchQuery; resultPath: string };
+const { directory, query, resultPath, driveArea } = workerData as {
+  directory: string; query: SearchQuery; resultPath: string; driveArea?: DriveArea };
 const started = performance.now();
 const budget = createWorkBudget();
 const dataset = await readDataset(directory, budget);
 const selected = dataset.selectedSections(query);
 const inputs: JobInputs = { version: dataset.catalog.info.id,
+  ...(driveArea ? { driveArea: { ...driveArea, geometry: restrictDriveArea(driveArea.geometry, selected, query.boundary) } } : {}),
   sections: selected.map(({ id, name, state, regionId, regionName, bounds, boundary, files }) => ({ id, name, state, regionId, regionName, bounds, boundary, files })) };
 let progress: JobProgress = { stage: 'preparing', completedRegions: [], totalRegions: selected.length,
   elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 };
@@ -21,7 +23,7 @@ const send = (includeInputs = false) => parentPort!.postMessage({ type: 'progres
   progress: { ...progress, elapsedMs: performance.now() - started } });
 send(true);
 await dataset.verifyInputs(inputs);
-const selections = await dataset.starts(query);
+const selections = await dataset.starts(query, inputs.driveArea?.geometry);
 progress.totalStarts = selections.reduce((sum, { eligible }) => sum + eligible.length, 0);
 const store = createRouteStore(resultPath, { writable: true });
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);

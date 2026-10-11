@@ -3,6 +3,12 @@ export type Bounds = [west: number, south: number, east: number, north: number];
 export type Position = [longitude: number, latitude: number, elevationMeters?: number];
 /** A simple polygon's vertices, without a duplicate closing vertex. */
 export type SearchBoundary = [longitude: number, latitude: number][];
+/** The origin is omitted from shared hosted results; new requests require it. */
+export type DriveTime = { minutes: number; origin?: [longitude: number, latitude: number] };
+export type DriveArea = {
+  geometry: { type: 'MultiPolygon'; coordinates: number[][][][] };
+  resolvedAt: string;
+};
 export type Access = 'public' | 'unknown';
 
 export type TrailEdge = {
@@ -49,6 +55,8 @@ export type SearchQuery = {
   sections: string[];
   /** Restrict starting points only. Routes may leave this boundary. */
   boundary?: SearchBoundary;
+  /** Estimated typical driving area, intersected with the selected search area. */
+  driveTime?: DriveTime;
   /** Internal discovery plans. Public jobs always use the deep plan. */
   effort?: 'normal' | 'deep';
   distance: [minimum: number, maximum: number];
@@ -96,7 +104,7 @@ export type JobStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'fail
 export type JobProgress = {
   /** Distinct hikes accepted so far; results remain private until completion. */
   foundHikes?: number;
-  stage: 'preparing' | 'searching' | 'saving';
+  stage: 'driving' | 'preparing' | 'searching' | 'saving';
   currentRegion?: { id: string; name: string };
   completedRegions: string[];
   totalRegions: number;
@@ -113,6 +121,8 @@ export type JobRegion = {
 };
 export type JobInputs = {
   version: string;
+  /** The resolved area is immutable and excluded from routine status/history reads. */
+  driveArea?: DriveArea;
   sections: (JobRegion & {
     bounds: Bounds;
     boundary: { type: 'MultiPolygon'; coordinates: number[][][][] };

@@ -9,6 +9,21 @@ import {
 } from "../../src/client/SearchControls.js";
 
 describe("editable search constraints", () => {
+  it("retains driving settings across units and disabling, and requires a fresh origin for shared settings", () => {
+    const query = queryForDraft({ ...initialDraft, sections: ["fixture"],
+      driveTime: { enabled: true, minutes: "120", origin: [-122.33, 47.6] } });
+    const draft = draftForQuery(query);
+    expect(queryForDraft(convertDraft(draft, "imperial", "metric"), "metric")).toEqual(query);
+    const disabled = { ...draft, driveTime: { ...draft.driveTime!, enabled: false } };
+    expect(queryForDraft(disabled)).not.toHaveProperty("driveTime");
+    expect(queryForDraft({ ...disabled, driveTime: { ...disabled.driveTime, enabled: true } })).toEqual(query);
+    for (const minutes of ["", "4", "241", "60.5"]) {
+      expect(() => queryForDraft({ ...draft, driveTime: { ...draft.driveTime!, minutes } })).toThrow("driving origin");
+    }
+    expect(() => queryForDraft(draftForQuery({ ...query, driveTime: { minutes: 120 } }))).toThrow("driving origin");
+    draft.driveTime!.origin![0] = -123;
+    expect(query.driveTime!.origin![0]).toBe(-122.33);
+  });
   it("copies saved editable limits without rounding or changing the search scope", () => {
     const query: SearchQuery = {
       sections: ["alpine-lakes", "rainier"],

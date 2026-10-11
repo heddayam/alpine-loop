@@ -13,7 +13,8 @@ const area = (rings: number[][][] = [clockwise]) => ({ value: {
 const json = (value: unknown) => new Response(JSON.stringify(value));
 const success = { jobId: 'job_1', jobStatus: 'esriJobSucceeded' };
 function provider(payload: unknown = area()) {
-  const fetch = vi.fn<typeof globalThis.fetch>(async url => json(String(url).endsWith('/submitJob') ? success : payload));
+  const fetch = vi.fn<typeof globalThis.fetch>(async url => json(String(url).endsWith('/submitJob') ? success
+    : String(url).endsWith('/solveServiceArea') ? { saPolygons: (payload as ReturnType<typeof area>).value } : payload));
   const reserve = vi.fn();
   return { fetch, reserve, drive: createDriveTime({ apiKey: 'private-key', fetch, reserve }) };
 }
@@ -33,11 +34,15 @@ describe('ArcGIS driving-time filter', () => {
     const body = init!.body as URLSearchParams;
     expect(body.get('break_values')).toBe('120');
     expect(body.get('break_units')).toBe('Minutes');
-    expect(body.get('travel_direction')).toBe('Away from Facility');
+    expect(body.get('travel_direction')).toBe('Away From Facility');
     expect(body.has('time_of_day')).toBe(false);
     expect(JSON.parse(body.get('context')!)).toEqual({ outSR: { wkid: 4326 } });
     expect(JSON.parse(body.get('facilities')!).features[0].geometry).toEqual({ x: origin[0], y: origin[1] });
     expect(body.get('ignore_invalid_locations')).toBe('false');
+    expect(JSON.parse(body.get('locate_settings')!)).toEqual({ default: {
+      tolerance: 500, toleranceUnits: 'esriMeters', allowAutoRelocate: true,
+      sources: [{ name: 'Routing_Streets' }],
+    } });
     const mode = JSON.parse(body.get('travel_mode')!);
     expect(mode).toMatchObject({ type: 'AUTOMOBILE', impedanceAttributeName: 'TravelTime', useHierarchy: false });
     expect(mode.restrictionAttributeNames).toContain('Driving an Automobile');
@@ -53,6 +58,39 @@ describe('ArcGIS driving-time filter', () => {
     expect(geometry).toEqual({ type: 'MultiPolygon', coordinates: [
       [[...distant].reverse()], [[...island].reverse()], [[...clockwise].reverse(), [...hole].reverse()],
     ] });
+  });
+
+  it('uses direct requests through 60 minutes, retains local roads at 61, and never retries a failed direct call', async () => {
+    const { drive, fetch, reserve } = provider(area([hole, distant, island, clockwise]));
+    const direct = await drive.resolve({ origin, minutes: 60 }, signal());
+    expect(fetch).toHaveBeenCalledOnce();
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe('https://route-api.arcgis.com/arcgis/rest/services/World/ServiceAreas/NAServer/ServiceArea_World/solveServiceArea');
+    const body = init!.body as URLSearchParams;
+    expect(body.get('defaultBreaks')).toBe('60');
+    expect(body.get('travelDirection')).toBe('esriNATravelDirectionFromFacility');
+    expect(body.get('ignoreInvalidLocations')).toBe('false');
+    expect(body.has('timeOfDay')).toBe(false);
+    expect(JSON.parse(body.get('travelMode')!)).toMatchObject({ impedanceAttributeName: 'TravelTime', useHierarchy: false });
+    const queued = await drive.resolve({ origin, minutes: 61 }, signal());
+    expect(direct.geometry).toEqual(queued.geometry);
+    expect(fetch.mock.calls[1]![0]).toMatch(/\/submitJob$/);
+    expect(reserve).toHaveBeenCalledTimes(2);
+    const broken = vi.fn<typeof globalThis.fetch>(async () => json({ error: { message: 'private-key' } }));
+    const denied = createDriveTime({ apiKey: 'private-key', reserve: () => {}, fetch: broken });
+    await expect(denied.resolve({ origin, minutes: 30 }, signal())).rejects.not.toThrow('private-key');
+    expect(broken).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a stalled direct request without submitting another provider job', async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Promise(() => {}));
+    const pending = createDriveTime({ apiKey: 'key', reserve: () => {}, fetch })
+      .resolve({ origin, minutes: 30 }, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0]![1]!.signal!.aborted).toBe(true);
   });
 
   it('clones cached results, expires them after 30 minutes, and keeps at most 32 areas', async () => {

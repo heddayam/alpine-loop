@@ -42,5 +42,6 @@ export function useAnchoredPopover(disabled: boolean) {
   const onBlur = (event: FocusEvent<HTMLDivElement>) => {
     if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
   };
-  return { root, button, panel, open, offset, onBlur, toggle: () => setOpen(value => !value) };
+  return { root, button, panel, open, offset, onBlur,
+    show: () => setOpen(true), hide: () => setOpen(false), toggle: () => setOpen(value => !value) };
 }

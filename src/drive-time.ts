@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { Boundary } from './data-format.js';
 
 const ENDPOINT = 'https://logistics.arcgis.com/arcgis/rest/services/World/ServiceAreas/GPServer/GenerateServiceAreas';
+const DIRECT = 'https://route-api.arcgis.com/arcgis/rest/services/World/ServiceAreas/NAServer/ServiceArea_World/solveServiceArea';
 const TTL = 30 * 60_000;
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_POINTS = 100_000;
@@ -15,7 +16,7 @@ const position = (value: unknown): value is [number, number] => Array.isArray(va
   Math.abs(value[0]) <= 180 && Math.abs(value[1]) <= 90;
 
 // Passenger cars, including legal unpaved forest roads. Hierarchy omits local roads
-// away from the origin; ArcGIS forces it beyond 240 minutes, which we reject.
+// away from the origin; direct requests force it beyond 60 minutes, jobs beyond 240.
 // https://developers.arcgis.com/rest/services-reference/enterprise/retrieve-travel-modes/
 const restrictions = {
   'Avoid Private Roads': 'AVOID_MEDIUM', 'Driving an Automobile': 'PROHIBITED',
@@ -90,11 +91,11 @@ export function createDriveTime(options: Options) {
   const apiKey = options.apiKey ?? process.env.ARCGIS_API_KEY;
   const fetcher = options.fetch ?? globalThis.fetch;
   const cache = new Map<string, { expires: number; result: Result }>();
-  async function json(path: string, fields: Record<string, string>, signal: AbortSignal): Promise<Record<string, unknown>> {
+  async function json(url: string, fields: Record<string, string>, signal: AbortSignal): Promise<Record<string, unknown>> {
     signal.throwIfAborted();
     let response: Response;
     try {
-      response = await fetcher(`${ENDPOINT}/${path}`, {
+      response = await fetcher(url, {
         method: 'POST', redirect: 'error', signal,
         headers: { 'X-Esri-Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ f: 'json', ...fields }),
@@ -145,16 +146,32 @@ export function createDriveTime(options: Options) {
       const stopped = new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () =>
         reject(timedOut ? new Error('Driving-time calculation timed out. Try again.') : cancelled()), { once: true }));
       const cancelJob = () => {
-        if (job) void json(`jobs/${encodeURIComponent(job)}/cancel`, {}, AbortSignal.timeout(5000)).catch(() => {});
+        if (job) void json(`${ENDPOINT}/jobs/${encodeURIComponent(job)}/cancel`, {}, AbortSignal.timeout(5000)).catch(() => {});
       };
       const calculate = async (): Promise<Result> => {
-        const submitted = await json('submitJob', {
-          facilities: JSON.stringify({ geometryType: 'esriGeometryPoint', spatialReference: { wkid: 4326 },
-            features: [{ geometry: { x: request.origin[0], y: request.origin[1] }, attributes: { Name: 'Origin' } }] }),
-          break_values: String(request.minutes), break_units: 'Minutes', travel_direction: 'Away from Facility',
-          travel_mode: JSON.stringify(travelMode), polygon_overlap_type: 'Disks', polygon_detail: 'Standard',
+        const facilities = JSON.stringify({ geometryType: 'esriGeometryPoint', spatialReference: { wkid: 4326 },
+          features: [{ geometry: { x: request.origin[0], y: request.origin[1] }, attributes: { Name: 'Origin' } }] });
+        const mode = JSON.stringify(travelMode);
+        const locate = JSON.stringify({ default: { tolerance: 500, toleranceUnits: 'esriMeters',
+          allowAutoRelocate: true, sources: [{ name: 'Routing_Streets' }] } });
+        // Avoid job startup for short drives without sacrificing distant local roads.
+        // https://developers.arcgis.com/rest/routing/serviceArea-service-direct/
+        if (request.minutes <= 60) {
+          const payload = await json(DIRECT, {
+            facilities, travelMode: mode, defaultBreaks: String(request.minutes),
+            travelDirection: 'esriNATravelDirectionFromFacility', outputPolygons: 'esriNAOutputPolygonSimplified',
+            splitPolygonsAtBreaks: 'false', outputLines: 'esriNAOutputLineNone',
+            ignoreInvalidLocations: 'false', outSR: '4326', locateSettings: locate,
+          }, controller.signal);
+          controller.signal.throwIfAborted();
+          return { geometry: geometry({ value: payload.saPolygons }), resolvedAt: new Date().toISOString() };
+        }
+        const submitted = await json(`${ENDPOINT}/submitJob`, {
+          facilities,
+          break_values: String(request.minutes), break_units: 'Minutes', travel_direction: 'Away From Facility',
+          travel_mode: mode, polygon_overlap_type: 'Disks', polygon_detail: 'Standard',
           output_type: 'Polygons', output_format: 'Feature Set', ignore_invalid_locations: 'false',
-          locate_settings: JSON.stringify({ default: { tolerance: 500, toleranceUnits: 'esriMeters' } }),
+          locate_settings: locate,
           context: JSON.stringify({ outSR: { wkid: 4326 } }),
         }, controller.signal);
         if (typeof submitted.jobId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(submitted.jobId)) throw invalid();
@@ -165,9 +182,9 @@ export function createDriveTime(options: Options) {
           if (!['esriJobSubmitted', 'esriJobWaiting', 'esriJobExecuting', 'esriJobNew'].includes(String(status.jobStatus)))
             throw failure();
           await delay(1000, undefined, { signal: controller.signal });
-          status = await json(`jobs/${encodeURIComponent(job)}`, {}, controller.signal);
+          status = await json(`${ENDPOINT}/jobs/${encodeURIComponent(job)}`, {}, controller.signal);
         }
-        const payload = await json(`jobs/${encodeURIComponent(job)}/results/service_areas`, {}, controller.signal);
+        const payload = await json(`${ENDPOINT}/jobs/${encodeURIComponent(job)}/results/service_areas`, {}, controller.signal);
         controller.signal.throwIfAborted();
         return { geometry: geometry(payload), resolvedAt: new Date().toISOString() };
       };

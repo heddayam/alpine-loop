@@ -4,6 +4,7 @@ import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type Search
 import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
 import { SteppedNumber } from "./SteppedNumber.js";
 import { RegionPicker } from "./RegionPicker.js";
+import { DriveTimeControl, type DriveTimeDraft } from "./DriveTimeControl.js";
 import { useAnchoredPopover } from "./useAnchoredPopover.js";
 import { hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
@@ -27,6 +28,7 @@ const displayValue = (meters: number, divisor: number, gain: boolean) =>
 export type SearchDraft = {
   sections: string[];
   boundary?: SearchBoundary;
+  driveTime?: DriveTimeDraft;
   distance: [string, string];
   gain: [string, string];
   approachEnabled: boolean;
@@ -107,6 +109,8 @@ export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"
   return withMeasurements({
     sections: [...query.sections],
     ...(query.boundary ? { boundary: query.boundary.map(point => [...point]) } : {}),
+    driveTime: { enabled: !!query.driveTime, minutes: String(query.driveTime?.minutes ?? 120),
+      ...(query.driveTime?.origin ? { origin: [...query.driveTime.origin] } : {}) },
     distance: ["", ""],
     gain: ["", ""],
     approachEnabled,
@@ -166,6 +170,11 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
   const maxGain = measurement(draft, "gainMax", units);
   if (!draft.sections.length)
     throw new Error("Select at least one search region.");
+  const drive = draft.driveTime;
+  if (drive?.enabled && (!drive.origin || !drive.minutes.trim() || !Number.isSafeInteger(Number(drive.minutes)) ||
+    Number(drive.minutes) < 5 || Number(drive.minutes) > 240)) {
+    throw new Error("Choose a driving origin and a whole number of minutes from 5 to 240.");
+  }
   if (
     values.some(
       (value) =>
@@ -195,6 +204,7 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
     ...(grades ? { grades } : {}),
     sections: [...draft.sections],
     ...(draft.boundary ? { boundary: draft.boundary.map(point => [...point]) } : {}),
+    ...(drive?.enabled ? { driveTime: { minutes: Number(drive.minutes), origin: [...drive.origin!] } } : {}),
     distance: [minDistance, maxDistance],
     gain: [minGain, maxGain],
     ...(draft.approachEnabled ? {
@@ -298,6 +308,9 @@ export function SearchControls({
   onChange,
   onSubmit,
   onDrawBoundary,
+  choosingDriveOrigin = false,
+  driveOriginReturn = 0,
+  onChooseDriveOrigin,
   onClearResults,
 }: {
   dataset: CatalogView;
@@ -309,6 +322,9 @@ export function SearchControls({
   onChange: (draft: SearchDraft) => void;
   onSubmit: (event: FormEvent) => void;
   onDrawBoundary: () => void;
+  choosingDriveOrigin?: boolean;
+  driveOriginReturn?: number;
+  onChooseDriveOrigin: () => void;
   onClearResults?: () => void;
 }) {
   const drawButton = useRef<HTMLButtonElement>(null);
@@ -337,7 +353,7 @@ export function SearchControls({
               savedSections={savedSections}
               value={draft.sections}
               boundary={draft.boundary}
-              disabled={disabled}
+              disabled={disabled || choosingDriveOrigin}
               onChange={(sections) => update({ sections, boundary: undefined })}
             />
             {!draft.boundary && <span className="area-choice-separator">or</span>}
@@ -345,7 +361,7 @@ export function SearchControls({
               ref={drawButton}
               type="button"
               className="area-action"
-              disabled={disabled}
+              disabled={disabled || choosingDriveOrigin}
               onClick={onDrawBoundary}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
@@ -356,7 +372,7 @@ export function SearchControls({
             {draft.boundary && <button
               type="button"
               className="area-action clear-area"
-              disabled={disabled}
+              disabled={disabled || choosingDriveOrigin}
               aria-label="Clear drawn area"
               title="Clear drawing and use the full selected regions"
               onClick={() => {
@@ -368,6 +384,10 @@ export function SearchControls({
             </button>}
           </div>
         </div>
+        <DriveTimeControl value={draft.driveTime ?? { enabled: false, minutes: "120" }}
+          available={dataset.driveTimeAvailable === true} disabled={disabled}
+          choosingOrigin={choosingDriveOrigin} returnFromMap={driveOriginReturn} onChooseOrigin={onChooseDriveOrigin}
+          onChange={(driveTime) => update({ driveTime })} />
         <Range
           name="Distance"
           unit={display.distanceLabel}
@@ -444,7 +464,7 @@ export function SearchControls({
           <button
             className="primary search-button"
             type="submit"
-            disabled={disabled || !currentRegions}
+            disabled={disabled || !currentRegions || choosingDriveOrigin || !!draft.driveTime?.enabled && !draft.driveTime.origin}
           >
             {submitting ? "Submitting…" : "Search"}
           </button>
