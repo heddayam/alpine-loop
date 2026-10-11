@@ -168,8 +168,8 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
   const maxDistance = measurement(draft, "distanceMax", units);
   const minGain = measurement(draft, "gainMin", units);
   const maxGain = measurement(draft, "gainMax", units);
-  if (!draft.sections.length)
-    throw new Error("Select at least one search region.");
+  if (!draft.sections.length && !draft.boundary && !draft.driveTime?.enabled)
+    throw new Error("Select at least one search region, draw an area, or add driving time.");
   const drive = draft.driveTime;
   if (drive?.enabled && (!drive.origin || !drive.minutes.trim() || !Number.isSafeInteger(Number(drive.minutes)) ||
     Number(drive.minutes) < 5 || Number(drive.minutes) > 240)) {
@@ -334,7 +334,7 @@ export function SearchControls({
     onChange({ ...draft, ...change });
   const display = unitsFor(units);
   const currentRegions =
-    draft.sections.length > 0 &&
+    (draft.sections.length > 0 || !!draft.driveTime?.enabled) &&
     draft.sections.every((id) =>
       dataset.sections.some((section) => section.id === id),
     );
@@ -353,6 +353,7 @@ export function SearchControls({
               savedSections={savedSections}
               value={draft.sections}
               boundary={draft.boundary}
+              allowAny={!!draft.driveTime?.enabled}
               disabled={disabled || choosingDriveOrigin}
               onChange={(sections) => update({ sections, boundary: undefined })}
             />
@@ -382,12 +383,12 @@ export function SearchControls({
             >
               <span aria-hidden="true">×</span>
             </button>}
+            <DriveTimeControl value={draft.driveTime ?? { enabled: false, minutes: "120" }}
+              available={dataset.driveTimeAvailable === true} disabled={disabled}
+              choosingOrigin={choosingDriveOrigin} returnFromMap={driveOriginReturn} onChooseOrigin={onChooseDriveOrigin}
+              onChange={(driveTime) => update({ driveTime })} />
           </div>
         </div>
-        <DriveTimeControl value={draft.driveTime ?? { enabled: false, minutes: "120" }}
-          available={dataset.driveTimeAvailable === true} disabled={disabled}
-          choosingOrigin={choosingDriveOrigin} returnFromMap={driveOriginReturn} onChooseOrigin={onChooseDriveOrigin}
-          onChange={(driveTime) => update({ driveTime })} />
         <Range
           name="Distance"
           unit={display.distanceLabel}

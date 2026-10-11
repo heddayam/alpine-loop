@@ -508,7 +508,7 @@ export function App() {
   };
   const launch = async (event: FormEvent) => {
     event.preventDefault();
-    if (!regions.length || busy || downloading || pendingDownload || choosingDriveOrigin) return;
+    if (busy || downloading || pendingDownload || choosingDriveOrigin) return;
     let query: SearchQuery;
     try {
       query = queryForDraft(draft, units);
@@ -698,7 +698,9 @@ export function App() {
     queuedCount ? `${queuedCount} queued` : "",
   ].filter(Boolean).join(", ");
   const currentJob = jobs.find((job) => job.id === highlightedJob);
-  const viewedRegions = viewedJob?.query.boundary ? ["Drawn boundary"] : viewedJob?.query.sections
+  const viewedRegions = viewedJob?.query.boundary ? ["Drawn boundary"]
+    : viewedJob?.query.driveTime && !viewedJob.query.sections.length ? [`Within ${viewedJob.query.driveTime.minutes} min drive`]
+    : viewedJob?.query.sections
     .map((id) =>
       dataset?.sections.find((section) => section.id === id)?.name ??
         viewedJob.inputs?.sections.find((section) => section.id === id)?.name ?? id,
@@ -840,7 +842,8 @@ export function App() {
                 selectedSections={
                   drawingBoundary ? mapDataset.sections.map(section => section.id) : showSearchArea
                     ? regions
-                    : (viewedJob?.query.sections ?? regions)
+                    : (viewedJob?.query.sections.length ? viewedJob.query.sections
+                      : viewedJob?.inputs?.sections.map(section => section.id) ?? regions)
                 }
                 boundary={visibleBoundary}
                 driveArea={visibleDriveArea}
@@ -929,7 +932,8 @@ export function App() {
         {(drawingBoundary || visibleBoundary || (!showSearchArea ? viewedJob?.query.driveTime : draft.driveTime?.enabled)) && <p className="scope-note">
           {drawingBoundary ? "Draw within the prepared regions outlined on the map."
             : (!showSearchArea ? viewedJob?.query.driveTime : draft.driveTime?.enabled)
-              ? "Estimated driving time filters starting points in the search area. Hikes may extend outside."
+              ? visibleDriveArea ? "Dimmed parts of the search area exceed the estimated driving limit. Hikes may extend outside."
+                : "Estimated driving time filters starting points in the search area. Hikes may extend outside."
             : "Search uses starting points inside the drawn boundary. Map movement does not change scope."}
         </p>}
         {downloading ? (
@@ -991,8 +995,8 @@ export function App() {
           </span>
         ) : (
           <span>
-            {regions.length} {regions.length === 1 ? "region" : "regions"}{" "}
-            selected
+            {!regions.length && draft.driveTime?.enabled ? "Drive time across supported coverage"
+              : `${regions.length} ${regions.length === 1 ? "region" : "regions"} selected`}
           </span>
         )}
       </footer>

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import type { WorkBudget } from './work-budget.js';
 import { openSections } from './sections.js';
-import { boundarySections, pointInBoundary, pointInArea } from './boundary.js';
+import { areaBounds, boundarySections, pointInBoundary, pointInArea, restrictDriveArea } from './boundary.js';
 import { routeName } from './route-name.js';
 
 /** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
@@ -13,11 +13,20 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
   const sections = await openSections(directory, budget);
   const { catalog } = sections;
   const byId = new Map(catalog.sections.map(section => [section.id, section]));
-  const selected = (query: SearchQuery) => {
+  const selected = (query: SearchQuery, driveArea?: Boundary) => {
     if (query.boundary) {
       const matches = boundarySections(query.boundary, catalog.sections);
       if (!matches.length) throw Object.assign(new Error('The drawn boundary does not overlap any prepared search regions.'), { statusCode: 400 });
       return matches;
+    }
+    // No named scope: driving time selects across supported catalog coverage.
+    // Preflight checks all data before billing; the resolved area limits worker input.
+    if (!query.sections.length && query.driveTime) {
+      if (!driveArea) return catalog.sections;
+      const bounds = areaBounds(driveArea);
+      return bounds ? catalog.sections.filter(section => section.bounds[0] <= bounds[2] && section.bounds[2] >= bounds[0] &&
+        section.bounds[1] <= bounds[3] && section.bounds[3] >= bounds[1] &&
+        restrictDriveArea(driveArea, [section]).coordinates.length > 0) : [];
     }
     return query.sections.map(id => {
       const section = byId.get(id);
@@ -36,7 +45,7 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
   async function starts(query: SearchQuery, driveArea?: Boundary) {
     if (query.driveTime && !driveArea) throw new Error('The driving area must be resolved before searching.');
     const result = [];
-    for (const section of selected(query)) {
+    for (const section of selected(query, driveArea)) {
       const records = await sections.read<SectionStarts>(section, 'starts');
       const eligible = records.filter(([start, position]) => (query.includeUnknown || start.access === 'public') &&
         (!query.boundary || pointInBoundary(position, query.boundary)) &&

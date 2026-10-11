@@ -42,10 +42,13 @@ export const jobTitle = (
   job: JobSnapshot,
   regionName: (id: string) => string,
 ) =>
-  `${job.query.boundary ? "Drawn boundary; " : ""}${job.query.sections.map((id) => jobRegionName(job, id, regionName)).join(", ")}; ${new Date(job.createdAt).toLocaleString()}`;
+  `${job.query.boundary ? "Drawn boundary; " : ""}${job.query.sections.length
+    ? job.query.sections.map((id) => jobRegionName(job, id, regionName)).join(", ")
+    : job.query.driveTime ? `Within ${job.query.driveTime.minutes} min drive` : "Search area"}; ${new Date(job.createdAt).toLocaleString()}`;
 
 /** Use prepared geography, keeping unknown saved sections explicit. */
 export function jobAreaSummary(job: JobSnapshot, catalog: JobRegion[] = []) {
+  if (!job.query.sections.length && job.query.driveTime) return "Any supported area";
   const groups = new Map<string, string>();
   for (const id of job.query.sections) {
     const saved = job.regions?.find(section => section.id === id)
@@ -283,7 +286,7 @@ export function JobsDialog({
                   </td>
                   <th scope="row" className="job-area">
                     <div className="job-area-line" title={areas.join(", ")}>
-                      <span>{job.query.boundary ? `Drawn area: ${areaSummary}` : areas.length > 1 ? areaSummary : areas[0]}</span>
+                      <span>{job.query.boundary ? `Drawn area: ${areaSummary}` : areas.length > 1 ? areaSummary : areas[0] ?? areaSummary}</span>
                       {areas.length > 1 && <span className="job-area-count">{areas.length} sections</span>}
                     </div>
                     {job.query.driveTime && <span className="job-muted">{job.query.driveTime.minutes} min driving area</span>}

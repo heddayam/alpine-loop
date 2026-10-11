@@ -76,20 +76,20 @@ export function DriveTimeControl({ value, onChange, disabled, available, choosin
 
   return <div className="drive-control" ref={popover.root} onBlur={popover.onBlur}
     title={!available ? "Driving filter is temporarily unavailable." : undefined}>
-    <span className="field-label">Driving time</span>
     <div className={`drive-trigger${value.enabled ? " drive-enabled" : ""}`}>
-      <input type="checkbox" aria-label="Enable driving time filter" checked={value.enabled}
-        disabled={disabled || choosingOrigin || !available && !value.enabled}
-        onChange={event => {
-          change({ enabled: event.target.checked });
-          if (event.target.checked && !popover.open) popover.toggle();
-        }} />
       <button ref={popover.button} type="button" disabled={disabled || choosingOrigin || !available}
-        aria-label={`Driving time, ${value.enabled ? value.origin ? `${value.minutes || "—"} min` : "choose location" : "off"}`}
-        aria-expanded={popover.open} aria-controls={`${id}-panel`} onClick={popover.toggle}>
-        {value.enabled ? value.origin ? `${value.minutes || "—"} min` : "Choose origin" : "Off"}
-        <span aria-hidden="true">▾</span>
+        aria-label={value.enabled ? `Edit driving time, ${value.minutes || "—"} minutes` : "Add drive time"}
+        aria-expanded={popover.open} aria-controls={`${id}-panel`} onClick={() => {
+          if (!value.enabled) change({ enabled: true });
+          popover.toggle();
+        }}>
+        {value.enabled ? value.origin ? `Within ${value.minutes || "—"} min` : "Set drive time" : "Add drive time"}
+        {value.enabled && <span aria-hidden="true">▾</span>}
       </button>
+      {value.enabled && <button type="button" className="drive-remove" aria-label="Remove driving time"
+        disabled={disabled || choosingOrigin} onClick={() => {
+          change({ enabled: false }); popover.hide(); popover.button.current?.focus();
+        }}><span aria-hidden="true">×</span></button>}
     </div>
     {popover.open && available && <div ref={popover.panel} id={`${id}-panel`} className="drive-popover"
       style={{ left: popover.offset }} role="group" aria-label="Driving time settings">

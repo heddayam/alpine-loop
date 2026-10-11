@@ -24,6 +24,7 @@ const send = (includeInputs = false) => parentPort!.postMessage({ type: 'progres
 send(true);
 await dataset.verifyInputs(inputs);
 const selections = await dataset.starts(query, inputs.driveArea?.geometry);
+progress.totalRegions = selections.length;
 progress.totalStarts = selections.reduce((sum, { eligible }) => sum + eligible.length, 0);
 const store = createRouteStore(resultPath, { writable: true });
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);

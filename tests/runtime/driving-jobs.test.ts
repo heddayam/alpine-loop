@@ -61,6 +61,41 @@ async function unpublished(app: App, id: string) {
 }
 
 describe('driving filters through the actual app and search worker', () => {
+  it('uses driving time alone across prepared coverage and restores its scope after data removal', async () => {
+    const source = await fixture({ sectionCount: 2 });
+    const api = provider([rectangle(-121.991, 47.049, -121.987, 47.051)]);
+    let app = await source.open(api.fetch);
+    const standalone = { ...drivingQuery, sections: [] };
+    expect((await app.inject({ method: 'POST', url: '/api/coverage', payload: standalone })).json())
+      .toMatchObject({ sections: ['fixture-0', 'fixture-1'], missing: [] });
+    const job = await finished(app, (await submit(app, standalone)).json().id);
+    expect(job).toMatchObject({ status: 'completed', query: { sections: [] }, groupCount: 1,
+      progress: { totalRegions: 2, totalStarts: 1, completedStarts: 1 } });
+    const page = (await app.inject(`/api/jobs/${job.id}/results`)).json();
+    expect(page.routes[0].startId).toBe('fixture-1/start-0');
+    expect(job.inputs!.sections).toHaveLength(2);
+    const narrowed = await finished(app, (await submit(app, drivingQuery)).json().id);
+    expect(narrowed).toMatchObject({ status: 'completed', query: { sections: ['fixture-0'] }, groupCount: 0 });
+    await app.close();
+    await rm(source.directory, { recursive: true, force: true });
+    app = await source.open(api.fetch);
+    expect((await app.inject(`/api/jobs/${job.id}`)).json()).toEqual(job);
+    expect((await app.inject(`/api/jobs/${job.id}/results`)).json()).toEqual(page);
+    expect(api.submissions()).toBe(1);
+  });
+
+  it('completes standalone driving searches outside prepared coverage honestly with saved empty geometry', async () => {
+    const source = await fixture();
+    const api = provider([rectangle(-120, 46, -119, 47)]);
+    const app = await source.open(api.fetch);
+    const job = await finished(app, (await submit(app, { ...drivingQuery, sections: [] })).json().id);
+    expect(job).toMatchObject({ status: 'completed', query: { sections: [] }, groupCount: 0,
+      progress: { totalRegions: 0, totalStarts: 0, completedStarts: 0 },
+      inputs: { driveArea: { geometry: { coordinates: [] } } } });
+    expect(job.inputs!.sections).toHaveLength(1);
+    expect((await app.inject(`/api/jobs/${job.id}/results`)).json().routes).toEqual([]);
+  });
+
   it('filters holes and disconnected areas before choosing a start, allows hiking outside, and retains immutable compact results', async () => {
     const source = await fixture({ startCount: 3, startNodes: [0, 1, 2] });
     const api = provider([

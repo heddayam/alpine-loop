@@ -28,9 +28,9 @@ export function parseQuery(value: unknown): SearchQuery {
   if (query.effort !== undefined && query.effort !== 'deep') throw new RequestError('Submit a search using the current search settings.', 400);
   const range = (values: unknown, length: number): values is number[] => Array.isArray(values)
     && values.length === length && values.every(number => typeof number === 'number' && Number.isFinite(number));
-  if (!Array.isArray(query.sections) || (!query.sections.length && !query.boundary) || new Set(query.sections).size !== query.sections.length
+  if (!Array.isArray(query.sections) || (!query.sections.length && !query.boundary && !query.driveTime) || new Set(query.sections).size !== query.sections.length
     || query.sections.some(id => typeof id !== 'string' || !id.trim())) {
-    throw new RequestError('Choose at least one distinct search region.', 400);
+    throw new RequestError('Choose a region, draw an area, or add driving time.', 400);
   }
   if ([query.distance, query.gain].some(values => !range(values, 2) || values[0]! < 0 || values[0]! > values[1]!)
     || query.distance[1] <= 0

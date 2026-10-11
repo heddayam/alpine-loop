@@ -226,10 +226,12 @@ h4 {
   margin: 0;
 }
 .region-field {
-  width: 282px;
+  width: 395px;
+  max-width: 100%;
 }
 .search-area-controls { display: flex; align-items: center; gap: 6px; }
 .search-area-controls .region-picker { flex: 1; min-width: 0; }
+.any-area-action { display: block; width: 100%; border: 0; border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; background: transparent; }
 .area-choice-separator { color: var(--muted); font-size: 11px; }
 .area-action {
   display: inline-flex;

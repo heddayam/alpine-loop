@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Map as MapLibreMap,
   Marker,
@@ -16,7 +16,7 @@ import type { ProfileCursor } from "./ElevationProfile.js";
 import { HikeMarkers } from "./HikeMarkers.js";
 import { request } from "./request.js";
 import { mergedRegionBoundary } from "./region-outline.js";
-import { boundaryGeometry } from "../boundary.js";
+import { boundaryGeometry, excludedDriveArea } from "../boundary.js";
 import { BoundaryDrawing } from "./BoundaryDrawing.js";
 import { MapCoordinates } from "./MapCoordinates.js";
 import { routeDrawing } from "./route-drawing.js";
@@ -119,6 +119,9 @@ export function HikeMap({
   const [startLabel, setStartLabel] = useState<string | null>(null);
   const clearSegmentHover = useRef<() => void>(() => {});
   const profileMarker = useRef<Marker | null>(null);
+  const selectedArea = useMemo(() => mergedRegionBoundary(sections
+    .filter(section => selectedSections.includes(section.id)).map(section => section.boundary)),
+  [sections, selectedSections]);
   const callbacks = useRef({
     onSelect,
     onPreview,
@@ -280,9 +283,13 @@ export function HikeMap({
       instance.addSource("preview-route", { type: "geojson", data: empty });
       instance.addSource("result-paths", { type: "geojson", data: empty });
       instance.addSource("search-boundary", { type: "geojson", data: empty });
-      instance.addSource("driving-area", { type: "geojson", data: empty,
+      instance.addSource("driving-excluded", { type: "geojson", data: empty,
         attribution: 'Driving area: <a href="https://www.esri.com/">Powered by Esri</a>' });
       instance.addSource("driving-origin", { type: "geojson", data: empty });
+      instance.addLayer({
+        id: "driving-excluded-fill", type: "fill", source: "driving-excluded",
+        paint: { "fill-color": "#22303b", "fill-opacity": 0.22, "fill-antialias": false },
+      });
       instance.addLayer({
         id: "sections-outline",
         type: "line",
@@ -296,10 +303,6 @@ export function HikeMap({
       instance.addLayer({
         id: "search-boundary-outline", type: "line", source: "search-boundary",
         paint: { "line-color": "#557f9b", "line-width": 2, "line-dasharray": [3, 2] },
-      });
-      instance.addLayer({
-        id: "driving-area-outline", type: "line", source: "driving-area",
-        paint: { "line-color": "#245B78", "line-width": 2, "line-dasharray": [2, 2] },
       });
       instance.addLayer({
         id: "driving-origin-point", type: "circle", source: "driving-origin",
@@ -455,18 +458,13 @@ export function HikeMap({
 
   useEffect(() => {
     if (!map) return;
-    const boundary = mergedRegionBoundary(
-      sections
-        .filter((section) => selectedSections.includes(section.id))
-        .map((section) => section.boundary),
-    );
     (map.getSource("sections") as GeoJSONSource).setData({
       type: "FeatureCollection",
-      features: boundary.coordinates.length
-        ? [{ type: "Feature", geometry: boundary, properties: {} }]
+      features: selectedArea.coordinates.length
+        ? [{ type: "Feature", geometry: selectedArea, properties: {} }]
         : [],
     });
-  }, [map, sections, selectedSections]);
+  }, [map, selectedArea]);
 
   useEffect(() => {
     if (!map) return;
@@ -477,11 +475,11 @@ export function HikeMap({
 
   useEffect(() => {
     if (!map) return;
-    (map.getSource("driving-area") as GeoJSONSource).setData(driveArea && !drawingBoundary
-      ? { type: "Feature", properties: {}, geometry: driveArea } : empty);
+    (map.getSource("driving-excluded") as GeoJSONSource).setData(driveArea && !drawingBoundary
+      ? { type: "Feature", properties: {}, geometry: excludedDriveArea(selectedArea, driveArea, boundary) } : empty);
     (map.getSource("driving-origin") as GeoJSONSource).setData(driveOrigin && !drawingBoundary
       ? { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: driveOrigin } } : empty);
-  }, [map, driveArea, driveOrigin, drawingBoundary]);
+  }, [map, selectedArea, boundary, driveArea, driveOrigin, drawingBoundary]);
 
   useEffect(() => {
     if (!map || !choosingDriveOrigin) return;

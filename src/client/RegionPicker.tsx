@@ -10,6 +10,7 @@ export function RegionPicker({
   disabled = false,
   onChange,
   boundary,
+  allowAny = false,
 }: {
   dataset: CatalogView;
   value: string[];
@@ -17,6 +18,7 @@ export function RegionPicker({
   disabled?: boolean;
   onChange: (ids: string[]) => void;
   boundary?: SearchBoundary;
+  allowAny?: boolean;
 }) {
   const details = useRef<HTMLDetailsElement>(null);
   const summary = useRef<HTMLElement>(null);
@@ -30,7 +32,7 @@ export function RegionPicker({
           savedSections.find((section) => section.id === value[0])?.name ?? value[0]!)
       : value.length
         ? `${value.length} regions selected`
-        : "Select regions";
+        : allowAny ? "Any supported area" : "Select regions";
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
       if (
@@ -90,6 +92,10 @@ export function RegionPicker({
         <span>{selection}</span>
       </summary>
       <div id={`${id}-regions`} className="region-dropdown">
+        {allowAny && <button type="button" className="any-area-action" disabled={disabled}
+          onClick={() => { onChange([]); if (details.current) details.current.open = false; summary.current?.focus(); }}>
+          Any supported area
+        </button>}
         <CatalogAreas dataset={dataset} value={value} disabled={disabled} onChange={onChange} />
         {!!unknown.length && (
           <section className="region-group" aria-label="Unavailable selections">

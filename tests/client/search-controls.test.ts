@@ -9,6 +9,16 @@ import {
 } from "../../src/client/SearchControls.js";
 
 describe("editable search constraints", () => {
+  it("accepts standalone driving scope and retains it through copied settings and unit changes", () => {
+    const standalone = { ...initialDraft, sections: [], driveTime: {
+      enabled: true, minutes: "30", origin: [-122.33, 47.6] as [number, number],
+    } };
+    const query = queryForDraft(standalone);
+    expect(query.sections).toEqual([]);
+    expect(queryForDraft(convertDraft(draftForQuery(query), "imperial", "metric"), "metric")).toEqual(query);
+    expect(() => queryForDraft({ ...standalone, driveTime: { ...standalone.driveTime, enabled: false } })).toThrow("add driving time");
+    expect(() => queryForDraft({ ...standalone, driveTime: { ...standalone.driveTime, origin: undefined } })).toThrow("driving origin");
+  });
   it("retains driving settings across units and disabling, and requires a fresh origin for shared settings", () => {
     const query = queryForDraft({ ...initialDraft, sections: ["fixture"],
       driveTime: { enabled: true, minutes: "120", origin: [-122.33, 47.6] } });

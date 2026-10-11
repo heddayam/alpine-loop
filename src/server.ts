@@ -88,7 +88,7 @@ export async function createApp(directory: string, clientDirectory?: string, job
     }
     const query = parseQuery(request.body);
     const coverage = await (await availableData()).coverage(query);
-    query.sections = coverage.sections;
+    if (query.sections.length || query.boundary) query.sections = coverage.sections;
     if (coverage.missing.length) {
       requireDownloads();
       return reply.code(409).send({ message: 'Download the selected trail sections before searching.', ...coverage });

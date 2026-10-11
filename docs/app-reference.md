@@ -47,13 +47,19 @@ walking permission. A vehicle-closed track can remain walkable without creating
 a start at its trail junction. Mapped road contacts
 do not certify legal parking or current road conditions.
 
-**Driving time** optionally narrows either selected regions or a drawn area.
-Enable its checkbox and set a whole-number limit from 5 to 240 minutes in the
-popover. Choose a starting location on the map, or explicitly use your browser's
+**Driving time** works on its own, or narrows selected regions or a drawn area.
+Use **Add drive time** in the Search area row and set a whole-number limit from
+5 to 240 minutes in the popover. With no named regions or drawing, **Any supported
+area** searches across prepared catalog coverage. Select that option in the
+region picker to clear a previous region/drawing constraint. Native preflight
+checks that all supported coverage is installed before a standalone request;
+the resolved area limits which sections are explored. Choose a starting location
+on the map, or explicitly use your browser's
 location. Choosing on the map closes the popover and enters a labeled selection
 mode. Enter chooses the map center and Escape cancels; either returns to the
 popover for review. Cancellation retains the previous origin.
-Disabling the filter retains the draft origin and time. Panning never changes
+The configured button shows **Within 120 min**, with an adjacent remove action.
+Removing the filter retains the draft origin and time. Panning never changes
 the origin or search scope.
 
 The queued search calculates its driving area before exploring trails; it does
@@ -72,7 +78,9 @@ to the selected region would incorrectly exclude approach roads and detours.
 
 Calculation failures fail the job without broadening its search. Empty
 intersections complete with no hikes. Saved driving boundaries are clipped to
-the selected prepared area and restored without another provider call. Hosted
+the selected prepared area and restored without another provider call. The map
+dims only parts of Search area outside the driving boundary; reachable terrain
+stays clear, with no driving outline. Hosted
 shared results omit the exact origin; copying someone else's settings requires
 choosing your own origin. A chosen origin is sent to Esri only when the job runs.
 The operator configures the optional server key as described in

@@ -75,6 +75,13 @@ const location = (id: string, x: number, y = 0): RouteLocation => ({
 });
 
 describe("saved-job interface boundaries", () => {
+  it("names standalone driving jobs without requiring named regions", () => {
+    const standalone = { ...job("completed"), query: { ...job("completed").query, sections: [],
+      driveTime: { minutes: 120, origin: [-122.33, 47.6] as [number, number] } } };
+    expect(jobAreaSummary(standalone)).toBe("Any supported area");
+    expect(jobTitle(standalone, () => "Cascades")).toContain("Within 120 min drive");
+    expect(renderJob("completed", {}, standalone.query)).toContain("Any supported area");
+  });
   it("retains the job table during a completion refresh and shows loading only without rows", () => {
     const refresh = renderJob("completed", {}, {}, { loading: true });
     expect(refresh).not.toContain("Loading jobs…");
