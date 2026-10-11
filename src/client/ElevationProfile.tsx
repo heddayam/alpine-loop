@@ -107,12 +107,14 @@ export const ElevationProfile = memo(function ElevationProfile({
     }
     if (minimum === Infinity) return null;
     const padding = Math.max((maximum - minimum) * 0.06, 6 / display.elevation);
-    const step = tickStep((maximum - minimum + 2 * padding) / 2);
-    const floor = Math.floor((minimum - padding) / step) * step;
-    const ceiling = Math.ceil((maximum + padding) / step) * step;
+    // Rounded tick labels fit inside the bounds without expanding the plot range.
+    const floor = minimum - padding;
+    const ceiling = maximum + padding;
+    const step = tickStep((ceiling - floor) / 3);
+    const firstTick = Math.ceil(floor / step) * step;
     const ticks = Array.from(
-      { length: Math.round((ceiling - floor) / step) + 1 },
-      (_, i) => floor + i * step,
+      { length: Math.floor((ceiling - firstTick) / step) + 1 },
+      (_, i) => firstTick + i * step,
     );
     const total = samples.at(-1)!.distance;
     const x = (distance: number) =>

@@ -99,13 +99,10 @@ export function RouteCard({
       }}
     >
       <header className="route-card-header">
-        <div className="route-card-identity">
+        <div className="route-card-top">
           <h2 ref={heading} id="route-detail-heading" tabIndex={-1} title={name}>
             {name}
           </h2>
-          {route && <p className="route-card-trailhead" title={trailhead} aria-label={`Trailhead: ${trailhead}`}>{trailhead}</p>}
-        </div>
-        <div className="route-card-profile-header">
           <div className="route-card-tools">
             {route && <>
               <button className="star-route" type="button" aria-label={starred ? "Unstar route" : "Star route"}
@@ -123,8 +120,9 @@ export function RouteCard({
               </svg>
             </button>
           </div>
-          <div ref={setReadoutTarget} className="route-card-readout" />
         </div>
+        {route && <p className="route-card-trailhead" title={trailhead} aria-label={`Trailhead: ${trailhead}`}>{trailhead}</p>}
+        <div ref={setReadoutTarget} className="route-card-readout" />
       </header>
       {route ? (
         <div className="route-detail">

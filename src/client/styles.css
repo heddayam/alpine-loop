@@ -751,10 +751,19 @@ label.area-row:hover {
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(0, 1.25fr);
   align-items: center;
-  gap: 22px;
+  gap: 0 22px;
   padding-bottom: 5px;
 }
+.route-card-top {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
 .route-card-header h2 {
+  flex: 1;
+  align-self: flex-end;
   min-width: 0;
   font-size: 15px;
   line-height: 1.35;
@@ -762,10 +771,10 @@ label.area-row:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.route-card-identity { min-width: 0; }
 .route-card-trailhead {
+  align-self: start;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
@@ -776,16 +785,13 @@ label.area-row:hover {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+  flex-shrink: 0;
   min-width: 0;
 }
 .route-card-readout {
+  grid-column: 2;
   min-width: 0;
   min-height: 16px;
-}
-.route-card-profile-header {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
 }
 .close-route-card, .star-route {
   display: grid;
@@ -1013,6 +1019,7 @@ label.area-row:hover {
 }
 @container (max-width: 620px) {
   .route-card-header { grid-template-columns: 1fr; gap: 0; }
+  .route-card-readout { grid-column: 1; }
   .route-detail { grid-template-columns: 1fr; gap: 8px; }
   .map-route-card { width: min(420px, calc(100% - 24px)); }
 }
