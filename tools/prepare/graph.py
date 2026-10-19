@@ -95,7 +95,7 @@ def topology(ways, pois, tags_by_node, positions, footprint):
             continue
         counts["selectedWays"] += 1
         access = directions(way["tags"])
-        kind = role(way["tags"])
+        kind = "connector" if way.get("developed") else role(way["tags"])
         for ordinal, (left, right) in enumerate(zip(way["nodes"], way["nodes"][1:])):
             physical = tuple(sorted((left, right)))
             a, b = (positions[node] for node in physical)
