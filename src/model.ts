@@ -23,7 +23,8 @@ export type TrailEdge = {
   connector: boolean;
 };
 export type StartKind = 'trailhead' | 'parking' | 'road-contact';
-export type TrailStart = { id: string; node: number; name: string; access: Access; kind: StartKind };
+/** `place` is the founding start's ID for starts a hiker would call one place; absent in older data, meaning the start stands alone. */
+export type TrailStart = { id: string; node: number; name: string; access: Access; kind: StartKind; place?: string };
 export type Attribution = { name: string; url: string; license: string };
 export type DatasetInfo = {
   id: string;
@@ -88,7 +89,10 @@ export type RouteSummary = Pick<RouteCandidate, 'id' | 'distance' | 'gain' | 'ro
   startId: string;
   startName: string;
   startKind: StartKind;
+  /** Place name and position; the walk itself begins at the chosen connection within it. */
   startPosition: Position;
+  /** Absent for routes saved before place grouping. */
+  startPlace?: string;
   trailNames: string[];
 };
 /** Inclusive indices into the ordered walk; repeated physical trails share an ID. */
@@ -164,7 +168,7 @@ export type JobResults = {
   order: SortOrder;
   selectionNote: string;
 };
-export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance' | 'gain' | 'repetition' | 'roadDistance'> & { bounds: Bounds };
+export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'startPlace' | 'trailNames' | 'distance' | 'gain' | 'repetition' | 'roadDistance'> & { bounds: Bounds };
 /** Each shared physical trail is drawn once, with its preferred hikes in distance order. */
 export type RoutePath = { id: string; routeIds: string[]; geometry: [number, number][] };
 export type SearchProgress = {
