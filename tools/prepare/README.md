@@ -124,14 +124,23 @@ generic access; explicit prohibitions are excluded; uncertainty is retained and
 labeled. Motorways, motorway links and `motorroad=yes` need affirmative
 pedestrian-specific permission in each admitted direction. Vehicle one-way tags
 do not invent walking restrictions. Tracks and explicit sidewalks/crossings are
-road connectors, independently of their names or foot permissions. Mapped
-parking and trailhead contacts use shared source nodes; no nearest-trail
-connection is invented.
+road connectors, independently of their names or foot permissions. A footway,
+path, steps, pedestrian or cycleway way with at least half its length inside
+OSM residential, commercial, retail or industrial land, or university, college
+or school grounds, is town walking and also counts as road. Preparation extracts
+those areas from the same OSM source. Mapped parking and trailhead contacts use
+shared source nodes; no nearest-trail connection is invented.
 
 Prepared starts carry explicit `trailhead`, `parking`, or `road-contact` metadata
 from mapped entrance evidence. A trailhead outranks co-located parking; names
-never infer a kind. Completed search jobs use this metadata to choose the
-displayed qualifying start while retaining the other qualifying entrances.
+never infer a kind. A road contact or parking lot must touch a trail, and that
+trail must join at least 500 m of connected trail without road walking; unpaved
+tracks count toward this network only, and still count as road for hike limits.
+This removes town stairways, street-to-street paths and lots that touch only
+roads, including where land use is unmapped. Mapped trailheads are their own
+evidence. Entrances within 150 m of walking of a stronger one (trailhead, then
+parking, then road contact; public access, then ID) form one place, and only
+its strongest entrance is emitted as a start; the others stay graph nodes.
 
 Road-contact starts resolve car access in the order `motorcar`, `motor_vehicle`,
 `vehicle`, `access`, including directional restrictions. An explicit vehicle
