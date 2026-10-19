@@ -9,10 +9,21 @@ import { FixedList } from "./FixedList.js";
 import {
   distanceText,
   elevationText,
+  highPointText,
   stemDistance,
   unitsFor,
   type UnitSystem,
 } from "./units.js";
+
+type HikeSort = "distance" | "gain" | "highPoint" | "stem" | "roadDistance";
+export function compareHikes(a: RouteLocation, b: RouteLocation, sort: HikeSort, descending = false) {
+  const first = sort === "stem" ? stemDistance(a) : a[sort];
+  const second = sort === "stem" ? stemDistance(b) : b[sort];
+  // Unknown peaks stay after measured elevations in either direction.
+  if (first == null || second == null)
+    return Number(first == null) - Number(second == null) || a.id.localeCompare(b.id);
+  return (first - second) * (descending ? -1 : 1) || a.id.localeCompare(b.id);
+}
 
 /** The comparison list remains available while a hike is inspected on the map. */
 export function RouteDock({
@@ -54,16 +65,13 @@ export function RouteDock({
   onPreview: (id: string | null) => void;
   onClear: () => void;
 }) {
-  const [sort, setSort] = useState<"distance" | "gain" | "stem" | "roadDistance">(
+  const [sort, setSort] = useState<HikeSort>(
     "distance",
   );
   const [descending, setDescending] = useState(false);
   const display = unitsFor(units);
   const { sorted, starred } = useMemo(() => {
-    const compare = (a: RouteLocation, b: RouteLocation) => {
-      const delta = sort === "stem" ? stemDistance(a) - stemDistance(b) : a[sort] - b[sort];
-      return delta * (descending ? -1 : 1) || a.id.localeCompare(b.id);
-    };
+    const compare = (a: RouteLocation, b: RouteLocation) => compareHikes(a, b, sort, descending);
     const pins = new Set(starredRoutes.map(route => route.id));
     return {
       sorted: routes.filter(route => !pins.has(route.id)).sort(compare),
@@ -89,7 +97,10 @@ export function RouteDock({
         <strong>{routeName(route)}</strong>
         <span className="row-metrics">
           <span>{distanceText(route.distance, units)} <small>{display.distanceLabel}</small></span>
-          <span title="Elevation gain">{elevationText(route.gain, units)} <small>{display.elevationLabel}</small></span>
+          <span title="Elevation gain">{elevationText(route.gain, units)} <small>{display.elevationLabel} gain</small></span>
+          <span title={route.highPoint == null ? "High point unavailable because elevation data is incomplete" : "Highest elevation above sea level"}>
+            {route.highPoint == null ? <>— <small>high point</small></> : <>{elevationText(route.highPoint, units)} <small>{display.elevationLabel} high point</small></>}
+          </span>
           <span title="One-way approach walked again on the return">
             {distanceText(stemDistance(route), units)} <small>{display.distanceLabel} approach</small>
           </span>
@@ -138,6 +149,7 @@ export function RouteDock({
         </div>
         <p className="saved-request">
           {distanceText(job.query.distance[0], units)}–{distanceText(job.query.distance[1], units)} {display.distanceLabel}, {elevationText(job.query.gain[0], units)}–{elevationText(job.query.gain[1], units)} {display.elevationLabel} gain
+          {job.query.highPoint && <>, {highPointText(job.query.highPoint, units)} high point</>}
         </p>
       </header>
       <div className="results-toolbar">
@@ -169,6 +181,7 @@ export function RouteDock({
           >
             <option value="distance">Distance</option>
             <option value="gain">Elev. Gain</option>
+            <option value="highPoint">High Point</option>
             <option value="stem">Approach</option>
             <option value="roadDistance">Road</option>
           </select>
@@ -192,13 +205,13 @@ export function RouteDock({
               Starred <span className="starred-count">{starred.length}</span>
             </button>
             <div id="starred-routes" className="starred-list" hidden={starsCollapsed}>
-              <FixedList items={starred} rowHeight={52}>
+              <FixedList items={starred} rowHeight={70}>
                 {(route, index) => row(route, index, starred.length, true)}
               </FixedList>
             </div>
           </section>
         )}
-        <FixedList items={sorted} rowHeight={52}>
+        <FixedList items={sorted} rowHeight={70}>
           {(route, index) => row(route, index, sorted.length)}
         </FixedList>
         {!routes.length && (

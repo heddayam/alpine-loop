@@ -1,5 +1,5 @@
 import type { Boundary, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
-import type { HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
+import type { AccessPoint, Bounds, HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -7,11 +7,13 @@ import type { WorkBudget } from './work-budget.js';
 import { openSections } from './sections.js';
 import { areaBounds, boundarySections, pointInBoundary, pointInArea, restrictDriveArea } from './boundary.js';
 import { routeName } from './route-name.js';
+import { accessPolicyVersion, readAccessPolicy } from './access-policy.js';
 
 /** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
 export async function readDataset(directory: string, budget?: WorkBudget) {
   const sections = await openSections(directory, budget);
   const { catalog } = sections;
+  const accessPolicy = await readAccessPolicy(directory, catalog);
   const byId = new Map(catalog.sections.map(section => [section.id, section]));
   const selected = (query: SearchQuery, driveArea?: Boundary) => {
     if (query.boundary) {
@@ -47,12 +49,30 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     const result = [];
     for (const section of selected(query, driveArea)) {
       const records = await sections.read<SectionStarts>(section, 'starts');
-      const eligible = records.filter(([start, position]) => (query.includeUnknown || start.access === 'public') &&
+      const eligible = records.filter(([start, position]) => accessPolicy?.assessment(section.id, start.id)?.keep !== false &&
+        (query.includeUnknown || start.access === 'public') &&
         (!query.boundary || pointInBoundary(position, query.boundary)) &&
         (!driveArea || pointInArea(position, driveArea))).map(([start]) => start);
       result.push({ section, eligible });
     }
     return result;
+  }
+  async function accessPoints(bounds: Bounds): Promise<AccessPoint[]> {
+    const [west, south, east, north] = bounds;
+    if (!bounds.every(Number.isFinite) || west < -180 || east > 180 || south < -90 || north > 90 || west >= east || south >= north)
+      throw Object.assign(new Error('Choose valid map bounds.'), { statusCode: 400 });
+    const points: AccessPoint[] = [];
+    for (const section of catalog.sections) {
+      if (section.bounds[0] > east || section.bounds[2] < west || section.bounds[1] > north || section.bounds[3] < south
+        || !await sections.installed(section)) continue;
+      for (const [start, position] of await sections.read<SectionStarts>(section, 'starts')) {
+        if (position[0] < west || position[0] > east || position[1] < south || position[1] > north) continue;
+        const { node: _node, ...facts } = start;
+        const assessment = accessPolicy?.assessment(section.id, start.id);
+        points.push({ ...facts, id: `${section.id}/${start.id}`, position, region: section.name, ...(assessment ? { assessment } : {}) });
+      }
+    }
+    return points;
   }
   async function select(query: SearchQuery, chosen: Awaited<ReturnType<typeof starts>>[number]) {
     const { graph, trails } = await sections.read<SectionGraph>(chosen.section, 'graph');
@@ -82,6 +102,8 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     if ((await stat(file)).size > 16 * 1024 * 1024) throw new Error('Prepared catalog changed during this job.');
     const current = JSON.parse(await readFile(file, 'utf8')) as typeof catalog;
     if (current.info?.id !== inputs.version) throw new Error('Prepared data changed during this job. Submit a new job.');
+    if (await accessPolicyVersion(directory) !== inputs.accessPolicyVersion)
+      throw new Error('Prepared access-point policy changed during this job. Submit a new job.');
     for (const pinned of inputs.sections) {
       const entry = current.sections?.find(section => section.id === pinned.id);
       const facts = entry && { id: entry.id, name: entry.name, bounds: entry.bounds, boundary: entry.boundary, files: entry.files };
@@ -90,7 +112,7 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
       if (!await sections.installed(pinned.id)) throw new Error(`Prepared region was removed during this job: ${pinned.name}`);
     }
   }
-  return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, select, verifyInputs,
+  return { info: catalog.info, catalog, accessPolicy, selectedSections: selected, coverage, starts, accessPoints, select, verifyInputs,
     readTrailNames: async (section: JobInputs['sections'][number]) => {
       if (byId.get(section.id)?.files.graph.sha256 !== section.files.graph.sha256) return undefined;
       const { trails } = await sections.read<SectionGraph>(section.id, 'graph');

@@ -1,0 +1,179 @@
+{
+  "date": "2026-10-13",
+  "scope": "Local real-data diagnostic, fixed first 1,500,000 expansions, not full-search completion timings.",
+  "method": "Separate Node 24 processes, 256 MiB old-generation heap, unchanged 40% cooperative CPU budget. Existing app search ran concurrently. Route arrays match exactly by SHA-256, including order, walks and metrics. Each emitted walk independently checked for connectivity, closure, ordered distance/gain/road sums and query bounds.",
+  "query": {
+    "effort": "deep",
+    "distance": [
+      12874.752,
+      20921.472
+    ],
+    "gain": [
+      609.6,
+      1066.8
+    ],
+    "stem": 4828.032,
+    "repetition": 0.2,
+    "includeUnknown": true,
+    "roads": {
+      "distance": 4828.032,
+      "fraction": 1
+    }
+  },
+  "comparisons": [
+    {
+      "before": {
+        "mode": "before",
+        "name": "Diablo Range & East Bay",
+        "elapsedMs": 31300.252957999997,
+        "cpuMs": 19079.776,
+        "peakRssMiB": 375.859375,
+        "routes": 32,
+        "digest": "35282e4e1336e45fcc96c09f9d2baf99a90b9d91403c45c58601b3253cdcc0fe",
+        "progress": {
+          "totalStarts": 3697,
+          "attemptedStarts": 3697,
+          "completedStarts": 0,
+          "expansions": 1500000,
+          "elapsedMs": 31300,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 172
+        }
+      },
+      "after": {
+        "mode": "after",
+        "name": "Diablo Range & East Bay",
+        "elapsedMs": 6865.635875,
+        "cpuMs": 3675.395,
+        "peakRssMiB": 343.5625,
+        "routes": 32,
+        "digest": "35282e4e1336e45fcc96c09f9d2baf99a90b9d91403c45c58601b3253cdcc0fe",
+        "progress": {
+          "totalStarts": 3697,
+          "attemptedStarts": 3697,
+          "completedStarts": 0,
+          "expansions": 1500000,
+          "elapsedMs": 6864,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 172
+        }
+      },
+      "speedup": 4.558973637383588
+    },
+    {
+      "before": {
+        "mode": "before",
+        "name": "Alpine Lakes",
+        "elapsedMs": 4195.818708,
+        "cpuMs": 2243.955,
+        "peakRssMiB": 283.390625,
+        "routes": 20,
+        "digest": "3620c4ce58d398a3659d5b008fc65bf87d5f116acdc924c05a8087eddfebfbe1",
+        "progress": {
+          "totalStarts": 2669,
+          "attemptedStarts": 2669,
+          "completedStarts": 0,
+          "expansions": 1500000,
+          "elapsedMs": 4195,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 324
+        }
+      },
+      "after": {
+        "mode": "after",
+        "name": "Alpine Lakes",
+        "elapsedMs": 3285.028084,
+        "cpuMs": 2028.081,
+        "peakRssMiB": 289.296875,
+        "routes": 20,
+        "digest": "3620c4ce58d398a3659d5b008fc65bf87d5f116acdc924c05a8087eddfebfbe1",
+        "progress": {
+          "totalStarts": 2669,
+          "attemptedStarts": 2669,
+          "completedStarts": 0,
+          "expansions": 1500000,
+          "elapsedMs": 3284,
+          "totalSearchPoints": 6168,
+          "completedSearchPoints": 324
+        }
+      },
+      "speedup": 1.277255049488338
+    }
+  ],
+  "fullDiabloComparison": {
+    "scope": "Completed engine discovery only, all 3697 starts and all 6168 planned points. Neither run used the production 40% CPU throttle; both yielded through setImmediate. Concurrent benchmarks and app activity make elapsed speedup descriptive. Geometry storage/grouping not timed.",
+    "before": {
+      "mode": "before",
+      "name": "Diablo Range & East Bay",
+      "elapsedMs": 485746.11504199996,
+      "cpuMs": 524208.009,
+      "peakRssMiB": 375.25,
+      "routes": 1923,
+      "digest": "b334300dcfa07ae51a753f0d38a3a9a85c116355661db8e75c72f078615b1217",
+      "progress": {
+        "totalStarts": 3697,
+        "attemptedStarts": 3697,
+        "completedStarts": 3697,
+        "expansions": 331229819,
+        "elapsedMs": 485747,
+        "totalSearchPoints": 6168,
+        "completedSearchPoints": 6168
+      }
+    },
+    "after": {
+      "mode": "after",
+      "name": "Diablo Range & East Bay",
+      "elapsedMs": 321168.577459,
+      "cpuMs": 402885.957,
+      "peakRssMiB": 373.21875,
+      "routes": 1923,
+      "digest": "b334300dcfa07ae51a753f0d38a3a9a85c116355661db8e75c72f078615b1217",
+      "progress": {
+        "totalStarts": 3697,
+        "attemptedStarts": 3697,
+        "completedStarts": 3697,
+        "expansions": 296580795,
+        "elapsedMs": 321170,
+        "totalSearchPoints": 6168,
+        "completedSearchPoints": 6168
+      }
+    },
+    "identicalRouteArrays": true,
+    "elapsedSpeedup": 1.5124334979626384,
+    "cpuSpeedup": 1.3011324914459603
+  },
+  "californiaDataAudit": {
+    "allPreparedStarts": 7664,
+    "outsidePreparedBoundary": 0,
+    "rawInventoryComparison": "All three boundaries exactly equal pinned full-standard GMBA range intersected with pinned Census California boundary, symmetric difference area zero.",
+    "partitionPolicy": {
+      "maxCandidateSourceSegments": 700000,
+      "Diablo": 640044,
+      "SantaCruz": 362525,
+      "SonomaMarin": 268103,
+      "selectedHighwayCuts": 0
+    },
+    "roadContacts": 6417,
+    "contactsWithoutRetainedWalkingTrail": 0,
+    "contactsWithNoSourceWalkingPermission": 0,
+    "contactsWhoseEverySourceArrivalRoadIsExplicitlyProhibited": 0,
+    "roadContactKinds": {
+      "Diablo": {
+        "all": 3144,
+        "pathOrBridleway": 1037,
+        "otherFootwayCyclewayStepsPedestrianOnly": 2107
+      },
+      "SantaCruz": {
+        "all": 2151,
+        "pathOrBridleway": 1449,
+        "otherFootwayCyclewayStepsPedestrianOnly": 702
+      },
+      "SonomaMarin": {
+        "all": 1122,
+        "pathOrBridleway": 585,
+        "otherFootwayCyclewayStepsPedestrianOnly": 537
+      }
+    },
+    "limitations": "Road contact is uncertain access, not verified parking. OSM footway/cycleway/steps mappings are not proof of an urban location or a poor hike. These checks validate stated source rules and geometry; they do not establish on-the-ground access."
+  }
+}

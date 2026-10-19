@@ -1,0 +1,767 @@
+{
+  "scope": "Read-only mapped developed-land corridor and directed connector-reachability trial. No complete route search. Outside the mask means no mapped developed evidence, not proven natural land.",
+  "rule": {
+    "developedLanduse": [
+      "residential",
+      "commercial",
+      "industrial",
+      "retail"
+    ],
+    "developedAmenity": [
+      "school",
+      "college",
+      "university"
+    ],
+    "bufferMeters": 25,
+    "corridorDemotionFraction": 0.5,
+    "connectorBudgetMeters": 1609.344,
+    "sensitivityBufferMeters": [
+      0,
+      25
+    ]
+  },
+  "sourceDate": "2026-08-01",
+  "maskPolygonCounts": {
+    "CA": {
+      "industrial": 14486,
+      "college": 256,
+      "school": 9798,
+      "commercial": 25650,
+      "retail": 13502,
+      "university": 247,
+      "residential": 219600,
+      "institutional": 3,
+      "education": 49,
+      "religious": 17,
+      "public_facility": 1,
+      "orchard": 8,
+      "meadow": 1,
+      "civic": 4,
+      "farmyard": 1,
+      "public": 1,
+      "farmland": 3,
+      "eduation": 1,
+      "construction": 1
+    },
+    "WA": {
+      "university": 35,
+      "retail": 4565,
+      "college": 107,
+      "school": 2473,
+      "residential": 35147,
+      "industrial": 5782,
+      "construction": 10,
+      "commercial": 7163,
+      "education": 49,
+      "religious": 1
+    }
+  },
+  "regions": [
+    {
+      "name": "Mount St. Helens & Mount Adams",
+      "state": "WA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 1138,
+            "trailhead": 52,
+            "parking": 419
+          },
+          "startsRemoved": {
+            "parking": 19,
+            "trailhead": 1
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 320,
+            "trailhead": 4,
+            "road-contact": 10
+          },
+          "trailCorridorsDemoted": 42,
+          "demotedTrailMeters": 1226.8
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 1138,
+            "trailhead": 52,
+            "parking": 419
+          },
+          "startsRemoved": {
+            "parking": 19,
+            "trailhead": 1
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 320,
+            "trailhead": 4,
+            "road-contact": 19
+          },
+          "trailCorridorsDemoted": 53,
+          "demotedTrailMeters": 2167.9
+        }
+      }
+    },
+    {
+      "name": "Mount Rainier & Central Cascades",
+      "state": "WA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 1519,
+            "trailhead": 117,
+            "parking": 462
+          },
+          "startsRemoved": {
+            "parking": 77,
+            "road-contact": 28,
+            "trailhead": 1
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "road-contact": 103,
+            "parking": 386,
+            "trailhead": 6
+          },
+          "trailCorridorsDemoted": 469,
+          "demotedTrailMeters": 15519.6
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 1519,
+            "trailhead": 117,
+            "parking": 462
+          },
+          "startsRemoved": {
+            "parking": 77,
+            "road-contact": 29,
+            "trailhead": 1
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "road-contact": 179,
+            "parking": 386,
+            "trailhead": 7
+          },
+          "trailCorridorsDemoted": 726,
+          "demotedTrailMeters": 31193.5
+        }
+      }
+    },
+    {
+      "name": "Alpine Lakes",
+      "state": "WA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 1985,
+            "trailhead": 69,
+            "parking": 615
+          },
+          "startsRemoved": {
+            "parking": 27,
+            "road-contact": 1
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 489,
+            "trailhead": 7,
+            "road-contact": 246
+          },
+          "trailCorridorsDemoted": 1066,
+          "demotedTrailMeters": 30251.8
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 1985,
+            "trailhead": 69,
+            "parking": 615
+          },
+          "startsRemoved": {
+            "road-contact": 13,
+            "parking": 28
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 504,
+            "road-contact": 372,
+            "trailhead": 8
+          },
+          "trailCorridorsDemoted": 1471,
+          "demotedTrailMeters": 55118.5
+        }
+      }
+    },
+    {
+      "name": "Glacier Peak & Mountain Loop",
+      "state": "WA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 1646,
+            "parking": 387,
+            "trailhead": 123
+          },
+          "startsRemoved": {
+            "parking": 23,
+            "road-contact": 4,
+            "trailhead": 2
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 313,
+            "trailhead": 9,
+            "road-contact": 127
+          },
+          "trailCorridorsDemoted": 331,
+          "demotedTrailMeters": 13756.9
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 1646,
+            "parking": 387,
+            "trailhead": 123
+          },
+          "startsRemoved": {
+            "parking": 23,
+            "road-contact": 31,
+            "trailhead": 2
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 314,
+            "trailhead": 9,
+            "road-contact": 197
+          },
+          "trailCorridorsDemoted": 503,
+          "demotedTrailMeters": 21033.5
+        }
+      }
+    },
+    {
+      "name": "Mount Baker & North Cascades",
+      "state": "WA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 1344,
+            "trailhead": 60,
+            "parking": 251
+          },
+          "startsRemoved": {
+            "parking": 49,
+            "road-contact": 9,
+            "trailhead": 1
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 194,
+            "road-contact": 57,
+            "trailhead": 3
+          },
+          "trailCorridorsDemoted": 85,
+          "demotedTrailMeters": 6806.7
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 1344,
+            "trailhead": 60,
+            "parking": 251
+          },
+          "startsRemoved": {
+            "parking": 49,
+            "road-contact": 9,
+            "trailhead": 1
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 194,
+            "road-contact": 98,
+            "trailhead": 3
+          },
+          "trailCorridorsDemoted": 150,
+          "demotedTrailMeters": 13329.8
+        }
+      }
+    },
+    {
+      "name": "Olympic Mountains",
+      "state": "WA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 642,
+            "parking": 152,
+            "trailhead": 85
+          },
+          "startsRemoved": {
+            "parking": 1,
+            "road-contact": 1
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 121,
+            "road-contact": 23,
+            "trailhead": 2
+          },
+          "trailCorridorsDemoted": 77,
+          "demotedTrailMeters": 2712.2
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 642,
+            "parking": 152,
+            "trailhead": 85
+          },
+          "startsRemoved": {
+            "parking": 1,
+            "road-contact": 2
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "parking": 121,
+            "road-contact": 25,
+            "trailhead": 2
+          },
+          "trailCorridorsDemoted": 80,
+          "demotedTrailMeters": 3019.8
+        }
+      }
+    },
+    {
+      "name": "Santa Cruz Mountains",
+      "state": "CA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 2151,
+            "parking": 356,
+            "trailhead": 10
+          },
+          "startsRemoved": {
+            "road-contact": 50,
+            "parking": 49
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "road-contact": 441,
+            "parking": 281,
+            "trailhead": 5
+          },
+          "trailCorridorsDemoted": 1564,
+          "demotedTrailMeters": 106024.1
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 2151,
+            "parking": 356,
+            "trailhead": 10
+          },
+          "startsRemoved": {
+            "road-contact": 110,
+            "parking": 52
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "road-contact": 628,
+            "parking": 281,
+            "trailhead": 5
+          },
+          "trailCorridorsDemoted": 1956,
+          "demotedTrailMeters": 139203.6
+        }
+      }
+    },
+    {
+      "name": "Diablo Range & East Bay",
+      "state": "CA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 3144,
+            "parking": 532,
+            "trailhead": 21
+          },
+          "startsRemoved": {
+            "road-contact": 99,
+            "parking": 50
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "road-contact": 1062,
+            "parking": 436,
+            "trailhead": 9
+          },
+          "trailCorridorsDemoted": 4875,
+          "demotedTrailMeters": 152140.5
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 3144,
+            "parking": 532,
+            "trailhead": 21
+          },
+          "startsRemoved": {
+            "road-contact": 233,
+            "parking": 60
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "road-contact": 1702,
+            "parking": 438,
+            "trailhead": 13
+          },
+          "trailCorridorsDemoted": 6088,
+          "demotedTrailMeters": 217811.9
+        }
+      }
+    },
+    {
+      "name": "Sonoma\u2013Marin Coast",
+      "state": "CA",
+      "bufferTrials": {
+        "0": {
+          "startsBefore": {
+            "road-contact": 1122,
+            "parking": 314,
+            "trailhead": 14
+          },
+          "startsRemoved": {
+            "road-contact": 6,
+            "parking": 2
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "road-contact": 88,
+            "parking": 221,
+            "trailhead": 6
+          },
+          "trailCorridorsDemoted": 319,
+          "demotedTrailMeters": 15280.0
+        },
+        "25": {
+          "startsBefore": {
+            "road-contact": 1122,
+            "parking": 314,
+            "trailhead": 14
+          },
+          "startsRemoved": {
+            "road-contact": 7,
+            "parking": 2
+          },
+          "startsNeedingConnectorOrUnreachable": {
+            "road-contact": 140,
+            "parking": 222,
+            "trailhead": 6
+          },
+          "trailCorridorsDemoted": 439,
+          "demotedTrailMeters": 24898.7
+        }
+      }
+    }
+  ],
+  "namedTrailAndUrbanChecks": [
+    {
+      "state": "WA",
+      "name": "Skyline Trail",
+      "preparedMeters": 39995.9,
+      "developedPercent": 0.0,
+      "originalTrailMeters": 39349.5,
+      "demotedTrailMeters": 0,
+      "corridors": 25
+    },
+    {
+      "state": "WA",
+      "name": "Wonderland Trail",
+      "preparedMeters": 127742.7,
+      "developedPercent": 0.15,
+      "originalTrailMeters": 127742.7,
+      "demotedTrailMeters": 225.9,
+      "corridors": 95
+    },
+    {
+      "state": "CA",
+      "name": "Skyline Trail",
+      "preparedMeters": 33285.3,
+      "developedPercent": 3.93,
+      "originalTrailMeters": 30239.4,
+      "demotedTrailMeters": 912.7,
+      "corridors": 72
+    },
+    {
+      "state": "CA",
+      "name": "Newell Creek Trail",
+      "preparedMeters": 1234.0,
+      "developedPercent": 21.12,
+      "originalTrailMeters": 903.2,
+      "demotedTrailMeters": 0,
+      "corridors": 6
+    },
+    {
+      "state": "CA",
+      "name": "Swanson Creek Trail",
+      "preparedMeters": 386.6,
+      "developedPercent": 0.0,
+      "originalTrailMeters": 386.6,
+      "demotedTrailMeters": 0,
+      "corridors": 4
+    },
+    {
+      "state": "CA",
+      "name": "Campanile Way",
+      "preparedMeters": 447.8,
+      "developedPercent": 100.0,
+      "originalTrailMeters": 426.6,
+      "demotedTrailMeters": 426.6,
+      "corridors": 29
+    },
+    {
+      "state": "CA",
+      "name": "Sproul Plaza",
+      "preparedMeters": 173.3,
+      "developedPercent": 100.0,
+      "originalTrailMeters": 173.3,
+      "demotedTrailMeters": 173.3,
+      "corridors": 11
+    },
+    {
+      "state": "CA",
+      "name": "Orangewood Drive",
+      "preparedMeters": 404.9,
+      "developedPercent": 100.0,
+      "originalTrailMeters": 16.8,
+      "demotedTrailMeters": 16.8,
+      "corridors": 7
+    },
+    {
+      "state": "CA",
+      "name": "Dipsea Trail",
+      "preparedMeters": 9373.3,
+      "developedPercent": 0.14,
+      "originalTrailMeters": 9230.3,
+      "demotedTrailMeters": 0,
+      "corridors": 32
+    },
+    {
+      "state": "CA",
+      "name": "Cataract Trail",
+      "preparedMeters": 4440.3,
+      "developedPercent": 0.0,
+      "originalTrailMeters": 4440.3,
+      "demotedTrailMeters": 0,
+      "corridors": 11
+    },
+    {
+      "state": "CA",
+      "name": "Sunnyside Trail",
+      "preparedMeters": 1665.4,
+      "developedPercent": 0.0,
+      "originalTrailMeters": 1423.4,
+      "demotedTrailMeters": 0,
+      "corridors": 6
+    },
+    {
+      "state": "CA",
+      "name": "Sun Trail",
+      "preparedMeters": 134.3,
+      "developedPercent": 0.0,
+      "originalTrailMeters": 134.3,
+      "demotedTrailMeters": 0,
+      "corridors": 2
+    }
+  ],
+  "knownWashingtonStartChecks": [
+    {
+      "query": "north-bend-known",
+      "start": "osm-entrance:12761651948",
+      "region": "Alpine Lakes",
+      "kind": "parking",
+      "connectorMetersToOutdoor": 0,
+      "accepted": true
+    },
+    {
+      "query": "pass-lakes",
+      "start": "osm-entrance:1004976342",
+      "region": "Mount Rainier & Central Cascades",
+      "kind": "road-contact",
+      "connectorMetersToOutdoor": 0,
+      "accepted": true
+    },
+    {
+      "query": "stevens-long",
+      "start": "osm-entrance:1013210510",
+      "region": "Alpine Lakes",
+      "kind": "trailhead",
+      "connectorMetersToOutdoor": 0,
+      "accepted": true
+    },
+    {
+      "query": "paradise-short",
+      "start": "osm-entrance:11028822550",
+      "region": "Mount Rainier & Central Cascades",
+      "kind": "road-contact",
+      "connectorMetersToOutdoor": 0,
+      "accepted": true
+    },
+    {
+      "query": "paradise-day",
+      "start": "osm-entrance:11028822550",
+      "region": "Mount Rainier & Central Cascades",
+      "kind": "road-contact",
+      "connectorMetersToOutdoor": 0,
+      "accepted": true
+    },
+    {
+      "query": "sunrise-day",
+      "start": "osm-entrance:5305234174",
+      "region": "Mount Rainier & Central Cascades",
+      "kind": "trailhead",
+      "connectorMetersToOutdoor": 0,
+      "accepted": true
+    },
+    {
+      "query": "sunrise-long",
+      "start": "osm-entrance:110921039",
+      "region": "Mount Rainier & Central Cascades",
+      "kind": "trailhead",
+      "connectorMetersToOutdoor": 0,
+      "accepted": true
+    }
+  ],
+  "removedRoadContactSamples": [
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:12574590951",
+      "position": [
+        -121.9996276,
+        47.4643973,
+        240.69895414104914
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:12574590960",
+      "position": [
+        -122.0005898,
+        47.4661516,
+        242.899886586025
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:12574590996",
+      "position": [
+        -122.0016333,
+        47.4640872,
+        242.3034208986585
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:12574605607",
+      "position": [
+        -122.0033887,
+        47.4647028,
+        243.40596089761624
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:13578789660",
+      "position": [
+        -122.0370438,
+        47.5198801,
+        53.76706190785823
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:13585262043",
+      "position": [
+        -121.8509956,
+        47.3050928,
+        275.2850510061144
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:13613177552",
+      "position": [
+        -122.0164367,
+        47.4903898,
+        184.92792464600757
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:13991673946",
+      "position": [
+        -121.6145932,
+        46.6490369,
+        372.4218635227727
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:14002986314",
+      "position": [
+        -121.9266892,
+        47.1925029,
+        331.6728776731581
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:5219050611",
+      "position": [
+        -122.0639849,
+        47.4921311,
+        251.77751389385384
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:5219117393",
+      "position": [
+        -122.0708641,
+        47.4913767,
+        177.02149892958383
+      ]
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "start": "osm-entrance:5219125527",
+      "position": [
+        -122.0711499,
+        47.4916065,
+        177.06794329504825
+      ]
+    }
+  ],
+  "elapsedSeconds": 93.4,
+  "californiaSummary": {
+    "roadContactsBefore": 6417,
+    "roadContactsRemoved": 350,
+    "roadContactsRemovedWithoutMaskBuffer": 155,
+    "roadContactsNeedingConnectorOrUnreachable": 2470,
+    "trailCorridorsDemoted": 8483,
+    "roadContactReductionPercent": 5.45
+  },
+  "complexity": {
+    "prototypeScriptLines": 76,
+    "newDependencies": 0,
+    "productionChanges": 0,
+    "implementation": "Developed polygon mask, length-overlap classification, and directed multi-source connector reachability. Reuses Shapely and prepared walking graph. Raster/building-density processing not tested."
+  },
+  "limitations": [
+    "Known Washington checks cover six distinct starts across seven benchmark queries, not complete witness routes.",
+    "Named trail measurements cover retained, named prepared corridors, not necessarily the entire named trail. Sun Trail coverage is only 134.3 m.",
+    "No whole-route recall or residential false-positive rate was measured.",
+    "Outside mapped developed polygons remains provisionally eligible; this is not evidence of natural land.",
+    "One-mile connector allowance matches the frozen prepared-witness benchmark, not the current half-mile UI preset. Query-specific distance and fraction constraints were not rerun.",
+    "Demoted corridors become connectors rather than forbidden paths. Parking and trailhead removal counts include originally unreachable starts; road-contact reduction is the cleaner contextual metric.",
+    "Buffer sensitivity is 0 versus 25 m; corridor-demotion threshold sensitivity was not measured.",
+    "No runtime speedup was measured."
+  ],
+  "verdict": {
+    "pathClassification": "Promising on the selected real examples: all prepared Campanile Way, Sproul Plaza, and Orangewood Drive portions fall inside developed context; six selected California named trail samples lose no original trail mileage.",
+    "standaloneStartFiltering": "Insufficient: 350 of 6417 California road contacts removed with 25 m mask buffer and one-mile connector reach. Complete route qualification and independently checked residential samples remain needed.",
+    "recommendation": "Retain spatial context as a promising signal. Do not ship the tested mask as a universal hard residential/hiking filter."
+  },
+  "reproduction": {
+    "script": "/private/tmp/alpine-spatial-trial.py",
+    "preparedRoot": ".local-data/mountains",
+    "summaryInput": "/private/tmp/alpine-policy-sections.json",
+    "sourceFiles": {
+      "CA": ".cache/sources/geofabrik-california-osm/california-260801.osm.pbf",
+      "WA": ".cache/sources/geofabrik-washington-osm/3bea264079e184675aac7d8ab104bff5339b9e3656a36c084f96f616271a0e4e/geofabrik-washington-osm-washington-260801.osm.pbf"
+    },
+    "extractCommands": [
+      "osmium tags-filter INPUT wr/landuse=residential,commercial,industrial,retail wr/amenity=school,college,university -o MASK.pbf",
+      "osmium export MASK.pbf --geometry-types=polygon -u type_id -f geojsonseq -o MASK.geojsonseq"
+    ],
+    "approximateProjection": "Equirectangular metres at 37 degrees CA and 47 degrees WA for this trial only."
+  }
+}

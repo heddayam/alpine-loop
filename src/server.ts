@@ -1,13 +1,13 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { statfs } from 'node:fs/promises';
 import { gpx, readDataset } from './dataset.js';
 import { gpxFilename } from './route-name.js';
 import { createJobs, parseQuery, RequestError, type DrivingOptions } from './jobs.js';
 import { createHostedAccess, type HostingOptions } from './hosted-access.js';
-import type { JobSnapshot, ResultSort, SortOrder } from './model.js';
+import type { Bounds, JobSnapshot, ResultSort, SortOrder } from './model.js';
 import type { FastifyRequest } from 'fastify';
 
 export async function createApp(directory: string, clientDirectory?: string, jobDirectory = resolve('.local-data/jobs'), hosting: HostingOptions = {}, driving: DrivingOptions = {}) {
@@ -67,6 +67,11 @@ export async function createApp(directory: string, clientDirectory?: string, job
     return access ? { ...catalog, hosted: true } : catalog;
   });
   app.post('/api/coverage', async request => (await availableData()).coverage(parseQuery(request.body)));
+  app.get('/api/access-point-policy', async () => (await availableData()).accessPolicy?.metadata ?? null);
+  app.get<{ Querystring: { west?: string; south?: string; east?: string; north?: string } }>('/api/access-points', async request => {
+    return (await availableData()).accessPoints([request.query.west, request.query.south, request.query.east, request.query.north]
+      .map(value => typeof value !== 'string' || !value.trim() ? NaN : Number(value)) as Bounds);
+  });
   app.get('/api/downloads', async () => (await availableData()).downloads.latest());
   app.post('/api/downloads', async (request, reply) => {
     requireDownloads();

@@ -4,7 +4,7 @@ import { readDataset } from './dataset.js';
 import { solveSection } from './diversity.js';
 import { createRouteStore } from './route-store.js';
 import { createWorkBudget } from './work-budget.js';
-import { routeGradeCheck } from './route-grades.js';
+import { routeElevationCheck } from './route-elevation.js';
 import type { DriveArea, JobInputs, JobProgress, Position, SearchQuery } from './model.js';
 import { restrictDriveArea } from './boundary.js';
 
@@ -15,6 +15,7 @@ const budget = createWorkBudget();
 const dataset = await readDataset(directory, budget);
 const selected = dataset.selectedSections(query);
 const inputs: JobInputs = { version: dataset.catalog.info.id,
+  ...(dataset.accessPolicy ? { accessPolicyVersion: dataset.accessPolicy.version } : {}),
   ...(driveArea ? { driveArea: { ...driveArea, geometry: restrictDriveArea(driveArea.geometry, selected, query.boundary) } } : {}),
   sections: selected.map(({ id, name, state, regionId, regionName, bounds, boundary, files }) => ({ id, name, state, regionId, regionName, bounds, boundary, files })) };
 let progress: JobProgress = { stage: 'preparing', completedRegions: [], totalRegions: selected.length,
@@ -35,13 +36,13 @@ const samePosition = (a: Position, b: Position) => a[0] === b[0] && a[1] === b[1
 async function saveRoutes(chosen: (typeof selections)[number]) {
   const selection = await dataset.select(query, chosen);
   const { graph } = selection;
-  const gradeCheck = query.grades ? await routeGradeCheck(graph,
-    dataset.readGeometry(chosen.section.id, new Set(graph.edges.map(edge => edge.trail))), query.grades, budget) : undefined;
+  const elevationCheck = query.grades || query.highPoint ? await routeElevationCheck(graph,
+    dataset.readGeometry(chosen.section.id, new Set(graph.edges.map(edge => edge.trail))), query, budget) : undefined;
   const used = new Map<number, [Position, Position]>();
   const previousExpansions = progress.expansions;
   progress.stage = 'searching'; send();
   store.begin();
-  await solveSection(graph, query, { budget, gradeCheck, onProgress: async measured => {
+  await solveSection(graph, query, { budget, elevationCheck, onProgress: async measured => {
     if (Date.now() - lastVerified >= 1000) { await verify(); lastVerified = Date.now(); }
     progress.expansions = previousExpansions + measured.expansions;
     progress.totalSearchPoints = measured.totalSearchPoints;

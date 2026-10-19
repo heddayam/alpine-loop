@@ -1,0 +1,530 @@
+{
+  "scope": "Read-only classification and direct gateway trial, not a route search or accuracy certification. Explicit hiking route membership resolves selected nested route relations; missing referenced relations are counted. Parking/trailhead POIs are retained provisionally without proving reachability to a core trail. Majority-main-loop rule has not been trialled.",
+  "elapsedSeconds": 1.9881620419910178,
+  "sections": [
+    {
+      "name": "Mount St. Helens & Mount Adams",
+      "state": "WA",
+      "startsBefore": {
+        "road-contact": 1138,
+        "trailhead": 52,
+        "parking": 419
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 925,
+        "trailhead": 52,
+        "parking": 419
+      },
+      "originalTrailCorridors": 3770,
+      "downgradedTrailCorridors": 613,
+      "downgradedTrailLengthMeters": 71635.32679277027,
+      "mixedCorridors": 14
+    },
+    {
+      "name": "Mount Rainier & Central Cascades",
+      "state": "WA",
+      "startsBefore": {
+        "road-contact": 1519,
+        "trailhead": 117,
+        "parking": 462
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 1078,
+        "trailhead": 117,
+        "parking": 462
+      },
+      "originalTrailCorridors": 6193,
+      "downgradedTrailCorridors": 2042,
+      "downgradedTrailLengthMeters": 224324.59776336653,
+      "mixedCorridors": 62
+    },
+    {
+      "name": "Alpine Lakes",
+      "state": "WA",
+      "startsBefore": {
+        "road-contact": 1985,
+        "trailhead": 69,
+        "parking": 615
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 1470,
+        "trailhead": 69,
+        "parking": 615
+      },
+      "originalTrailCorridors": 7373,
+      "downgradedTrailCorridors": 2270,
+      "downgradedTrailLengthMeters": 128457.04981731762,
+      "mixedCorridors": 16
+    },
+    {
+      "name": "Glacier Peak & Mountain Loop",
+      "state": "WA",
+      "startsBefore": {
+        "road-contact": 1646,
+        "parking": 387,
+        "trailhead": 123
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 1221,
+        "parking": 387,
+        "trailhead": 123
+      },
+      "originalTrailCorridors": 5413,
+      "downgradedTrailCorridors": 1368,
+      "downgradedTrailLengthMeters": 130408.41929440771,
+      "mixedCorridors": 9
+    },
+    {
+      "name": "Mount Baker & North Cascades",
+      "state": "WA",
+      "startsBefore": {
+        "road-contact": 1344,
+        "trailhead": 60,
+        "parking": 251
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 1132,
+        "trailhead": 60,
+        "parking": 251
+      },
+      "originalTrailCorridors": 4124,
+      "downgradedTrailCorridors": 599,
+      "downgradedTrailLengthMeters": 69486.40639791593,
+      "mixedCorridors": 13
+    },
+    {
+      "name": "Olympic Mountains",
+      "state": "WA",
+      "startsBefore": {
+        "road-contact": 642,
+        "parking": 152,
+        "trailhead": 85
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 457,
+        "parking": 152,
+        "trailhead": 85
+      },
+      "originalTrailCorridors": 2220,
+      "downgradedTrailCorridors": 459,
+      "downgradedTrailLengthMeters": 99950.58392397001,
+      "mixedCorridors": 9
+    },
+    {
+      "name": "Santa Cruz Mountains",
+      "state": "CA",
+      "startsBefore": {
+        "road-contact": 2151,
+        "parking": 356,
+        "trailhead": 10
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 1454,
+        "parking": 356,
+        "trailhead": 10
+      },
+      "originalTrailCorridors": 6924,
+      "downgradedTrailCorridors": 2576,
+      "downgradedTrailLengthMeters": 200804.1347244876,
+      "mixedCorridors": 34
+    },
+    {
+      "name": "Diablo Range & East Bay",
+      "state": "CA",
+      "startsBefore": {
+        "road-contact": 3144,
+        "parking": 532,
+        "trailhead": 21
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 1037,
+        "parking": 532,
+        "trailhead": 21
+      },
+      "originalTrailCorridors": 12128,
+      "downgradedTrailCorridors": 7810,
+      "downgradedTrailLengthMeters": 339515.4441021481,
+      "mixedCorridors": 82
+    },
+    {
+      "name": "Sonoma\u2013Marin Coast",
+      "state": "CA",
+      "startsBefore": {
+        "road-contact": 1122,
+        "parking": 314,
+        "trailhead": 14
+      },
+      "startsAfterDirectGate": {
+        "road-contact": 593,
+        "parking": 314,
+        "trailhead": 14
+      },
+      "originalTrailCorridors": 3765,
+      "downgradedTrailCorridors": 1476,
+      "downgradedTrailLengthMeters": 180426.1140009371,
+      "mixedCorridors": 28
+    }
+  ],
+  "knownWashingtonStartChecks": [
+    {
+      "query": "north-bend-known",
+      "start": "osm-entrance:12761651948",
+      "trial": {
+        "region": "Alpine Lakes",
+        "kind": "parking",
+        "accepted": true,
+        "directCore": true
+      }
+    },
+    {
+      "query": "pass-lakes",
+      "start": "osm-entrance:1004976342",
+      "trial": {
+        "region": "Mount Rainier & Central Cascades",
+        "kind": "road-contact",
+        "accepted": true,
+        "directCore": true
+      }
+    },
+    {
+      "query": "stevens-long",
+      "start": "osm-entrance:1013210510",
+      "trial": {
+        "region": "Alpine Lakes",
+        "kind": "trailhead",
+        "accepted": true,
+        "directCore": true
+      }
+    },
+    {
+      "query": "paradise-short",
+      "start": "osm-entrance:11028822550",
+      "trial": {
+        "region": "Mount Rainier & Central Cascades",
+        "kind": "road-contact",
+        "accepted": false,
+        "directCore": false
+      }
+    },
+    {
+      "query": "paradise-day",
+      "start": "osm-entrance:11028822550",
+      "trial": {
+        "region": "Mount Rainier & Central Cascades",
+        "kind": "road-contact",
+        "accepted": false,
+        "directCore": false
+      }
+    },
+    {
+      "query": "sunrise-day",
+      "start": "osm-entrance:5305234174",
+      "trial": {
+        "region": "Mount Rainier & Central Cascades",
+        "kind": "trailhead",
+        "accepted": true,
+        "directCore": true
+      }
+    },
+    {
+      "query": "sunrise-long",
+      "start": "osm-entrance:110921039",
+      "trial": {
+        "region": "Mount Rainier & Central Cascades",
+        "kind": "trailhead",
+        "accepted": true,
+        "directCore": false
+      }
+    }
+  ],
+  "counterexamples": [
+    {
+      "region": "Santa Cruz Mountains",
+      "way": "w1305180032",
+      "tags": {
+        "access": "permissive",
+        "highway": "footway",
+        "lit": "no",
+        "name": "Newell Creek Trail",
+        "surface": "dirt",
+        "tiger:cfcc": "A41",
+        "tiger:county": "Santa Cruz, CA",
+        "tiger:name_base": "Bear Creek",
+        "tiger:name_type": "Way",
+        "width": "1"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Santa Cruz Mountains",
+      "way": "w66448040",
+      "tags": {
+        "highway": "footway",
+        "name": "A\u00f1o Nuevo Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Santa Cruz Mountains",
+      "way": "w1507593468",
+      "tags": {
+        "bridge": "yes",
+        "highway": "footway",
+        "layer": "1",
+        "name": "A\u00f1o Nuevo Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Santa Cruz Mountains",
+      "way": "w1507593467",
+      "tags": {
+        "highway": "footway",
+        "name": "A\u00f1o Nuevo Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Santa Cruz Mountains",
+      "way": "w1387105445",
+      "tags": {
+        "bicycle": "no",
+        "highway": "steps",
+        "name": "Swanson Creek Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Santa Cruz Mountains",
+      "way": "w440835104",
+      "tags": {
+        "bicycle": "no",
+        "dog": "leashed",
+        "highway": "steps",
+        "horse": "no",
+        "name": "Swanson Creek Trail",
+        "operator": "Santa Clara County Parks",
+        "surface": "unpaved"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Santa Cruz Mountains",
+      "way": "w1347400488",
+      "tags": {
+        "highway": "footway",
+        "name": "Glen Brae Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Santa Cruz Mountains",
+      "way": "w1337239579",
+      "tags": {
+        "access": "permissive",
+        "highway": "footway",
+        "lit": "no",
+        "name": "Newell Creek Trail",
+        "surface": "dirt",
+        "tiger:cfcc": "A41",
+        "tiger:county": "Santa Cruz, CA",
+        "tiger:name_base": "Bear Creek",
+        "tiger:name_type": "Way",
+        "width": "1"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w35061604",
+      "tags": {
+        "bicycle": "no",
+        "foot": "designated",
+        "highway": "footway",
+        "horse": "designated",
+        "name": "Sunnyside Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1491954659",
+      "tags": {
+        "bicycle": "no",
+        "bridge": "yes",
+        "foot": "designated",
+        "highway": "footway",
+        "horse": "designated",
+        "layer": "1",
+        "name": "Sunnyside Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1491954658",
+      "tags": {
+        "bicycle": "no",
+        "foot": "designated",
+        "highway": "footway",
+        "horse": "designated",
+        "name": "Sunnyside Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1281829451",
+      "tags": {
+        "bicycle": "no",
+        "bridge": "yes",
+        "foot": "designated",
+        "highway": "footway",
+        "horse": "designated",
+        "layer": "1",
+        "name": "Sunnyside Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1281829449",
+      "tags": {
+        "bicycle": "no",
+        "foot": "designated",
+        "highway": "footway",
+        "horse": "designated",
+        "name": "Sunnyside Trail"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w151184929",
+      "tags": {
+        "bridge": "yes",
+        "foot": "yes",
+        "highway": "footway",
+        "motor_vehicle": "no",
+        "name": "Dipsea Trail",
+        "surface": "unpaved"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w125871919",
+      "tags": {
+        "foot": "yes",
+        "highway": "footway",
+        "motor_vehicle": "no",
+        "name": "Dipsea Trail",
+        "surface": "ground"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1434438822",
+      "tags": {
+        "bridge": "yes",
+        "foot": "yes",
+        "highway": "footway",
+        "layer": "1",
+        "motor_vehicle": "no",
+        "name": "Dipsea Trail",
+        "surface": "ground"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1434438821",
+      "tags": {
+        "foot": "yes",
+        "highway": "footway",
+        "motor_vehicle": "no",
+        "name": "Dipsea Trail",
+        "surface": "ground"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1434438810",
+      "tags": {
+        "foot": "yes",
+        "highway": "footway",
+        "motor_vehicle": "no",
+        "name": "Dipsea Trail",
+        "surface": "ground"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1513247183",
+      "tags": {
+        "highway": "footway",
+        "name": "Wildflower Loop Trail",
+        "surface": "unpaved"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "way": "w1513247185",
+      "tags": {
+        "highway": "footway",
+        "name": "Wildflower Loop Trail",
+        "surface": "unpaved"
+      },
+      "hikingRelation": false,
+      "footRelation": false
+    }
+  ],
+  "unresolvedNestedRouteRelations": {
+    "CA": 34,
+    "WA": 24
+  },
+  "aggregateCalifornia": {
+    "roadContactsBefore": 6417,
+    "roadContactsAfterDirectGate": 3084,
+    "reductionPercent": 51.9
+  },
+  "verdict": {
+    "complexity": "Small classifier, but complete policy also requires route relations, mixed-corridor splitting and connector/route validation.",
+    "accuracy": "Reject as a universal hard classifier: legitimate trails mapped as footway/steps lack hiking evidence in this source. Direct start gate also rejects a known Paradise witness start. These are early failure signals, not a measured route false-negative rate.",
+    "notMeasured": [
+      "Whole-route recall under bounded connector traversal",
+      "Precision against residential/populated-area ground truth",
+      "Search runtime improvement",
+      "POI reachability"
+    ]
+  },
+  "sources": [
+    {
+      "title": "NPS Muir Woods hiking guide (Sun Trail and Dipsea loop)",
+      "url": "https://www.nps.gov/muwo/planyourvisit/hike.htm"
+    }
+  ]
+}

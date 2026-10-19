@@ -1,0 +1,283 @@
+{
+  "catalogId": "mountains-catalog-6283dfaa51916e216daef82e793d2481228940889fcf9811fd251a891e189c89",
+  "sourceDate": "2026-08-01",
+  "before": 7664,
+  "after": 3971,
+  "rules": [
+    "A trail corridor qualifies when at least half of its 30 m surroundings overlaps mapped natural/recreation areas after subtracting developed land, or every source way belongs to a mapped hiking route.",
+    "Walking-permitted tracks closed to motor vehicles can also qualify using the same spatial or hiking-route evidence.",
+    "Road contacts must directly touch a qualifying corridor.",
+    "Parking and trailheads must reach a qualifying corridor within 804.672 m (half a mile) along the existing directed walking graph."
+  ],
+  "regions": [
+    {
+      "region": "Santa Cruz Mountains",
+      "before": {
+        "road-contact": 2151,
+        "parking": 356,
+        "trailhead": 10
+      },
+      "after": {
+        "road-contact": 1338,
+        "parking": 263,
+        "trailhead": 10
+      },
+      "outdoorTrailMeters": 1525389.9
+    },
+    {
+      "region": "Diablo Range & East Bay",
+      "before": {
+        "road-contact": 3144,
+        "parking": 532,
+        "trailhead": 21
+      },
+      "after": {
+        "road-contact": 1049,
+        "parking": 388,
+        "trailhead": 21
+      },
+      "outdoorTrailMeters": 1776069.1
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "before": {
+        "road-contact": 1122,
+        "parking": 314,
+        "trailhead": 14
+      },
+      "after": {
+        "road-contact": 591,
+        "parking": 297,
+        "trailhead": 14
+      },
+      "outdoorTrailMeters": 1035693.6
+    }
+  ],
+  "namedChecks": [
+    {
+      "name": "Newell Creek Trail",
+      "preparedMeters": 1231.4,
+      "originalTrailMeters": 901.4,
+      "qualifiedNetworkMeters": 901.4
+    },
+    {
+      "name": "Swanson Creek Trail",
+      "preparedMeters": 385.9,
+      "originalTrailMeters": 385.9,
+      "qualifiedNetworkMeters": 385.9
+    },
+    {
+      "name": "Campanile Way",
+      "preparedMeters": 443.3,
+      "originalTrailMeters": 422.3,
+      "qualifiedNetworkMeters": 0
+    },
+    {
+      "name": "Sproul Plaza",
+      "preparedMeters": 172.7,
+      "originalTrailMeters": 172.7,
+      "qualifiedNetworkMeters": 0
+    },
+    {
+      "name": "Orangewood Drive",
+      "preparedMeters": 402.6,
+      "originalTrailMeters": 16.7,
+      "qualifiedNetworkMeters": 0
+    },
+    {
+      "name": "Sunol Ridge Trail",
+      "preparedMeters": 10341.0,
+      "originalTrailMeters": 0,
+      "qualifiedNetworkMeters": 6527.1
+    },
+    {
+      "name": "Dipsea Trail",
+      "preparedMeters": 9295.1,
+      "originalTrailMeters": 9153.5,
+      "qualifiedNetworkMeters": 9153.5
+    },
+    {
+      "name": "Cataract Trail",
+      "preparedMeters": 4410.2,
+      "originalTrailMeters": 4410.2,
+      "qualifiedNetworkMeters": 4410.2
+    },
+    {
+      "name": "Sunnyside Trail",
+      "preparedMeters": 1652.5,
+      "originalTrailMeters": 1412.0,
+      "qualifiedNetworkMeters": 1652.5
+    },
+    {
+      "name": "Sun Trail",
+      "preparedMeters": 133.1,
+      "originalTrailMeters": 133.1,
+      "qualifiedNetworkMeters": 133.1
+    }
+  ],
+  "usgsChecks": [
+    {
+      "region": "Santa Cruz Mountains",
+      "sample": "alpine-usgs-santa-cruz",
+      "referenceFeatures": 17,
+      "matchedTrailCorridors": 6,
+      "coreCorridors": 6,
+      "matchedMeters": 7520.5,
+      "coreMeters": 7520.5,
+      "notCoreExamples": [],
+      "truncated": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "sample": "alpine-usgs-mount-tam",
+      "referenceFeatures": 244,
+      "matchedTrailCorridors": 228,
+      "coreCorridors": 228,
+      "matchedMeters": 82440.5,
+      "coreMeters": 82440.5,
+      "notCoreExamples": [],
+      "truncated": false
+    }
+  ],
+  "positiveMaskTypes": {
+    "leisure:park": 6820,
+    "natural:coastline": 1,
+    "natural:wetland": 3573,
+    "natural:wood": 17775,
+    "leisure:nature_reserve": 708,
+    "boundary:protected_area": 201,
+    "natural:beach": 649,
+    "landuse:recreation_ground": 1493,
+    "natural:scrub": 10870,
+    "natural:grassland": 9368,
+    "landuse:commercial": 2,
+    "landuse:meadow": 7931,
+    "landuse:village_green": 2,
+    "landuse:forest": 1346,
+    "landuse:quarry": 1,
+    "natural:fell": 2,
+    "landuse:brownfield": 1,
+    "natural:bare_rock": 1694,
+    "landuse:cemetery": 1,
+    "landuse:construction": 6,
+    "boundary:national_park": 3,
+    "natural:water": 2,
+    "landuse:grass": 11,
+    "landuse:farm": 1,
+    "landuse:residential": 4,
+    "landuse:farmland": 2,
+    "natural:heath": 281,
+    "landuse:industrial": 1,
+    "natural:tree_row": 1,
+    "landuse:greenfield": 1,
+    "landuse:conservation": 3,
+    "landuse:private": 1,
+    "leisure:fishing": 1,
+    "landuse:fairground": 1
+  },
+  "developedMaskTypes": {
+    "landuse:industrial": 4382,
+    "landuse:retail": 4650,
+    "amenity:school": 3419,
+    "landuse:commercial": 7418,
+    "amenity:university": 87,
+    "amenity:college": 96,
+    "landuse:residential": 40689,
+    "landuse:institutional": 3,
+    "landuse:education": 28,
+    "boundary:administrative": 4,
+    "landuse:religious": 4,
+    "natural:wood": 18,
+    "landuse:public_facility": 1,
+    "boundary:land_area": 1,
+    "natural:water": 3,
+    "landuse:civic": 4,
+    "landuse:public": 1,
+    "natural:grass": 4,
+    "landuse:farmland": 1,
+    "landuse:eduation": 1
+  },
+  "unresolvedNestedHikingRelations": 31,
+  "elapsedSeconds": 86.97,
+  "scope": "California-only experiment, no prepared-data or search-policy changes. Named checks cover prepared portions, not whole hikes. No solver run or route recall certification. USGS comparisons are geometric samples, not a complete independent trail inventory.",
+  "spotChecks": [
+    {
+      "id": "mountain-e7c44d3adae6b1354f5085fe/osm-entrance:1588476939",
+      "name": "Trail entrance",
+      "kind": "road-contact",
+      "keep": false,
+      "position": [
+        -121.9640157,
+        37.5746754,
+        26.211931884700867
+      ],
+      "connectorMeters": null
+    },
+    {
+      "id": "mountain-e7c44d3adae6b1354f5085fe/osm-entrance:52989588",
+      "name": "Trailhead",
+      "kind": "trailhead",
+      "keep": true,
+      "position": [
+        -121.8958825,
+        37.594379,
+        73.3332511767037
+      ],
+      "connectorMeters": 0
+    },
+    {
+      "id": "mountain-e7c44d3adae6b1354f5085fe/osm-entrance:53054218",
+      "name": "Trail entrance",
+      "kind": "road-contact",
+      "keep": false,
+      "position": [
+        -121.9641719,
+        37.5745904,
+        25.580239327887504
+      ],
+      "connectorMeters": null
+    }
+  ],
+  "neighborhoodChecks": [
+    {
+      "name": "UC Berkeley",
+      "bounds": [
+        -122.266,
+        37.865,
+        -122.253,
+        37.879
+      ],
+      "before": {
+        "road-contact": 231,
+        "parking": 48
+      },
+      "after": {
+        "parking": 20
+      }
+    },
+    {
+      "name": "Orangewood/Orchard",
+      "bounds": [
+        -121.965,
+        37.574,
+        -121.963,
+        37.575
+      ],
+      "before": {
+        "road-contact": 4
+      },
+      "after": {}
+    }
+  ],
+  "revisionReason": "Initial trial rejected the Sunol Ridge Trail entrance because all tracks were treated as connectors. Added a general rule for walking-permitted tracks closed to motor vehicles, still requiring positive spatial or hiking-route evidence. No named-trail exception.",
+  "limitations": [
+    "A map-only eligibility experiment, not a whole-route recall or search-runtime benchmark.",
+    "Fixed half-mile walking connection budget is a trial parameter, not the current query settings.",
+    "USGS samples cover Mount Tamalpais and part of Santa Cruz. The selected East Bay reference query returned no data.",
+    "31 nested hiking-relation references were unavailable in the pinned California extract; membership evidence may be incomplete.",
+    "Missing positive spatial evidence may still reject valid access. No independent residential false-positive rate or threshold-sensitivity study was performed.",
+    "Remaining parking near recreation networks still needs manual review; UC Berkeley retains 20 of 48 parking starts.",
+    "Named checks cover prepared portions only; Sun Trail sample is 133.1 m."
+  ],
+  "newDependencies": 0
+}

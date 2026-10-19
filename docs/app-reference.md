@@ -1,7 +1,7 @@
 # Alpine Loop reference
 
 A local desktop app for finding loops and lollipops from mapped trails. Choose
-one or more prepared mountain regions, set distance, elevation gain, stem and road limits,
+one or more prepared mountain regions, set mileage, elevation gain, high point, stem and road limits,
 and submit a search job. Browse stable results after discovery finishes.
 Every shown route meets the requested constraints; unfinished jobs show their
 stage, within-region progress and completed regions. Discovery tries a bounded
@@ -36,6 +36,9 @@ point inside or on the boundary. Hikes may extend outside the drawn boundary;
 the prepared highway partitions still apply. Crossed or unsupported boundaries
 are rejected; a valid area with no eligible starts completes with no results.
 The boundary is saved with the job and restored by View results or Copy settings.
+All search-area outlines start hidden. The **Show search area** checkbox toggles
+named regions, drawings and saved driving intersections without changing search
+scope. Drawing mode always shows its editing boundary and prepared coverage.
 **Redraw** replaces the polygon; the adjacent clear button removes the
 starting-point restriction and returns to the full selected regions. Panning and zooming
 only change the view. Drawing uses available prepared coverage and does not
@@ -79,8 +82,14 @@ to the selected region would incorrectly exclude approach roads and detours.
 Calculation failures fail the job without broadening its search. Empty
 intersections complete with no hikes. Saved driving boundaries are clipped to
 the selected prepared area and restored without another provider call. The map
-dims only parts of Search area outside the driving boundary; reachable terrain
-stays clear, with no driving outline. Hosted
+keeps the driving outline hidden by default. Checking **Show search area** on the
+saved results map reveals the existing thin boundary with its saved minute limit;
+unchecking it clears the outline again. Editing search settings hides the outline.
+The outline covers only the effective search area: driving reach intersected with
+the selected region or drawing. Excluded region edges and the separate drawn
+outline remain hidden, with no fill. Visibility never changes filtering or makes
+another provider request.
+Hosted
 shared results omit the exact origin; copying someone else's settings requires
 choosing your own origin. A chosen origin is sent to Esri only when the job runs.
 The operator configures the optional server key as described in
@@ -131,9 +140,62 @@ selecting its row again closes the details. Stem is the one-way approach walked 
 on the return, limited by absolute distance. Stem steppers change by 1 mi; elevation
 gain changes by 500 ft. Settings offers a locally remembered imperial/metric choice
 for search, results and profiles; metric steps are 1 km and 100 m. Changing units
-preserves the exact submitted limits. Typed values remain unrestricted within valid
+preserves the exact submitted limits. **High Point** follows Elevation gain in the
+search bar and limits the highest elevation above sea level anywhere along the
+full hike, including its approach and roads. Either bound can be left blank for
+no limit; both blank disables the filter. Bounds are inclusive and use feet or
+meters. Searches with this filter exclude routes with unknown elevations and
+check exact geometry before route preference and grouping. High point alone
+retains one peak per trail; grade limits share the same geometry read when enabled.
+Saved jobs, copied settings and result summaries retain the submitted range.
+Result rows show mileage and elevation gain on the first stats row, then high
+point and one-way approach on the second, including starred results. High points
+come from the same shared-geometry pass used to build map extents, so older saved
+jobs work without changing their files or downloading full routes into the list.
+Incomplete elevation data displays a dash instead of an estimated high point.
+The selected-hike card also shows High Point immediately after Elevation gain,
+using its saved geometry and the selected elevation units.
+High Point is also available in the results sort menu. Both directions sort
+measured peaks first and keep unknown elevations last, within the ordinary and
+starred groups independently.
+Typed values remain unrestricted within valid
 limits. The profile uses the dock's width,
 with elevation labels inside the plot and pointer/keyboard tracking on the route.
+When no saved results are open, **Show access points** displays prepared starts
+from all installed regions in the map view. Trailheads are green, parking blue,
+and road contacts orange; outlined points have uncertain access. Clicking a point
+shows its name, type, access status, region and OpenStreetMap link. Road contacts
+are labeled as unverified parking. The layer is on by default and hides while
+viewing results, drawing an area or choosing a driving origin. It does not change
+search scope.
+
+**Before**, **After**, and **Removed** compare original prepared starts with the
+active offline access-point policy. **After** is the default and is also the set
+used by new searches, further narrowed by search-area and access settings.
+Point details explain eligibility. The same rule applies across Washington and
+California: natural/recreation context or mapped hiking-route evidence qualifies
+walking corridors. Road contacts must reach one within half a mile along
+directed walking trails, without road connectors; parking must reach one within
+half a mile along mapped walking connections. As an alternative, direct contact
+with a walking corridor whose source ways are all tagged `highway=path` or
+`highway=bridleway` qualifies without land-area or hiking-relation annotations.
+Explicit `footway=sidewalk` or `footway=crossing` tags do not qualify for this
+alternative. Existing car-arrival and walking prohibitions still apply. Walking
+tracks closed to vehicles can qualify with the same evidence. Explicitly mapped
+trailheads carry direct hiking evidence and remain eligible subject to access rules. Region boundaries
+and traversable graph edges are unchanged; uncertain access remains included by
+default and explicit prohibitions remain enforced.
+
+The maintainer generates decisions offline with `benchmarks/access-point-trial.py`
+using the prepared catalog, source-way lineage and OSM context extracts, then
+activates them as `access-point-policy.json` in the prepared-data directory.
+The shared dataset reader applies those decisions to both map annotations and
+worker start selection. Missing policy means ordinary prepared starts; a present
+policy must match the catalog and completely cover each region it references.
+Each new job pins its policy digest, and changes during a search fail the job
+without publishing partial results. Saved completed jobs retain their results.
+This local prepared artifact has not been published to hosted coverage.
+
 The map shows all result locations as compact hollow circles and numbered cluster
 circles. Counts use 28 px circles with 13 px semibold numbers; larger counts get
 enough room to remain circular. The active trailhead fills charcoal at the same size; the route uses a

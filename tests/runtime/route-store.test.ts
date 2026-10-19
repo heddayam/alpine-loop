@@ -48,6 +48,7 @@ it('stores only one walk per hike, with immutable totals and preferred-only pagi
       expect(published.page(ROUTES_PER_PAGE).routes.map(route => route.id)).toEqual(['r50', 'r51']);
       expect(published.page(0, 'distance', 'desc').routes[0]!.id).toBe('r51');
       expect(published.locations()).toHaveLength(count);
+      expect(published.locations().every(route => route.highPoint === 30)).toBe(true);
       const paths = published.paths([-1, -1, 1, 1]);
       expect(paths).toHaveLength(1);
       expect(paths[0]!.geometry).toEqual(drawing.map(([lon, lat]) => [lon, lat]));
@@ -65,7 +66,7 @@ it('reuses a lollipop approach without reversing its saved drawing or losing ele
   const directory = await mkdtemp(join(tmpdir(), 'alpine-lollipop-drawing-'));
   const file = join(directory, 'results.sqlite');
   const store = createRouteStore(file, { writable: true });
-  const approach: Position[] = [[0, 0, 10], [1, 0, 20], [2, 0, 30]];
+  const approach: Position[] = [[0, 0, 10], [1, 0, 120], [2, 0, 30]];
   const loop: Position[] = [[2, 0, 30], [2, 1, 40], [3, 0, 50], [2, 0, 30]];
   const expected: Position[] = [...approach, ...loop.slice(1), ...approach.toReversed().slice(1)];
   try {
@@ -90,6 +91,7 @@ it('reuses a lollipop approach without reversing its saved drawing or losing ele
       ]);
       expect(published.route('lollipop')!.geometry).toEqual(expected);
       expect(published.locations()[0]!.bounds).toEqual([0, 0, 3, 1]);
+      expect(published.locations()[0]!.highPoint).toBe(120);
       expect(published.paths([-1, -1, 4, 2]).map(path => path.routeIds)).toEqual([['lollipop'], ['lollipop']]);
       expect(published.paths([2.5, -.5, 3.5, .5]).map(path => path.geometry))
         .toEqual([loop.map(([lon, lat]) => [lon, lat])]);
@@ -97,6 +99,27 @@ it('reuses a lollipop approach without reversing its saved drawing or losing ele
     const fixture = new DatabaseSync(file, { readOnly: true });
     try { expect(JSON.parse(fixture.prepare('SELECT points FROM geometry WHERE trail_id = 0').get()!.points as string)).toEqual(approach); }
     finally { fixture.close(); }
+  } finally { store.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+it('keeps unknown high points distinct from zero and negative elevations in compact summaries', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'alpine-high-point-summaries-'));
+  const file = join(directory, 'results.sqlite');
+  const store = createRouteStore(file, { writable: true });
+  try {
+    const known = saved('known'), unknown = saved('unknown');
+    unknown.route.sections = [{ section: 'fixture', id: 1, reverse: false }, { section: 'fixture', id: 0, reverse: true }];
+    store.begin(); store.add(known); store.add(unknown);
+    store.saveGeometry('fixture', 0, [[0, 0, -30], [1, 0, -10], [2, 0, -20]]);
+    store.saveGeometry('fixture', 1, [[2, 0, -20], [3, 0], [4, 0, 100]]);
+    store.commit(); store.close();
+    const published = createRouteStore(file);
+    try {
+      const rows = published.locations();
+      expect(rows.find(row => row.id === 'known')!.highPoint).toBe(-10);
+      expect(rows.find(row => row.id === 'unknown')!.highPoint).toBeNull();
+      expect(rows.every(row => !('geometry' in row))).toBe(true);
+    } finally { published.close(); }
   } finally { store.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -162,6 +185,7 @@ it.each(['legacy', 'revision', 'variants'] as const)('reads %s completed files w
       expect(published.locations().map(route => route.id)).toEqual(['preferred']);
       expect(published.paths([-1, -1, 2, 2])[0]!.routeIds).toEqual(['preferred']);
       expect(published.locations()[0]!.bounds).toEqual([0, 0, 1, 1]);
+      expect(published.locations()[0]!.highPoint).toBe(30);
       for (const id of ['preferred', 'other-start', 'reverse', 'tiny-loop-change']) {
         const route = published.route(id)!;
         expect(route.id).toBe(id);

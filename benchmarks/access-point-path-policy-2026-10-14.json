@@ -1,0 +1,557 @@
+{
+  "catalogId": "mountains-catalog-6283dfaa51916e216daef82e793d2481228940889fcf9811fd251a891e189c89",
+  "sourceDate": "2026-08-01",
+  "before": 18730,
+  "after": 14959,
+  "rules": [
+    "A trail corridor qualifies when at least half of its 30 m surroundings overlaps mapped natural/recreation areas after subtracting developed land, or every source way belongs to a mapped hiking route.",
+    "Walking-permitted tracks closed to motor vehicles can also qualify using the same spatial or hiking-route evidence.",
+    "Road contacts must reach a qualifying corridor within 804.672 m (half a mile) along directed walking trails, without road connectors.",
+    "Parking must reach a qualifying corridor within 804.672 m (half a mile) along the existing directed walking graph.",
+    "Direct contact with a walking corridor whose source ways are all highway=path or highway=bridleway qualifies independently of context, excluding footway=sidewalk and footway=crossing.",
+    "Explicitly mapped trailheads carry direct hiking access evidence; walking and arrival prohibitions remain enforced."
+  ],
+  "regions": [
+    {
+      "region": "Mount St. Helens & Mount Adams",
+      "state": "WA",
+      "before": {
+        "road-contact": 1138,
+        "trailhead": 52,
+        "parking": 419
+      },
+      "after": {
+        "road-contact": 1060,
+        "trailhead": 52,
+        "parking": 363
+      },
+      "outdoorTrailMeters": 3074278.5
+    },
+    {
+      "region": "Mount Rainier & Central Cascades",
+      "state": "WA",
+      "before": {
+        "road-contact": 1519,
+        "trailhead": 117,
+        "parking": 462
+      },
+      "after": {
+        "road-contact": 1358,
+        "trailhead": 117,
+        "parking": 327
+      },
+      "outdoorTrailMeters": 3183235.7
+    },
+    {
+      "region": "Alpine Lakes",
+      "state": "WA",
+      "before": {
+        "road-contact": 1985,
+        "trailhead": 69,
+        "parking": 615
+      },
+      "after": {
+        "road-contact": 1710,
+        "trailhead": 69,
+        "parking": 548
+      },
+      "outdoorTrailMeters": 3216973.0
+    },
+    {
+      "region": "Glacier Peak & Mountain Loop",
+      "state": "WA",
+      "before": {
+        "road-contact": 1646,
+        "parking": 387,
+        "trailhead": 123
+      },
+      "after": {
+        "road-contact": 1469,
+        "parking": 322,
+        "trailhead": 123
+      },
+      "outdoorTrailMeters": 4344135.6
+    },
+    {
+      "region": "Mount Baker & North Cascades",
+      "state": "WA",
+      "before": {
+        "road-contact": 1344,
+        "trailhead": 60,
+        "parking": 251
+      },
+      "after": {
+        "road-contact": 1289,
+        "trailhead": 60,
+        "parking": 190
+      },
+      "outdoorTrailMeters": 2983198.6
+    },
+    {
+      "region": "Olympic Mountains",
+      "state": "WA",
+      "before": {
+        "road-contact": 642,
+        "parking": 152,
+        "trailhead": 85
+      },
+      "after": {
+        "road-contact": 602,
+        "parking": 133,
+        "trailhead": 85
+      },
+      "outdoorTrailMeters": 1966201.7
+    },
+    {
+      "region": "Santa Cruz Mountains",
+      "state": "CA",
+      "before": {
+        "road-contact": 2151,
+        "parking": 356,
+        "trailhead": 10
+      },
+      "after": {
+        "road-contact": 1782,
+        "parking": 268,
+        "trailhead": 10
+      },
+      "outdoorTrailMeters": 1525389.9
+    },
+    {
+      "region": "Diablo Range & East Bay",
+      "state": "CA",
+      "before": {
+        "road-contact": 3144,
+        "parking": 532,
+        "trailhead": 21
+      },
+      "after": {
+        "road-contact": 1496,
+        "parking": 389,
+        "trailhead": 21
+      },
+      "outdoorTrailMeters": 1776069.1
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "state": "CA",
+      "before": {
+        "road-contact": 1122,
+        "parking": 314,
+        "trailhead": 14
+      },
+      "after": {
+        "road-contact": 805,
+        "parking": 297,
+        "trailhead": 14
+      },
+      "outdoorTrailMeters": 1035693.6
+    }
+  ],
+  "namedChecks": [
+    {
+      "name": "Skyline Trail",
+      "preparedMeters": 72980.9,
+      "originalTrailMeters": 69289.3,
+      "qualifiedNetworkMeters": 70283.0
+    },
+    {
+      "name": "Rattlesnake Ledge Trail",
+      "preparedMeters": 3113.0,
+      "originalTrailMeters": 3113.0,
+      "qualifiedNetworkMeters": 3113.0
+    },
+    {
+      "name": "Paradise Glacier Trail",
+      "preparedMeters": 1789.2,
+      "originalTrailMeters": 1789.2,
+      "qualifiedNetworkMeters": 1789.2
+    },
+    {
+      "name": "Mount Si Trail",
+      "preparedMeters": 6187.6,
+      "originalTrailMeters": 6187.6,
+      "qualifiedNetworkMeters": 6187.6
+    },
+    {
+      "name": "Snow Lake Trail",
+      "preparedMeters": 5395.3,
+      "originalTrailMeters": 5395.3,
+      "qualifiedNetworkMeters": 5395.3
+    },
+    {
+      "name": "Colchuck Lake Trail",
+      "preparedMeters": 3474.9,
+      "originalTrailMeters": 3474.9,
+      "qualifiedNetworkMeters": 3474.9
+    },
+    {
+      "name": "Newell Creek Trail",
+      "preparedMeters": 1231.4,
+      "originalTrailMeters": 901.4,
+      "qualifiedNetworkMeters": 901.4
+    },
+    {
+      "name": "Swanson Creek Trail",
+      "preparedMeters": 385.9,
+      "originalTrailMeters": 385.9,
+      "qualifiedNetworkMeters": 385.9
+    },
+    {
+      "name": "Campanile Way",
+      "preparedMeters": 443.3,
+      "originalTrailMeters": 422.3,
+      "qualifiedNetworkMeters": 0
+    },
+    {
+      "name": "Sproul Plaza",
+      "preparedMeters": 172.7,
+      "originalTrailMeters": 172.7,
+      "qualifiedNetworkMeters": 0
+    },
+    {
+      "name": "Orangewood Drive",
+      "preparedMeters": 402.6,
+      "originalTrailMeters": 16.7,
+      "qualifiedNetworkMeters": 0
+    },
+    {
+      "name": "Sunol Ridge Trail",
+      "preparedMeters": 10341.0,
+      "originalTrailMeters": 0,
+      "qualifiedNetworkMeters": 6527.1
+    },
+    {
+      "name": "Dipsea Trail",
+      "preparedMeters": 9295.1,
+      "originalTrailMeters": 9153.5,
+      "qualifiedNetworkMeters": 9153.5
+    },
+    {
+      "name": "Cataract Trail",
+      "preparedMeters": 4410.2,
+      "originalTrailMeters": 4410.2,
+      "qualifiedNetworkMeters": 4410.2
+    },
+    {
+      "name": "Sunnyside Trail",
+      "preparedMeters": 1652.5,
+      "originalTrailMeters": 1412.0,
+      "qualifiedNetworkMeters": 1652.5
+    },
+    {
+      "name": "Sun Trail",
+      "preparedMeters": 133.1,
+      "originalTrailMeters": 133.1,
+      "qualifiedNetworkMeters": 133.1
+    }
+  ],
+  "spotChecks": [
+    {
+      "id": "mountain-e7c44d3adae6b1354f5085fe/osm-entrance:1588476939",
+      "name": "Trail entrance",
+      "kind": "road-contact",
+      "keep": true,
+      "position": [
+        -121.9640157,
+        37.5746754,
+        26.211931884700867
+      ],
+      "connectorMeters": null
+    },
+    {
+      "id": "mountain-e7c44d3adae6b1354f5085fe/osm-entrance:52989588",
+      "name": "Trailhead",
+      "kind": "trailhead",
+      "keep": true,
+      "position": [
+        -121.8958825,
+        37.594379,
+        73.3332511767037
+      ],
+      "connectorMeters": 0
+    },
+    {
+      "id": "mountain-e7c44d3adae6b1354f5085fe/osm-entrance:53054218",
+      "name": "Trail entrance",
+      "kind": "road-contact",
+      "keep": true,
+      "position": [
+        -121.9641719,
+        37.5745904,
+        25.580239327887504
+      ],
+      "connectorMeters": null
+    }
+  ],
+  "trailheadsWithoutNearbyContext": [
+    {
+      "id": "mountain-1a237ff8895adebfa21e390b/osm-entrance:9591163451",
+      "name": "Sulphur Creek Falls Hiking Trail",
+      "position": [
+        -122.3886562,
+        46.4994662,
+        274.18476968333204
+      ]
+    },
+    {
+      "id": "mountain-e003916c5698006638c9c77c/osm-entrance:49834003",
+      "name": "Trailhead",
+      "position": [
+        -121.776498,
+        46.772053,
+        1269.6845290236943
+      ]
+    },
+    {
+      "id": "mountain-70611e49c04901ed37bd793e/osm-entrance:9843140114",
+      "name": "Trailhead",
+      "position": [
+        -121.019326,
+        47.2349499,
+        737.1854919135524
+      ]
+    },
+    {
+      "id": "mountain-70611e49c04901ed37bd793e/osm-entrance:9843149304",
+      "name": "Trailhead",
+      "position": [
+        -121.019845,
+        47.2356024,
+        738.1827725431449
+      ]
+    },
+    {
+      "id": "mountain-d43a7b201dc5e484847ccc42/osm-entrance:3744591694",
+      "name": "Winthrop Trail",
+      "position": [
+        -120.2087036,
+        48.4665792,
+        561.6531191190377
+      ]
+    },
+    {
+      "id": "mountain-d43a7b201dc5e484847ccc42/osm-entrance:3752342172",
+      "name": "Wolf Ridge Trailhead",
+      "position": [
+        -120.2741064,
+        48.5006747,
+        565.833790472413
+      ]
+    },
+    {
+      "id": "mountain-d43a7b201dc5e484847ccc42/osm-entrance:3752350318",
+      "name": "Town Trailhead",
+      "position": [
+        -120.1806173,
+        48.4729461,
+        538.3234695484878
+      ]
+    },
+    {
+      "id": "mountain-d43a7b201dc5e484847ccc42/osm-entrance:50069417",
+      "name": "East Fork Buttermilk Trailhead",
+      "position": [
+        -120.328315,
+        48.289266,
+        1448.6294428700141
+      ]
+    },
+    {
+      "id": "mountain-d43a7b201dc5e484847ccc42/osm-entrance:7173821802",
+      "name": "Shaw Lake Trailhead",
+      "position": [
+        -121.7167454,
+        47.9267708,
+        265.33824026655464
+      ]
+    },
+    {
+      "id": "mountain-d43a7b201dc5e484847ccc42/osm-entrance:7462035028",
+      "name": "Rock Mountain Trailhead",
+      "position": [
+        -120.9580749,
+        47.775646,
+        816.8180131332675
+      ]
+    },
+    {
+      "id": "mountain-7a6c62952459c6276843dae6/osm-entrance:5256331494",
+      "name": "Gunn Ranch Trailhead",
+      "position": [
+        -120.2567406,
+        48.5304596,
+        881.8919424482235
+      ]
+    },
+    {
+      "id": "mountain-bcb514054a1fdcb6bcf393a1/osm-entrance:3076302806",
+      "name": "Big Spruce Tree Nature Trailhead",
+      "position": [
+        -123.9741429,
+        47.8370735,
+        156.8288922582224
+      ]
+    }
+  ],
+  "usgsChecks": [
+    {
+      "region": "Santa Cruz Mountains",
+      "sample": "alpine-usgs-santa-cruz",
+      "referenceFeatures": 17,
+      "matchedTrailCorridors": 6,
+      "coreCorridors": 6,
+      "matchedMeters": 7520.5,
+      "coreMeters": 7520.5,
+      "notCoreExamples": [],
+      "truncated": false
+    },
+    {
+      "region": "Sonoma\u2013Marin Coast",
+      "sample": "alpine-usgs-mount-tam",
+      "referenceFeatures": 244,
+      "matchedTrailCorridors": 228,
+      "coreCorridors": 228,
+      "matchedMeters": 82440.5,
+      "coreMeters": 82440.5,
+      "notCoreExamples": [],
+      "truncated": false
+    }
+  ],
+  "positiveMaskTypes": {
+    "leisure:park": 14171,
+    "natural:coastline": 4,
+    "natural:wetland": 15443,
+    "natural:wood": 49685,
+    "leisure:nature_reserve": 2064,
+    "boundary:protected_area": 318,
+    "natural:beach": 1888,
+    "landuse:recreation_ground": 3545,
+    "natural:scrub": 21347,
+    "natural:grassland": 14831,
+    "landuse:commercial": 3,
+    "landuse:meadow": 18827,
+    "landuse:village_green": 2,
+    "landuse:forest": 9340,
+    "landuse:quarry": 1,
+    "natural:fell": 21,
+    "landuse:brownfield": 1,
+    "natural:bare_rock": 7192,
+    "landuse:cemetery": 3,
+    "landuse:construction": 6,
+    "boundary:national_park": 8,
+    "natural:sand": 2,
+    "natural:heath": 4222,
+    "natural:water": 2,
+    "landuse:grass": 42,
+    "landuse:farm": 1,
+    "landuse:residential": 4,
+    "landuse:farmland": 3,
+    "natural:grass": 1,
+    "landuse:industrial": 1,
+    "natural:tree_row": 1,
+    "landuse:greenfield": 7,
+    "landuse:conservation": 3,
+    "landuse:private": 1,
+    "natural:meadow": 1,
+    "leisure:fishing": 1,
+    "landuse:fairground": 1,
+    "natural:island": 1,
+    "natural:scree": 1,
+    "natural:ravine": 1,
+    "landuse:public": 4,
+    "landuse:protected_area": 1,
+    "landuse:reservoir_watershed": 4,
+    "landuse:nature": 1,
+    "landuse:disc golf course": 1,
+    "landuse:aquaculture": 1,
+    "landuse:windfarm": 1
+  },
+  "developedMaskTypes": {
+    "landuse:industrial": 12359,
+    "landuse:retail": 8894,
+    "amenity:school": 6137,
+    "landuse:commercial": 20077,
+    "amenity:university": 128,
+    "amenity:college": 202,
+    "landuse:residential": 197523,
+    "landuse:institutional": 3,
+    "landuse:education": 81,
+    "boundary:administrative": 4,
+    "landuse:religious": 5,
+    "natural:wood": 30,
+    "landuse:public_facility": 1,
+    "boundary:land_area": 1,
+    "natural:water": 17,
+    "natural:sand": 2,
+    "landuse:orchard": 7,
+    "natural:scrub": 6,
+    "natural:grassland": 6,
+    "landuse:meadow": 1,
+    "landuse:civic": 4,
+    "landuse:public": 1,
+    "natural:grass": 4,
+    "natural:heath": 1,
+    "landuse:farmland": 1,
+    "landuse:eduation": 1,
+    "landuse:construction": 10,
+    "leisure:sports_centre": 1,
+    "landuse:school": 1,
+    "leisure:pitch": 1,
+    "leisure:nature_reserve": 1
+  },
+  "unresolvedNestedHikingRelations": 26,
+  "elapsedSeconds": 245.79,
+  "scope": "One rule across all installed regions. Offline decisions can be activated as access-point-policy.json; graphs and region boundaries remain unchanged. Named checks cover prepared portions, not whole hikes. No solver run or route recall certification. USGS comparisons are geometric samples, not a complete independent trail inventory.",
+  "validation": {
+    "restoredStartsAgainstApproachPolicy": 1451,
+    "targetCoordinates": [
+      47.64331,
+      -120.56389
+    ],
+    "targetEligible": true,
+    "targetActualHikes": 4,
+    "targetMileage": [
+      2.74,
+      1.73,
+      3.76,
+      2.19
+    ],
+    "comparisonQuery": {
+      "sections": [
+        "mountain-70611e49c04901ed37bd793e",
+        "mountain-d43a7b201dc5e484847ccc42"
+      ],
+      "effort": "deep",
+      "distance": [
+        16093.44,
+        19312.128
+      ],
+      "gain": [
+        0,
+        1828.8000000000002
+      ],
+      "stem": 3218.688,
+      "repetition": 1,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 1609.344,
+        "fraction": 1
+      }
+    },
+    "before": {
+      "starts": 3763,
+      "hikes": 129
+    },
+    "after": {
+      "starts": 4241,
+      "hikes": 129
+    },
+    "identicalRoutes": 120,
+    "independentRouteChecks": "All 129 saved walks close and have exact ordered metrics within submitted distance, gain, road and stem/repetition limits.",
+    "urbanCounterexample": "Two of four Orangewood/Orchard contacts return because the adjoining way is tagged highway=path without sidewalk/crossing tags.",
+    "automatedChecks": "Five offline approach/type boundaries, two app/worker policy checks, build and typecheck pass.",
+    "runtime": "Both candidate entrances show eligible in a running isolated local browser; full regeneration exactly matches the trial policy. Activated locally, not deployed.",
+    "timingLimit": "Concurrent policy regeneration and local app activity mean trial elapsed times are not a controlled speed comparison."
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundaryError, boundarySections, excludedDriveArea, pointInArea, pointInBoundary, MAX_BOUNDARY_VERTICES } from '../../src/boundary.js';
+import { boundaryError, boundarySections, restrictDriveArea, pointInArea, pointInBoundary, MAX_BOUNDARY_VERTICES } from '../../src/boundary.js';
 import { parseQuery } from '../../src/jobs.js';
 import type { SearchBoundary } from '../../src/model.js';
 
@@ -43,7 +43,7 @@ describe('drawn starting-point boundaries', () => {
     expect(boundarySections([[1.5, 1.5], [2.5, 1.5], [2, 2.5]], [disconnected])).toEqual([]);
   });
 
-  it('dims only excluded search scope, preserving reachable islands, holes and drawn limits', () => {
+  it('clips driving scope to the search area, preserving reachable islands, holes and drawn limits', () => {
     const rectangle = (west: number, south: number, east: number, north: number) =>
       [[west, south], [east, south], [east, north], [west, north], [west, south]];
     const scope = { type: 'MultiPolygon' as const, coordinates: [[rectangle(0, 0, 10, 10)]] };
@@ -51,14 +51,14 @@ describe('drawn starting-point boundaries', () => {
       [rectangle(1, 1, 6, 6), rectangle(2, 2, 3, 3).reverse()], [rectangle(7, 7, 9, 9)],
     ] };
     const drawn: SearchBoundary = [[0, 0], [8, 0], [8, 8], [0, 8]];
-    const dimmed = excludedDriveArea(scope, reachable, drawn);
-    expect(pointInArea([0.5, 0.5], dimmed)).toBe(true);
-    expect(pointInArea([2.5, 2.5], dimmed)).toBe(true); // Unreachable hole remains dimmed.
-    expect(pointInArea([4, 4], dimmed)).toBe(false);
-    expect(pointInArea([7.5, 7.5], dimmed)).toBe(false); // Reachable island stays clear.
-    expect(pointInArea([9.5, 9.5], dimmed)).toBe(false); // Outside the drawing stays untouched.
-    expect(excludedDriveArea(scope, scope).coordinates).toEqual([]);
-    expect(excludedDriveArea(scope, { type: 'MultiPolygon', coordinates: [] })).toEqual(scope);
-    expect(excludedDriveArea({ type: 'MultiPolygon', coordinates: [] }, reachable).coordinates).toEqual([]);
+    const clipped = restrictDriveArea(reachable, [{ boundary: scope }], drawn);
+    expect(pointInArea([0.5, 0.5], clipped)).toBe(false);
+    expect(pointInArea([2.5, 2.5], clipped)).toBe(false); // Unreachable hole stays excluded.
+    expect(pointInArea([4, 4], clipped)).toBe(true);
+    expect(pointInArea([7.5, 7.5], clipped)).toBe(true); // Reachable island survives.
+    expect(pointInArea([8.5, 8.5], clipped)).toBe(false); // Driving area outside the drawing is excluded.
+    expect(restrictDriveArea(scope, [{ boundary: scope }])).toEqual(scope);
+    expect(restrictDriveArea({ type: 'MultiPolygon', coordinates: [] }, [{ boundary: scope }]).coordinates).toEqual([]);
+    expect(restrictDriveArea(reachable, []).coordinates).toEqual([]);
   });
 });

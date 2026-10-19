@@ -103,35 +103,40 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
       locations(): RouteLocation[] {
         const rows = db.prepare(`SELECT ${columns}, r.steps FROM ${from} ORDER BY r.group_id`).all() as (ChoiceRow & { steps: string })[];
         // Only small extents cross the API; shared trail drawings are read once.
-        const shapes = new Map<string, Bounds>();
+        const shapes = new Map<string, { bounds: Bounds; highPoint: number | null }>();
         return rows.map(row => {
           const { id, startId, startName, startPosition, trailNames, distance, gain, repetition, roadDistance, groupId } = choice(row);
           const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+          let highPoint: number | null = -Infinity;
           const steps = JSON.parse(row.steps) as StoredRoute['sections'];
           if (!steps.length) throw new Error('Saved route drawing is missing');
           for (const step of steps) {
             const key = `${step.section}:${step.id}`;
-            let extent = shapes.get(key);
-            if (!extent) {
+            let facts = shapes.get(key);
+            if (!facts) {
               const shape = getGeometry.get(step.section, step.id);
               if (!shape) throw new Error('Saved route drawing is missing');
               const points = JSON.parse(shape.points as string) as Position[];
               if (!points.length) throw new Error('Saved route drawing is missing');
-              extent = [Infinity, Infinity, -Infinity, -Infinity];
-              for (const [longitude, latitude] of points) {
+              const extent: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+              let peak: number | null = -Infinity;
+              for (const [longitude, latitude, elevation] of points) {
                 extent[0] = Math.min(extent[0], longitude);
                 extent[1] = Math.min(extent[1], latitude);
                 extent[2] = Math.max(extent[2], longitude);
                 extent[3] = Math.max(extent[3], latitude);
+                peak = peak !== null && Number.isFinite(elevation) ? Math.max(peak, elevation!) : null;
               }
-              shapes.set(key, extent);
+              facts = { bounds: extent, highPoint: peak };
+              shapes.set(key, facts);
             }
-            bounds[0] = Math.min(bounds[0], extent[0]);
-            bounds[1] = Math.min(bounds[1], extent[1]);
-            bounds[2] = Math.max(bounds[2], extent[2]);
-            bounds[3] = Math.max(bounds[3], extent[3]);
+            bounds[0] = Math.min(bounds[0], facts.bounds[0]);
+            bounds[1] = Math.min(bounds[1], facts.bounds[1]);
+            bounds[2] = Math.max(bounds[2], facts.bounds[2]);
+            bounds[3] = Math.max(bounds[3], facts.bounds[3]);
+            highPoint = highPoint !== null && facts.highPoint !== null ? Math.max(highPoint, facts.highPoint) : null;
           }
-          return { id, startId, startName, startPosition, trailNames, distance, gain, repetition, roadDistance, groupId, bounds };
+          return { id, startId, startName, startPosition, trailNames, distance, gain, repetition, roadDistance, groupId, bounds, highPoint };
         });
       },
       paths(bounds: Bounds): RoutePath[] {

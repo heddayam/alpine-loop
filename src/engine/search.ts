@@ -3,13 +3,14 @@ import { canonical, compareMetrics, preference, startRank, walkKey, type RouteMe
 import type { RouteCandidate, SearchEvent, SearchProgress, SearchQuery, TrailGraph } from '../model.js';
 import { DEFAULT_ROAD_LIMITS } from '../model.js';
 import type { WorkBudget } from '../work-budget.js';
-import { validGradeLimits } from '../grade.js';
+import { validGradeLimits, validHighPointRange } from '../grade.js';
 
-type Options = { signal?: AbortSignal; maxExpansions?: number; maxResults?: number; sliceExpansions?: number; budget?: WorkBudget; gradeCheck?: (route: RouteCandidate) => boolean };
+type Options = { signal?: AbortSignal; maxExpansions?: number; maxResults?: number; sliceExpansions?: number; budget?: WorkBudget; elevationCheck?: (route: RouteCandidate) => boolean };
 type Physical = { trail: number; from: number; to: number; directions: number[]; distance: number; gain: number; road: number; trailDistanceUpper: number };
-type Index = { physical: Physical[]; physicalForEdge: Int32Array; incident: number[][]; reverse: Int32Array; starts: number[][]; eligible: number[]; stemRatio: number; zeroRepetitionPossible: boolean; rounding: number; roadBounds: Map<number, Map<number, number>>; roadShortest: Map<number, Map<number, number>>; roadCertificates: Map<string, boolean>; gradeCheck?: Options['gradeCheck'] };
+type Index = { physical: Physical[]; physicalForEdge: Int32Array; incident: number[][]; reverse: Int32Array; starts: number[][]; eligible: number[]; stemRatio: number; zeroRepetitionPossible: boolean; rounding: number; incomingRoads: number[][]; roadBounds: Map<number, RoadDistances>; roadShortest: Map<number, RoadDistances>; roadCertificates: Map<string, boolean>; elevationCheck?: Options['elevationCheck'] };
 
 export function validateQuery(query: SearchQuery): void {
+  if (query.highPoint !== undefined && !validHighPointRange(query.highPoint)) throw new Error('Invalid high point range');
   if (query.grades !== undefined && !validGradeLimits(query.grades)) throw new Error('Invalid grade limits');
   for (const range of [query.distance, query.gain]) {
     if (range.length !== 2 || range.some(value => !Number.isFinite(value) || value < 0) || range[0] > range[1]) {
@@ -76,6 +77,11 @@ function indexGraph(graph: TrailGraph, query: SearchQuery): Index {
     incident[item.from]!.push(index);
     if (item.to !== item.from) incident[item.to]!.push(index);
   }
+  const incomingRoads = Array.from({ length: graph.nodes.length }, () => [] as number[]);
+  for (const item of physical) for (const id of item.directions) {
+    const edge = graph.edges[id]!;
+    if (edge.connector) incomingRoads[edge.to]!.push(id);
+  }
   // Every possible approach traverses a reversible physical trail twice. The
   // ratio is an upper bound on outbound/return distance in either orientation.
   let stemRatio = 1, zeroRepetitionPossible = false;
@@ -87,7 +93,8 @@ function indexGraph(graph: TrailGraph, query: SearchQuery): Index {
   // self-loop. This generous gamma guard also covers the products/divisions in
   // the conservative bounds. Unsafe huge bounds simply disable the shortcut.
   const rounding = query.distance[1] * Number.EPSILON * (16 * graph.nodes.length + 64);
-  return { physical, physicalForEdge, incident, reverse, starts, eligible, stemRatio, zeroRepetitionPossible, rounding, roadBounds: new Map(), roadShortest: new Map(), roadCertificates: new Map() };
+  eligible.sort((a, b) => startRank[graph.starts[a]!.kind] - startRank[graph.starts[b]!.kind] || a - b);
+  return { physical, physicalForEdge, incident, reverse, starts, eligible, stemRatio, zeroRepetitionPossible, rounding, incomingRoads, roadBounds: new Map(), roadShortest: new Map(), roadCertificates: new Map() };
 }
 
 function candidate(graph: TrailGraph, query: SearchQuery, start: number, edges: number[], back: number[]): RouteCandidate | undefined {
@@ -108,51 +115,49 @@ function candidate(graph: TrailGraph, query: SearchQuery, start: number, edges: 
   const route: RouteCandidate = { id: '', start, edges, distance, gain, roadDistance, repetition,
     kind: back.length ? 'lollipop' : 'loop', uncertain: graph.starts[start]!.access === 'unknown'
       || edges.some(id => graph.edges[id]!.access === 'unknown') };
-  route.id = `route-${createHash('sha256').update(walkKey(graph, route)).digest('hex').slice(0, 32)}`;
   return route;
 }
 
-/** Bounded sparse labels avoid a graph-sized array for every local target. */
-function sparseBounds(sources: number[], budget: number, choices: (node: number) => [number, number][], parents?: Map<number, number>): Map<number, number> {
-  const labels = new Map<number, number>(), heap: [number, number][] = [];
-  const push = (distance: number, node: number) => {
-    let at = heap.length; heap.push([distance, node]);
-    while (at) { const parent = (at - 1) >>> 1; if (heap[parent]![0] <= distance) break; heap[at] = heap[parent]!; at = parent; }
-    heap[at] = [distance, node];
-  };
-  for (const node of sources) { labels.set(node, 0); push(0, node); }
-  while (heap.length) {
-    const [distance, node] = heap[0]!, last = heap.pop()!;
-    if (heap.length) {
-      let at = 0;
-      while (at * 2 + 1 < heap.length) {
-        let child = at * 2 + 1;
-        if (child + 1 < heap.length && heap[child + 1]![0] < heap[child]![0]) child++;
-        if (heap[child]![0] >= last[0]) break;
-        heap[at] = heap[child]!; at = child;
-      }
-      heap[at] = last;
-    }
-    if (labels.get(node) !== distance) continue;
-    for (const [next, weight] of choices(node)) {
-      const following = distance + weight;
-      if (following > budget || following >= (labels.get(next) ?? Infinity)) continue;
-      labels.set(next, following); parents?.set(next, node); push(following, next);
-    }
+/** Resume reverse Dijkstra only as far as a requested road distance. Settled
+ * labels are exact; an unsettled label is never used to certify a route.
+ * Keeping the frontier lets later gaps extend the same bounded search. */
+class RoadDistances {
+  // Distances are nonnegative. An exact sign flip marks settled labels,
+  // including -0, without a second hash lookup or rounding their values.
+  private labels = new Map<number, number>();
+  private heap = new Heap();
+  constructor(private graph: TrailGraph, private incoming: number[][], target: number,
+    private budget: number, private rounded: boolean, private publicOnly = false) {
+    this.labels.set(target, 0); this.heap.push(0, target);
   }
-  return labels;
+  distance(node: number, ceiling = this.budget): number {
+    const limit = Math.min(ceiling, this.budget);
+    const known = this.labels.get(node);
+    if (known !== undefined && (known < 0 || Object.is(known, -0))) {
+      return -known <= limit ? -known : Infinity;
+    }
+    while (this.heap.length && this.heap.minimum <= limit) {
+      const [distance, current] = this.heap.pop();
+      const label = this.labels.get(current);
+      if (label !== distance || Object.is(label, -0)) continue;
+      this.labels.set(current, -distance);
+      for (const id of this.incoming[current]!) {
+        const edge = this.graph.edges[id]!;
+        if (this.publicOnly && edge.access !== 'public') continue;
+        const next = distance + (this.rounded ? Math.floor(edge.distance) : edge.distance);
+        if (next > this.budget || next >= (this.labels.get(edge.from) ?? Infinity)) continue;
+        this.labels.set(edge.from, next); this.heap.push(next, edge.from);
+      }
+      if (current === node) return distance;
+    }
+    return Infinity;
+  }
 }
-function roadBounds(graph: TrailGraph, index: Index, query: SearchQuery, target: number): Map<number, number> {
+function roadBounds(graph: TrailGraph, index: Index, query: SearchQuery, target: number): RoadDistances {
   let labels = index.roadBounds.get(target);
   if (!labels) {
-    labels = sparseBounds([target], Math.floor((query.roads ?? DEFAULT_ROAD_LIMITS).distance), node => {
-      const choices: [number, number][] = [];
-      for (const physicalId of index.incident[node]!) for (const id of index.physical[physicalId]!.directions) {
-        const edge = graph.edges[id]!;
-        if (edge.connector && edge.to === node) choices.push([edge.from, Math.floor(edge.distance)]);
-      }
-      return choices;
-    });
+    labels = new RoadDistances(graph, index.incomingRoads, target,
+      Math.floor((query.roads ?? DEFAULT_ROAD_LIMITS).distance), true);
     if (index.roadBounds.size >= 128) index.roadBounds.delete(index.roadBounds.keys().next().value!);
     index.roadBounds.set(target, labels);
   }
@@ -166,10 +171,12 @@ function roadBounds(graph: TrailGraph, index: Index, query: SearchQuery, target:
  * each gap is its unique road minimum. Identical gaps give exactly the same
  * ordered road sum; a changed gap exceeds the whole-walk rounding guard.
  * Ambiguous or tied bounds fall back to correlated legal-walk enumeration. */
-function uniqueRoadMinimum(graph: TrailGraph, index: Index, query: SearchQuery, route: RouteCandidate): boolean {
-  const counts = new Map<number, number>();
-  for (const id of route.edges) if (!graph.edges[id]!.connector) counts.set(graph.edges[id]!.trail, (counts.get(graph.edges[id]!.trail) ?? 0) + 1);
-  if (![...counts.values()].includes(1)) return false;
+function uniqueRoadMinimum(graph: TrailGraph, index: Index, query: SearchQuery, route: RouteCandidate, approachLength: number): boolean {
+  let mainTrail = false;
+  for (let at = approachLength; at < route.edges.length - approachLength; at++) {
+    if (!graph.edges[route.edges[at]!]!.connector) { mainTrail = true; break; }
+  }
+  if (!mainTrail) return false;
   const gap = (from: number, to: number, edges: number[]): boolean => {
     if (!edges.length) return from === to;
     const publicOnly = !route.uncertain;
@@ -180,18 +187,14 @@ function uniqueRoadMinimum(graph: TrailGraph, index: Index, query: SearchQuery, 
     let labels = index.roadShortest.get(target);
     if (!labels) {
       const budget = Math.min(query.distance[1], (query.roads ?? DEFAULT_ROAD_LIMITS).distance) + index.rounding;
-      labels = sparseBounds([to], budget, node => {
-        const choices: [number, number][] = [];
-        for (const physicalId of index.incident[node]!) for (const id of index.physical[physicalId]!.directions) {
-          const edge = graph.edges[id]!;
-          if (edge.connector && edge.to === node && (!publicOnly || edge.access === 'public')) choices.push([edge.from, edge.distance]);
-        }
-        return choices;
-      });
+      labels = new RoadDistances(graph, index.incomingRoads, to, budget, false, publicOnly);
       if (index.roadShortest.size >= 128) index.roadShortest.delete(index.roadShortest.keys().next().value!);
       index.roadShortest.set(target, labels);
     }
     const length = edges.reduce((sum, id) => sum + graph.edges[id]!.distance, 0);
+    // Only completions at most this gap's length can defeat its certificate.
+    // A wider rounding guard keeps the cutoff conservative for ordered sums.
+    const ceiling = length + 16 * index.rounding;
     let prefix = 0, certain = Number.isFinite(index.rounding);
     const visited = new Set([from]);
     for (const id of edges) {
@@ -202,7 +205,7 @@ function uniqueRoadMinimum(graph: TrailGraph, index: Index, query: SearchQuery, 
         const alternative = graph.edges[alternativeId]!;
         if (alternativeId === id || !alternative.connector || alternative.from !== edge.from
           || (publicOnly && alternative.access === 'unknown')) continue;
-        const lower = prefix + alternative.distance + (labels.get(alternative.to) ?? Infinity);
+        const lower = prefix + alternative.distance + labels.distance(alternative.to, ceiling);
         if (lower <= length + 8 * index.rounding) { certain = false; break; }
       }
       if (!certain) break;
@@ -230,19 +233,25 @@ function uniqueRoadMinimum(graph: TrailGraph, index: Index, query: SearchQuery, 
  * visited prefix node closes its simple circuit, after which the only legal
  * continuation is the exact reversed approach. This searches every legal
  * correlated alternative, including ones below either minimum. */
-function* roadDominated(graph: TrailGraph, index: Index, query: SearchQuery, route: RouteCandidate): Generator<undefined, RouteCandidate | undefined> {
-  if (!route.roadDistance || uniqueRoadMinimum(graph, index, query, route)) return;
-  const itinerary = route.edges.filter(id => !graph.edges[id]!.connector);
+function* roadDominated(graph: TrailGraph, index: Index, query: SearchQuery, route: RouteCandidate, approachLength: number): Generator<undefined, RouteCandidate | undefined> {
+  if (!route.roadDistance || uniqueRoadMinimum(graph, index, query, route, approachLength)) return;
+  const itinerary: number[] = [];
+  let lastMain = -1, firstReturn = 0;
+  for (const [at, id] of route.edges.entries()) if (!graph.edges[id]!.connector) {
+    itinerary.push(id);
+    if (at < route.edges.length - approachLength) {
+      firstReturn = itinerary.length;
+      if (at >= approachLength) lastMain = itinerary.length - 1;
+    }
+  }
   const criteria = { ...query, distance: [0, query.distance[1]] as [number, number], gain: [0, query.gain[1]] as [number, number] };
   const start = graph.starts[route.start]!.node;
-  const counts = new Map<number, number>();
-  for (const id of itinerary) counts.set(graph.edges[id]!.trail, (counts.get(graph.edges[id]!.trail) ?? 0) + 1);
-  const lastMain = itinerary.findLastIndex(id => counts.get(graph.edges[id]!.trail) === 1);
-  const blocked = new Map<number, number>(), seenTrails = new Set<number>();
-  if (lastMain >= 0) for (const [at, id] of itinerary.entries()) {
-    const edge = graph.edges[id]!;
-    if (seenTrails.has(edge.trail)) continue;
-    seenTrails.add(edge.trail);
+  const blocked = new Map<number, number>();
+  // A discovered walk has a simple approach and a disjoint simple circuit.
+  // Its first-use trails end before the reversed approach; no occurrence
+  // maps or duplicate-trail sets are needed to find the main trail steps.
+  if (lastMain >= 0) for (let at = 0; at < firstReturn; at++) {
+    const edge = graph.edges[itinerary[at]!]!;
     blocked.set(edge.from, Math.max(blocked.get(edge.from) ?? -1, at));
     if (at < lastMain) blocked.set(edge.to, Math.max(blocked.get(edge.to) ?? -1, at));
   }
@@ -252,7 +261,10 @@ function* roadDominated(graph: TrailGraph, index: Index, query: SearchQuery, rou
   while (frames.length) {
     const frame = frames[frames.length - 1]!;
     const destination = graph.edges[itinerary[frame.trail]!] ?.from ?? start;
-    const remainingRoad = roadBounds(graph, index, query, destination).get(frame.node) ?? Infinity;
+    // Beyond the candidate's remaining road mileage, every completion is
+    // already dominated. Preserve extra slack for the ordered-sum guard.
+    const ceiling = Math.max(0, route.roadDistance + 2 * index.rounding - Math.floor(frame.road));
+    const remainingRoad = roadBounds(graph, index, query, destination).distance(frame.node, ceiling);
     const choices = index.incident[frame.node]!;
     if (Math.floor(frame.road) + remainingRoad >= route.roadDistance + index.rounding || frame.next === choices.length) {
       frames.pop();
@@ -284,7 +296,7 @@ function* roadDominated(graph: TrailGraph, index: Index, query: SearchQuery, rou
         if (back.length !== earlier || consumed !== itinerary.length) continue;
         const alternative = candidate(graph, criteria, route.start, [...path, id, ...back], back);
         if (alternative && alternative.roadDistance < route.roadDistance && (!alternative.uncertain || route.uncertain)
-          && (!index.gradeCheck || index.gradeCheck(alternative))) return alternative;
+          && (!index.elevationCheck || index.elevationCheck(alternative))) return alternative;
       } else {
         // A future first-use trail cannot be reached by returning to a node
         // already in the prefix. Leave its endpoints available until that
@@ -313,6 +325,7 @@ type Circuit = { physical: number[]; nodes: number[]; rings: number[][]; key: st
 class Heap {
   private entries: [number, number][] = [];
   get length() { return this.entries.length; }
+  get minimum() { return this.entries[0]?.[0] ?? Infinity; }
   push(cost: number, node: number) {
     let at = this.entries.length; this.entries.push([cost, node]);
     while (at) { const parent = (at - 1) >>> 1; if (this.entries[parent]![0] <= cost) break;
@@ -656,12 +669,21 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
     const back = outward.toReversed().map(id => index.reverse[id]!);
     const key = start * 2 + direction;
     const route = candidate(graph, query, start, [...outward, ...ring, ...back], back);
-    if (!route || emitted.has(route.id)) return;
-    emitted.add(route.id);
+    if (!route) return;
     const previous = best.get(key);
     if (previous && compareMetrics(route, previous) > 0) return;
-    if (index.gradeCheck && !index.gradeCheck(route)) return;
-    const proof = roadDominated(graph, index, query, route);
+    // Each circuit publishes only its preferred qualifying walk. A candidate
+    // already worse than a certified walk of the same start kind cannot win.
+    // Leave its alternative approaches available: one may improve these metrics.
+    if (preferred && startRank[graph.starts[start]!.kind] === startRank[graph.starts[preferred.start]!.kind]
+      && compareMetrics(route, preferred) > 0) return;
+    // A rejected witness never needs a public identity. Road substitutions
+    // also need only metrics, so hash only candidates reaching this check.
+    route.id = `route-${createHash('sha256').update(walkKey(graph, route)).digest('hex').slice(0, 32)}`;
+    if (emitted.has(route.id)) return;
+    emitted.add(route.id);
+    if (index.elevationCheck && !index.elevationCheck(route)) return;
+    const proof = roadDominated(graph, index, query, route, outward.length);
     let result = proof.next(), work = 0;
     while (!result.done && work++ < proofBudget) { yield undefined; result = proof.next(); }
     if (result.done && !result.value) {
@@ -677,6 +699,14 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
     for (const start of index.eligible) {
       let node = graph.starts[start]!.node;
       if (!coreNodes.has(node) && !parents.has(node)) continue;
+      // Preference ranks start kind before all route metrics. A certified
+      // higher-ranked start proves these witnesses cannot change this circuit's
+      // displayed route; keep considering every eligible start without proofs
+      // for choices already dominated by that fixed product preference.
+      if (preferred && startRank[graph.starts[start]!.kind] > startRank[graph.starts[preferred.start]!.kind]) {
+        yield undefined;
+        continue;
+      }
       const outward: number[] = [];
       while (!coreNodes.has(node)) { const id = parents.get(node)!; outward.push(id); node = graph.edges[id]!.to; }
       for (const { ring, direction, positions } of rings) {
@@ -713,8 +743,9 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
  * All emitted walks pass strict ordered metrics and a road-minimum proof. */
 export async function* search(graph: TrailGraph, query: SearchQuery, options: Options = {}): AsyncGenerator<SearchEvent> {
   validateQuery(query);
-  if (query.grades && !options.gradeCheck) throw new Error('Grade-constrained search requires elevation geometry');
-  query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain], roads: { ...(query.roads ?? DEFAULT_ROAD_LIMITS) } };
+  if ((query.grades || query.highPoint) && !options.elevationCheck) throw new Error('Elevation-constrained search requires elevation geometry');
+  query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain],
+    ...(query.highPoint ? { highPoint: [...query.highPoint] } : {}), roads: { ...(query.roads ?? DEFAULT_ROAD_LIMITS) } };
   const plan = DISCOVERY[query.effort ?? 'normal'];
   if (!plan) throw new Error('Unknown discovery effort');
   const maximum = allowance(options.maxExpansions), maxResults = allowance(options.maxResults), slice = options.sliceExpansions ?? 8192;
@@ -726,7 +757,7 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   await new Promise<void>(resolve => setTimeout(resolve, 0));
   if (options.signal?.aborted) { yield { type: 'done', status: 'stopped', progress: snapshot(), reason: 'Search stopped' }; return; }
   const index = indexGraph(graph, query), groups = components(index), seen = new Set<string>();
-  if (query.grades) index.gradeCheck = options.gradeCheck;
+  if (query.grades || query.highPoint) index.elevationCheck = options.elevationCheck;
   const workspace = createForest(graph.nodes.length, index.physical.length);
   await options.budget?.checkpoint();
   progress.totalStarts = progress.attemptedStarts = index.eligible.length;

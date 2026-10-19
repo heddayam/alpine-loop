@@ -61,6 +61,7 @@ const action = (markup: string, name: string) =>
     button.includes(`aria-label="${name}"`) || button.endsWith(`>${name}</button>`),
   );
 const location = (id: string, x: number, y = 0): RouteLocation => ({
+  highPoint: 1000,
   id,
   groupId: id,
   startId: id,

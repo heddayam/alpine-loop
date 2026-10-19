@@ -1,4 +1,22 @@
-import type { GradeLimits, Position } from "./model.js";
+import type { GradeLimits, HighPointRange, Position } from "./model.js";
+
+export function validHighPointRange(value: unknown): value is HighPointRange {
+  return Array.isArray(value) && value.length === 2
+    && value.some(bound => bound !== null)
+    && value.every(bound => bound === null || typeof bound === "number" && Number.isFinite(bound))
+    && (value[0] === null || value[1] === null || value[0] <= value[1]);
+}
+
+/** A route's peak is known only when every saved elevation is available. */
+export function highestElevation(geometry: Position[]): number | null {
+  if (!geometry.length) return null;
+  let peak = -Infinity;
+  for (const point of geometry) {
+    if (!Number.isFinite(point[2])) return null;
+    peak = Math.max(peak, point[2]!);
+  }
+  return peak;
+}
 
 export function validGradeLimits(value: unknown): value is GradeLimits {
   if (!value || typeof value !== "object") return false;

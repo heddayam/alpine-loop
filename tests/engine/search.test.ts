@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RouteCandidate, SearchEvent, SearchQuery, TrailGraph } from '../../src/model.js';
 import { search } from '../../src/engine/search.js';
+import { routeElevationCheck } from '../../src/route-elevation.js';
 import { distinct, fixture, measure, normalized } from './oracle.js';
 
 const query: SearchQuery = { sections: ['fixture'], distance: [0, 10_000], gain: [0, 10_000], repetition: 1, includeUnknown: true };
@@ -34,6 +35,20 @@ async function compare(graph: TrailGraph, criteria = query) {
 }
 
 describe('independent legality oracle and explicit discovery quality', () => {
+  it('requires elevation geometry and keeps qualifying high approaches when lower road alternatives fail the range', async () => {
+    const graph = fixture([[0, 1, 100, { connector: true }], [0, 1, 200, { connector: true }],
+      [1, 2, 300], [2, 3, 300], [3, 1, 300]], [0]);
+    const criteria: SearchQuery = { ...query, roads: { distance: 2000, fraction: 1 }, highPoint: [200, null] };
+    await expect(collect(graph, criteria)).rejects.toThrow('requires elevation geometry');
+    const geometry = async function* () {
+      for (let id = 0; id < 5; id++) yield { id, coordinates: [[0, 0, 100], [0.001, 0, id === 1 ? 300 : 100], [0.002, 0, 100]] as import('../../src/model.js').Position[] };
+    };
+    const elevationCheck = await routeElevationCheck(graph, geometry(), criteria);
+    const { routes } = await collect(graph, criteria, { elevationCheck });
+    expect(routes.length).toBeGreaterThan(0);
+    expect(routes.every(route => route.edges.some(id => graph.edges[id]!.trail === 1))).toBe(true);
+    expect(routes.every(route => route.roadDistance === 400)).toBe(true);
+  });
   it('keeps physical parallel trails, self-loop corridors and direction-specific facts', async () => {
     const graph = fixture([
       [0, 1, 100, { gain: 10, backGain: 7, backDistance: 120 }],
