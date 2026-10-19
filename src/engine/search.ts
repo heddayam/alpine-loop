@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
-import { canonical, compareMetrics, preference, startRank, walkKey, type RouteMetrics } from './quality.js';
+import { canonical, compareMetrics, preference, stableHash, startRank, trailIdentity, walkKey, type RouteMetrics } from './quality.js';
 import type { RouteCandidate, SearchEvent, SearchProgress, SearchQuery, TrailGraph } from '../model.js';
 import { DEFAULT_ROAD_LIMITS } from '../model.js';
 import type { WorkBudget } from '../work-budget.js';
 import { validGradeLimits, validHighPointRange } from '../grade.js';
 
 type Options = { signal?: AbortSignal; maxExpansions?: number; maxResults?: number; sliceExpansions?: number; budget?: WorkBudget; elevationCheck?: (route: RouteCandidate) => boolean };
-type Physical = { trail: number; from: number; to: number; directions: number[]; distance: number; gain: number; road: number; trailDistanceUpper: number };
+/** `identity` derives from geometry, so discovery order survives renumbering of unrelated trails. */
+type Physical = { trail: number; identity: number; from: number; to: number; directions: number[]; distance: number; gain: number; road: number; trailDistanceUpper: number };
 type Index = { physical: Physical[]; physicalForEdge: Int32Array; incident: number[][]; reverse: Int32Array; starts: number[][]; eligible: number[]; stemRatio: number; zeroRepetitionPossible: boolean; rounding: number; incomingRoads: number[][]; roadBounds: Map<number, RoadDistances>; roadShortest: Map<number, RoadDistances>; roadCertificates: Map<string, boolean>; elevationCheck?: Options['elevationCheck'] };
 
 export function validateQuery(query: SearchQuery): void {
@@ -65,9 +66,13 @@ function indexGraph(graph: TrailGraph, query: SearchQuery): Index {
     if (allowed[index] && allowed[back]) reverse[index] = back;
   }
   const physical: Physical[] = [], physicalForEdge = new Int32Array(graph.edges.length).fill(-1);
-  for (const [trail, directions] of [...trails].sort(([a], [b]) => a - b)) {
-    const first = graph.edges[directions[0]!]!;
-    const item = { trail, from: first.from, to: first.to, directions,
+  // Physical order follows geometry identity, so every downstream tie and
+  // capped scan is independent of how preparation numbered the trails.
+  const identified = [...trails].map(([trail, directions]) => {
+    return { trail, directions, first: graph.edges[directions[0]!]!, identity: trailIdentity(graph, trail) };
+  }).sort((a, b) => a.identity - b.identity || a.trail - b.trail);
+  for (const { trail, directions, first, identity } of identified) {
+    const item = { trail, identity, from: first.from, to: first.to, directions,
       distance: Math.min(...directions.map(id => Math.floor(graph.edges[id]!.distance))),
       gain: Math.min(...directions.map(id => Math.floor(graph.edges[id]!.gain))),
       road: first.connector ? Math.min(...directions.map(id => Math.floor(graph.edges[id]!.distance))) : 0,
@@ -369,11 +374,13 @@ function anchor(graph: TrailGraph, index: Index, component: { nodes: number[]; s
   })[0]!;
   const axis = (pass - 1) % 4 < 2 ? 0 : 1, sign = pass % 2 ? 1 : -1;
   if (pass <= 4) return component.nodes.reduce((best, node) => sign * graph.nodes[node]![axis]! < sign * graph.nodes[best]![axis]! ? node : best);
-  return component.nodes[Math.floor(((pass * 0.6180339887498949) % 1) * component.nodes.length)]!;
+  // A geometry-keyed choice, not a position in the node list, keeps later roots stable.
+  const score = (node: number) => stableHash(`${graph.nodes[node]![0]},${graph.nodes[node]![1]};${pass}`);
+  return component.nodes.reduce((best, node) => score(node) < score(best) ? node : best);
 }
-const jitter = (trail: number, pass: number) => {
+const jitter = (identity: number, pass: number) => {
   if (!pass) return 1;
-  let value = Math.imul(trail ^ Math.imul(pass, 0x9e3779b9), 0x85ebca6b);
+  let value = Math.imul(identity ^ Math.imul(pass, 0x9e3779b9), 0x85ebca6b);
   value = Math.imul(value ^ (value >>> 16), 0xc2b2ae35);
   return 0.8 + ((value ^ (value >>> 16)) >>> 0) / 2 ** 32 * 0.4;
 };
@@ -397,7 +404,7 @@ function* forest(graph: TrailGraph, index: Index, roots: number[], pass: number,
       const item = graph.edges[arc]!;
       minimum = Math.min(minimum, item.distance + uphill * item.gain + (item.connector ? pavement * item.distance : 0));
     }
-    weights[id] = minimum * jitter(physical.trail, pass);
+    weights[id] = minimum * jitter(physical.identity, pass);
     yield undefined;
   }
   for (const root of roots) { labels[root] = 0; heap.push(0, root); }
@@ -460,7 +467,7 @@ function makeCircuit(graph: TrailGraph, index: Index, parts: number[], start: nu
     node = next;
   }
   if (node !== start || new Set(parts).size !== parts.length || new Set(nodes).size !== nodes.length || (!legalForward && !legalBackward)) return;
-  const order = canonical(parts.map(id => index.physical[id]!.trail));
+  const order = canonical(parts);
   const reversed = [order[0]!, ...order.slice(1).toReversed()];
   // Discovery's text-based tie order predates the shared numeric identity.
   // Preserve it so the bounded local shortlist selects the same circuits.
@@ -499,11 +506,13 @@ function* proposals(graph: TrailGraph, index: Index, query: SearchQuery, tree: T
     const queue = queues.get(key) ?? []; queue.push({ id, score }); queues.set(key, queue);
     yield undefined;
   }
-  for (const queue of queues.values()) queue.sort((a, b) => a.score - b.score || a.id - b.id);
+  for (const queue of queues.values()) queue.sort((a, b) => a.score - b.score
+    || index.physical[a.id]!.identity - index.physical[b.id]!.identity || a.id - b.id);
   const result: number[] = [], positions = new Map<string, number>();
   const total = [...queues.values()].reduce((sum, queue) => sum + queue.length, 0);
+  const ordered = [...queues].sort(([a], [b]) => a.localeCompare(b));
   while (result.length < total) {
-    for (const [key, queue] of queues) {
+    for (const [key, queue] of ordered) {
       const position = positions.get(key) ?? 0;
       if (position < queue.length) { result.push(queue[position]!.id); positions.set(key, position + 1); }
     }
@@ -653,8 +662,8 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
   const emitted = new Set<string>(), best = new Map<number, RouteMetrics>(), coreNodes = new Set(core.nodes);
   let preferred: RouteCandidate | undefined;
   const rings = core.rings.map(ring => {
-    const anchor = Math.min(...ring.map(id => graph.edges[id]!.trail));
-    return { ring, direction: Number(graph.edges[ring.find(id => graph.edges[id]!.trail === anchor)!]!.reverse),
+    const anchor = Math.min(...ring.map(id => index.physicalForEdge[id]!));
+    return { ring, direction: Number(graph.edges[ring.find(id => index.physicalForEdge[id] === anchor)!]!.reverse),
       positions: new Map(ring.map((id, at) => [graph.edges[id]!.from, at])) };
   });
   const hasStems = query.stem === undefined ? query.repetition !== 0 || index.zeroRepetitionPossible : query.stem !== 0;
@@ -728,7 +737,7 @@ function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: C
         }).filter((path): path is number[] => !!path);
         const ranked = paths.map(path => {
           const back = path.toReversed().map(id => index.reverse[id]!);
-          return { path, score: interest(graph, query, [...path, ...rotated, ...back], back), key: path.join(',') };
+          return { path, score: interest(graph, query, [...path, ...rotated, ...back], back), key: path.map(id => index.physicalForEdge[id]).join(',') };
         }).sort((a, b) => a.score - b.score || a.key.localeCompare(b.key));
         for (const { path } of ranked.slice(0, 4)) yield* verify(start, path, rotated, direction);
       }

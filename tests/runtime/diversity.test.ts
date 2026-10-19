@@ -409,3 +409,16 @@ it('scheduling leaves displayed route choices and stable family IDs unchanged', 
   const criteria: SearchQuery = { ...query, distance: [10_000, 10_000], repetition: 0, effort: 'deep' };
   expect(await solveSection(graph, criteria, { budget: createWorkBudget() })).toEqual(await solveSection(graph, criteria));
 });
+
+it('returns the same hikes, directions included, however preparation numbers the trails', async () => {
+  const trails: Parameters<typeof fixture>[0] = [[0, 1, 1200], [1, 2, 1700], [2, 0, 2100], [2, 3, 900], [3, 4, 1300], [4, 2, 1600], [1, 4, 2500]];
+  const graph = fixture(trails, [0, 3]);
+  const last = trails.length - 1;
+  const renumbered = { ...graph, edges: graph.edges.map(edge => ({ ...edge, trail: last - edge.trail }))
+    .sort((a, b) => a.trail - b.trail || Number(a.reverse) - Number(b.reverse)) };
+  const walks = async (input: typeof graph, original: (trail: number) => number) => (await solveSection(input, query))
+    .map(({ route }) => `${route.start}:${route.edges.map(id => `${original(input.edges[id]!.trail)}${input.edges[id]!.reverse ? '<' : '>'}`).join(',')}`).sort();
+  const expected = await walks(graph, trail => trail);
+  expect(expected.length).toBeGreaterThan(1);
+  expect(await walks(renumbered, trail => last - trail)).toEqual(expected);
+});

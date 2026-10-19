@@ -1,5 +1,7 @@
 import type { SearchQuery, TrailEdge, TrailGraph } from '../../src/model.js';
 import { createHash } from 'node:crypto';
+// The displayed-direction tie rule is product preference, shared with the engine; legality stays independent.
+import { trailIdentity } from '../../src/engine/quality.js';
 
 export type OracleRoute = { start: number; edges: number[]; distance: number; gain: number; roadDistance: number; repetition: number };
 
@@ -167,7 +169,7 @@ export function groupPool(graph: TrailGraph, paths: OracleRoute[]): OracleFamily
     return length(common) / Math.max(length(a.key), length(b.key));
   };
   const walk = (route: OracleRoute, reverse = false) => JSON.stringify([graph.starts[route.start]!.id,
-    (reverse ? route.edges.toReversed() : route.edges).map(id => [graph.edges[id]!.trail, reverse ? !graph.edges[id]!.reverse : graph.edges[id]!.reverse])]);
+    (reverse ? route.edges.toReversed() : route.edges).map(id => [trailIdentity(graph, graph.edges[id]!.trail), reverse ? !graph.edges[id]!.reverse : graph.edges[id]!.reverse])]);
   const uncertain = (route: OracleRoute) => graph.starts[route.start]!.access === 'unknown'
     || route.edges.some(id => graph.edges[id]!.access === 'unknown');
   const quality = (a: OracleRoute, b: OracleRoute) => {
