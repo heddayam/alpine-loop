@@ -192,6 +192,14 @@ def topology(ways, pois, tags_by_node, positions, footprint):
             entry["access"] = combine(evidence, crossing(tags_by_node.get(node[1:], {})))
             entry["sources"].append(poi["id"])
             entry.setdefault("pois", []).append(poi["id"])
+    # A stub of town walkway between streets is not a way into a hike. Except at a
+    # mapped trailhead, the touched trail must join a network of at least
+    # NETWORK_METERS without road walking. Unpaved tracks (fire roads) join
+    # networks here only; they still count as road for hike limits.
+    network = connected_lengths(usable, points, ways)
+    for node in [node for node, entry in entrances.items() if entry.get("rank") != 2 and network.get(node, 0) < NETWORK_METERS]:
+        counts["isolatedEntrances"] = counts.get("isolatedEntrances", 0) + 1
+        del entrances[node]
     anchors = set(entrances) | (frontiers & adjacent.keys())
     anchors.update(node for node, edges in adjacent.items() if len(edges) != 2 or tags_by_node.get(node[1:], {}).get("barrier"))
     def oriented(index, start):
@@ -232,6 +240,28 @@ def topology(ways, pois, tags_by_node, positions, footprint):
                               "access": state, "kind": kind, "name": " / ".join(sorted(names)) or None, "source": members})
     return corridors, points, entrances, {"counts": counts, "frontiers": sorted(frontiers & adjacent.keys()),
                                          "unresolvedPois": unresolved, "entrances": entrances}
+
+
+NETWORK_METERS = 500
+
+
+def connected_lengths(usable, points, ways):
+    """Length of the trail network (trails plus unpaved tracks) each node belongs to."""
+    parent = {}
+    def root(node):
+        parent.setdefault(node, node)
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+    walking = [segment for segment in usable if segment["kind"] == "trail"
+               or any(ways[source["way"]]["tags"].get("highway") == "track" for source in segment["source"])]
+    for segment in walking:
+        parent[root(segment["ends"][0])] = root(segment["ends"][1])
+    totals = defaultdict(float)
+    for segment in walking:
+        totals[root(segment["ends"][0])] += distance(*(points[node] for node in segment["ends"]))
+    return {node: totals[root(node)] for node in parent}
 
 
 def measure(corridors, sample):

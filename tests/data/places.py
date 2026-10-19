@@ -62,6 +62,21 @@ class StartPlaces(unittest.TestCase):
         self.assertEqual(set(entrances), {'n2'})
         self.assertEqual([(poi['id'], poi['reason']) for poi in audit['unresolvedPois']], [('w50', 'no shared trail node')])
 
+    def test_entrances_need_a_connected_trail_network(self):
+        # Three ~110 m stubs from one street: alone, joined to a 1.1 km fire road, and at a mapped trailhead.
+        points = {'s1': (0, 0), 's2': (.002, 0), 's3': (.004, 0), 'a': (0, .001), 'b': (.002, .001), 'c': (.004, .001),
+                  'f': (.002, .011)}
+        ways = {'street': {'id': 'street', 'nodes': ['s1', 's2', 's3'], 'tags': {'highway': 'residential'}},
+                'stub': {'id': 'stub', 'nodes': ['s1', 'a'], 'tags': {'highway': 'footway'}},
+                'spur': {'id': 'spur', 'nodes': ['s2', 'b'], 'tags': {'highway': 'path'}},
+                'fire': {'id': 'fire', 'nodes': ['b', 'f'], 'tags': {'highway': 'track', 'motor_vehicle': 'no'}},
+                'nature': {'id': 'nature', 'nodes': ['s3', 'c'], 'tags': {'highway': 'path'}}}
+        trailhead = {'highway': 'trailhead', 'name': 'Nature Walk'}
+        pois = [{'id': 'nc', 'kind': 'trailhead', 'nodes': ['s3'], 'tags': trailhead}]
+        _, _, entrances, audit = topology(ways, pois, {'s3': trailhead}, points, [-.01, -.01, .02, .02])
+        self.assertEqual(set(entrances), {'ns2', 'ns3'})
+        self.assertEqual(audit['counts']['isolatedEntrances'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()
