@@ -173,11 +173,13 @@ def topology(ways, pois, tags_by_node, positions, footprint):
         walking = permission(poi["tags"])
         arrival = permission(poi["tags"], modes=VEHICLE_MODES) if poi["kind"] == "parking" else "public"
         access = combine(walking, arrival)
-        connections = ["n" + node for node in poi["nodes"] if "n" + node in adjacent and "n" + node not in frontiers]
+        # Parking, like a road contact, must meet a trail; a mapped trailhead is its own evidence.
+        reach = adjacent if poi["kind"] == "trailhead" else trail_nodes
+        connections = ["n" + node for node in poi["nodes"] if "n" + node in reach and "n" + node not in frontiers]
         if access is None or not connections:
             unresolved.append({"id": poi["id"], "kind": poi["kind"], "name": poi["tags"].get("name"),
                                "reason": "restricted vehicle access" if arrival is None else "restricted walking access" if walking is None
-                               else "no shared routable OSM node", "nodes": poi["nodes"]})
+                               else "no shared routable OSM node" if reach is adjacent else "no shared trail node", "nodes": poi["nodes"]})
             continue
         for node in connections:
             entry = entrances.setdefault(node, {"id": "osm-entrance:" + node[1:], "sources": []})
