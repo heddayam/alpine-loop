@@ -51,6 +51,17 @@ class StartPlaces(unittest.TestCase):
                          [('osm-entrance:3', 'trailhead', 'Lot Trailhead'), ('osm-entrance:5', 'road-contact', 'Trail entrance')])
         self.assertEqual(graph['info']['startCount'], 2)
 
+    def test_parking_must_meet_a_trail(self):
+        # One lot touches only its road; the other touches the trail. Neither is a mapped trailhead.
+        points = {'1': (0, 0), '2': (.003, 0), '3': (.003, .003), '7': (.006, 0), '8': (.006, .001), '9': (.009, .001)}
+        ways = {'loop': {'id': 'loop', 'nodes': ['1', '2', '3', '1'], 'tags': {'highway': 'path'}},
+                'road': {'id': 'road', 'nodes': ['7', '8', '9'], 'tags': {'highway': 'service'}}}
+        pois = [{'id': 'w50', 'kind': 'parking', 'nodes': ['8'], 'tags': {'amenity': 'parking'}},
+                {'id': 'w51', 'kind': 'parking', 'nodes': ['2'], 'tags': {'amenity': 'parking'}}]
+        _, _, entrances, audit = topology(ways, pois, {}, points, [-.01, -.01, .02, .02])
+        self.assertEqual(set(entrances), {'n2'})
+        self.assertEqual([(poi['id'], poi['reason']) for poi in audit['unresolvedPois']], [('w50', 'no shared trail node')])
+
 
 if __name__ == '__main__':
     unittest.main()
