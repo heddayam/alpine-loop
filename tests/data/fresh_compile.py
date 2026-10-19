@@ -198,7 +198,7 @@ class FreshCompiler(unittest.TestCase):
                     "limitations": [], "attribution": [], "startCount": 0}
             graph, geometry, lineage, audit = build(source, [{"path": dem, "bounds": [-.01, -.01, .01, .01]}], bounds, info)
             self.assertEqual(graph["starts"][0]["name"], "Loop, 100% — ridge")
-            self.assertIn("n2", lineage["nodeIds"], "Every distinct parking contact stays selectable, even next to a named trailhead")
+            self.assertIn("n2", lineage["nodeIds"], "Every distinct parking contact stays a routing node, even next to a named trailhead")
             self.assertIn("n51", lineage["nodeIds"], "A degree-two trail/sidewalk transition remains a routing node")
             self.assertNotIn("n52", lineage["nodeIds"], "Sidewalk and crossing retain the same connector role and can compact")
             all_nodes = {node for trail in lineage["trails"] for node in trail["nodes"]}
@@ -207,8 +207,11 @@ class FreshCompiler(unittest.TestCase):
             self.assertEqual(len(audit["frontiers"]), 5, "Paths and ordinary roads crossing the footprint retain their boundary intersections")
             self.assertTrue(all(lineage["nodeIds"][start["node"]] not in audit["frontiers"] for start in graph["starts"]))
             self.assertEqual(audit["unresolvedPois"][0]["id"], "n20")
-            starts = {lineage["nodeIds"][start["node"]]: start for start in graph["starts"]}
-            self.assertEqual(set(starts), {"n1", "n2", "n3", "n4", "n5", "n50"}, "Distinct parking exits and road/track-to-trail contacts remain")
+            self.assertEqual({lineage["nodeIds"][start["node"]] for start in graph["starts"]}, {"n1", "n50"},
+                             "One start per place: the lot's trailhead represents all of its exits")
+            starts = {node: dict(entry, kind={2: "trailhead", 1: "parking"}.get(entry.get("rank", 0), "road-contact"))
+                      for node, entry in audit["entrances"].items()}
+            self.assertEqual(set(starts), {"n1", "n2", "n3", "n4", "n5", "n50"}, "Distinct parking exits and road/track-to-trail contacts are classified")
             self.assertEqual(starts["n1"]["kind"], "trailhead", "Trailhead evidence outranks co-located parking")
             self.assertEqual(starts["n2"]["kind"], "parking", "A distinct mapped parking exit preserves its source kind")
             self.assertEqual(starts["n50"]["kind"], "road-contact", "A road contact never acquires trailhead rank from its name")

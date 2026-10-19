@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/prepare'))
-from graph import places
+from graph import assemble, measure, places, topology
 
 
 def start(node, kind='road-contact', access='unknown'):
@@ -31,6 +31,25 @@ class StartPlaces(unittest.TestCase):
         edges = path(*((node, node + 1, 100) for node in range(4)))
         self.assertEqual(places(starts, edges, [[]] * 5),
                          ['osm-entrance:0', 'osm-entrance:0', 'osm-entrance:2', 'osm-entrance:2', 'osm-entrance:4'])
+
+    def test_compiled_lot_with_several_exits_is_one_start(self):
+        # A lot touches the trail at three nodes, one of them a mapped trailhead,
+        # and a road reaches the lot. A distant road contact stays its own start.
+        points = {'1': (0, 0), '2': (.0004, 0), '3': (.0008, 0), '4': (.0012, 0), '5': (.006, .003),
+                  '8': (.0004, -.001), '9': (.006, .004)}
+        ways = {'loop': {'id': 'loop', 'nodes': ['1', '2', '3', '4', '5', '1'], 'tags': {'highway': 'path'}},
+                'lot-road': {'id': 'lot-road', 'nodes': ['8', '2'], 'tags': {'highway': 'service'}},
+                'far-road': {'id': 'far-road', 'nodes': ['9', '5'], 'tags': {'highway': 'unclassified'}}}
+        trailhead = {'highway': 'trailhead', 'name': 'Lot Trailhead'}
+        pois = [{'id': 'n3', 'kind': 'trailhead', 'nodes': ['3'], 'tags': trailhead},
+                {'id': 'w100', 'kind': 'parking', 'nodes': ['2', '3', '4'], 'tags': {'amenity': 'parking'}}]
+        corridors, _, entrances, _ = topology(ways, pois, {'3': trailhead}, points, [-.01, -.01, .01, .01])
+        self.assertEqual(set(entrances), {'n2', 'n3', 'n4', 'n5'})
+        measure(corridors, lambda positions: [100] * len(positions))
+        graph, _, _ = assemble(corridors, entrances, {'id': 'fixture'})
+        self.assertEqual([(start['id'], start['kind'], start['name']) for start in graph['starts']],
+                         [('osm-entrance:3', 'trailhead', 'Lot Trailhead'), ('osm-entrance:5', 'road-contact', 'Trail entrance')])
+        self.assertEqual(graph['info']['startCount'], 2)
 
 
 if __name__ == '__main__':

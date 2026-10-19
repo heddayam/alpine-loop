@@ -275,9 +275,10 @@ def assemble(corridors, entrances, info):
     starts = [{"id": entrances[node]["id"], "node": indexes[node], "name": entrances[node]["name"], "access": entrances[node]["access"],
                "kind": {2: "trailhead", 1: "parking"}.get(entrances[node].get("rank", 0), "road-contact")}
               for node in sorted(entrances)]
-    for start, place in zip(starts, places(starts, edges, [entrances[node].get("pois", []) for node in sorted(entrances)])):
-        start["place"] = place
-    info = dict(info, startCount=len(starts), placeCount=len({start["place"] for start in starts}))
+    # One start per place: its strongest member. The other entrances stay graph nodes.
+    place = places(starts, edges, [entrances[node].get("pois", []) for node in sorted(entrances)])
+    starts = [start for start, founder in zip(starts, place) if founder == start["id"]]
+    info = dict(info, startCount=len(starts))
     return {"version": 1, "info": info, "nodes": nodes, "edges": edges, "starts": starts}, geometry, {
         "nodeIds": node_ids, "edgeIds": edge_ids,
         "trails": [{"id": corridor["id"], "kind": corridor["kind"], "nodes": corridor["nodes"], "segments": corridor["source"]} for corridor in corridors]}
@@ -288,7 +289,7 @@ KIND_STRENGTH = {"trailhead": 0, "parking": 1, "road-contact": 2}
 
 
 def places(starts, edges, pois):
-    """Group starts a hiker would call one place; every start remains searchable.
+    """Group starts a hiker would call one place; returns each start's founding start ID.
 
     Strongest starts found places first. A founder claims unclaimed starts within
     PLACE_METERS of walking, measured from the founder only, so chains of nearby

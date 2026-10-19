@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { canonical, compareMetrics, preference, walkKey, type RouteMetrics } from './quality.js';
+import { canonical, compareMetrics, preference, startRank, walkKey, type RouteMetrics } from './quality.js';
 import type { RouteCandidate, SearchEvent, SearchProgress, SearchQuery, TrailGraph } from '../model.js';
 import { DEFAULT_ROAD_LIMITS } from '../model.js';
 import type { WorkBudget } from '../work-budget.js';
@@ -351,7 +351,7 @@ function components(index: Index): { nodes: number[]; starts: number[] }[] {
 function anchor(graph: TrailGraph, index: Index, component: { nodes: number[]; starts: number[] }, pass: number): number {
   if (component.nodes.length <= 24) return component.nodes[pass % component.nodes.length]!;
   if (!pass) return component.starts.toSorted((a, b) => {
-    const rank = (node: number) => Math.min(...index.starts[node]!.map(id => ({ trailhead: 0, parking: 1, 'road-contact': 2 })[graph.starts[id]!.kind]));
+    const rank = (node: number) => Math.min(...index.starts[node]!.map(id => startRank[graph.starts[id]!.kind]));
     return rank(a) - rank(b) || a - b;
   })[0]!;
   const axis = (pass - 1) % 4 < 2 ? 0 : 1, sign = pass % 2 ? 1 : -1;

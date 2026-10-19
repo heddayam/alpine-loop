@@ -36,7 +36,7 @@ export function quality(graph: TrailGraph, a: RouteCandidate, b: RouteCandidate)
   return pair(a).localeCompare(pair(b)) || a.id.localeCompare(b.id);
 }
 
-const startRank = { trailhead: 0, parking: 1, 'road-contact': 2 };
+export const startRank = { trailhead: 0, parking: 1, 'road-contact': 2 };
 export function preference(graph: TrailGraph, a: RouteCandidate, b: RouteCandidate): number {
   return startRank[graph.starts[a.start]!.kind] - startRank[graph.starts[b.start]!.kind]
     || quality(graph, a, b) || graph.starts[a.start]!.id.localeCompare(graph.starts[b.start]!.id);

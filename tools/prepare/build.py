@@ -135,12 +135,12 @@ def compile_section(opl, products, footprint, info, supplement=()):
     print(f"Retained {len(ways):,} context ways; {len(positions):,} source nodes", flush=True)
     corridors, points, entrances, audit = topology(ways, pois, tags, positions, footprint)
     del ways, pois, tags, positions, points
-    print(f"Compile {len(corridors):,} corridors; {len(entrances):,} starts", flush=True)
+    print(f"Compile {len(corridors):,} corridors; {len(entrances):,} trail entrances", flush=True)
     elevation = Elevation(products, supplement)
     samples = measure(corridors, elevation.sample)
     graph, geometry, source_index = assemble(corridors, entrances, info)
     audit["counts"].update(elevationSamples=samples, nodes=len(graph["nodes"]), directedEdges=len(graph["edges"]),
-                           physicalTrails=len(geometry), starts=len(entrances), frontierNodes=len(audit["frontiers"]),
+                           physicalTrails=len(geometry), entrances=len(entrances), starts=len(graph["starts"]), frontierNodes=len(audit["frontiers"]),
                            elevationSupplementSamples=elevation.supplement_samples)
     return graph, geometry, source_index, audit
 

@@ -1,5 +1,5 @@
 import type { Boundary, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
-import type { HikeRoute, JobInputs, Position, RouteCandidate, SearchQuery, TrailStart } from './model.js';
+import type { HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -7,16 +7,6 @@ import type { WorkBudget } from './work-budget.js';
 import { openSections } from './sections.js';
 import { areaBounds, boundarySections, pointInBoundary, pointInArea, restrictDriveArea } from './boundary.js';
 import { routeName } from './route-name.js';
-
-/** Places are display groups; every member stays a separate search start. */
-function places(records: SectionStarts) {
-  const result = new Map<string, { founder: TrailStart; position: Position }>();
-  for (const [start, position] of records) {
-    const key = start.place ?? start.id;
-    if (!result.has(key) || start.id === key) result.set(key, { founder: start, position });
-  }
-  return result;
-}
 
 /** Catalog/starts stay small. Each worker loads one independently bounded graph at a time. */
 export async function readDataset(directory: string, budget?: WorkBudget) {
@@ -60,7 +50,7 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
       const eligible = records.filter(([start, position]) => (query.includeUnknown || start.access === 'public') &&
         (!query.boundary || pointInBoundary(position, query.boundary)) &&
         (!driveArea || pointInArea(position, driveArea))).map(([start]) => start);
-      result.push({ section, eligible, places: places(records) });
+      result.push({ section, eligible });
     }
     return result;
   }
@@ -70,7 +60,6 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     if (!query.includeUnknown) graph.edges = graph.edges.filter(edge => edge.access === 'public');
     function describe(candidate: RouteCandidate): StoredRoute {
       const start = graph.starts[candidate.start]!;
-      const place = chosen.places.get(start.place ?? start.id.slice(chosen.section.id.length + 1))!;
       const steps = candidate.edges.map(index => graph.edges[index]!);
       let first = 0, last = steps.length - 1;
       while (first < last && steps[first]!.trail === steps[last]!.trail) { first++; last--; }
@@ -81,8 +70,8 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
       }
       const { id, distance, gain, roadDistance, repetition, kind, uncertain } = candidate;
       return {
-        summary: { id, distance, gain, roadDistance, repetition, kind, uncertain, startId: start.id, startName: place.founder.name, startKind: start.kind,
-          startPosition: place.position, startPlace: `${chosen.section.id}/${place.founder.id}`, trailNames: [...names].sort((a, b) => b[1] - a[1]).map(([name]) => name) },
+        summary: { id, distance, gain, roadDistance, repetition, kind, uncertain, startId: start.id, startName: start.name, startKind: start.kind,
+          startPosition: graph.nodes[start.node]!, trailNames: [...names].sort((a, b) => b[1] - a[1]).map(([name]) => name) },
         sections: steps.map(edge => ({ section: chosen.section.id, id: edge.trail, reverse: edge.reverse, name: trails[edge.trail]!.name })),
       };
     }
