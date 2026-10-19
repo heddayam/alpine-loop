@@ -38,6 +38,7 @@ import { useJobs } from "./useJobs.js";
 import { RouteCache } from "./RouteCache.js";
 import { RouteDock } from "./RouteDock.js";
 import { RouteCard } from "./RouteCard.js";
+import { CollapseTab } from "./CollapseTab.js";
 import { useRouteStars } from "./useRouteStars.js";
 import {
   SearchControls,
@@ -48,6 +49,7 @@ import {
   type SearchDraft,
 } from "./SearchControls.js";
 import { readUnitSystem, saveUnitSystem, type UnitSystem } from "./units.js";
+import { CoordinateSearch } from "./CoordinateSearch.js";
 
 const HikeMap = lazy(async () => ({
   default: (await import("./Map.js")).HikeMap,
@@ -93,12 +95,14 @@ export function App() {
   const [choosingDriveOrigin, setChoosingDriveOrigin] = useState(false);
   const [driveOriginReturn, setDriveOriginReturn] = useState(0);
   const [showSearchArea, setShowSearchArea] = useState(true);
+  const [showAreaOutline, setShowAreaOutline] = useState(false);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
   const [camera, setCamera] = useState<{
     bounds: Bounds;
     revision: number;
     padding?: number;
     bottomPadding?: number;
+    center?: [number, number];
   }>();
   const jobHistory = useJobs();
   const { jobs } = jobHistory;
@@ -232,6 +236,7 @@ export function App() {
     setPendingJob(null);
     clearSelection();
     setViewedJob(undefined);
+    setShowAreaOutline(false);
     setResultsCollapsed(true);
     setLocations([]);
     routeCache.current.clear();
@@ -266,6 +271,7 @@ export function App() {
       if (controller.signal.aborted) return;
       routeCache.current.clear();
       setViewedJob(fullJob);
+      setShowAreaOutline(false);
       setDraft(draftForQuery(fullJob.query, unitsRef.current));
       setResultsCollapsed(false);
       setLocations(positions);
@@ -436,6 +442,7 @@ export function App() {
   const changeDraft = (next: SearchDraft) => {
     if (busy || downloading || choosingDownload) return;
     setDraft(next);
+    setShowAreaOutline(false);
     if (!next.driveTime?.enabled) setChoosingDriveOrigin(false);
     setError("");
     setShowSearchArea(true);
@@ -709,6 +716,10 @@ export function App() {
     <div className="app-shell">
       <header className="app-header">
         <h1>Alpine Loop</h1>
+        <CoordinateSearch disabled={!camera} onLocate={center => {
+          setCamera(current => current ? { bounds: current.bounds, revision: current.revision + 1, center } : current);
+          setResultScope("view");
+        }} />
         <nav aria-label="App">
           <button
             id="open-search-jobs"
@@ -813,21 +824,14 @@ export function App() {
           />
         )}
         {viewedJob && (
-          <button
+          <CollapseTab
             id="results-toggle"
-            className="collapse-results"
-            type="button"
-            aria-controls="results-panel"
-            aria-label={
-              resultsCollapsed
-                ? "Expand results panel"
-                : "Collapse results panel"
-            }
-            aria-expanded={!resultsCollapsed}
-            onClick={() => setResultsCollapsed((value) => !value)}
-          >
-            <span aria-hidden="true">{resultsCollapsed ? "›" : "‹"}</span>
-          </button>
+            edge="side"
+            controls="results-panel"
+            label="results panel"
+            collapsed={resultsCollapsed}
+            onToggle={() => setResultsCollapsed((value) => !value)}
+          />
         )}
         <section ref={browserPanel} className="browser-panel" aria-label="Browse hikes">
           {mapDataset && camera ? (
@@ -837,6 +841,7 @@ export function App() {
               }
             >
               <HikeMap
+                browsing={!viewedJob}
                 units={units}
                 sections={mapDataset.sections}
                 selectedSections={
@@ -847,6 +852,9 @@ export function App() {
                 }
                 boundary={visibleBoundary}
                 driveArea={visibleDriveArea}
+                showAreaOutline={showAreaOutline}
+                driveMinutes={viewedJob?.query.driveTime?.minutes}
+                onToggleAreaOutline={() => setShowAreaOutline(value => !value)}
                 driveOrigin={visibleDriveOrigin}
                 choosingDriveOrigin={choosingDriveOrigin}
                 onDriveOrigin={(origin) => {
@@ -932,7 +940,7 @@ export function App() {
         {(drawingBoundary || visibleBoundary || (!showSearchArea ? viewedJob?.query.driveTime : draft.driveTime?.enabled)) && <p className="scope-note">
           {drawingBoundary ? "Draw within the prepared regions outlined on the map."
             : (!showSearchArea ? viewedJob?.query.driveTime : draft.driveTime?.enabled)
-              ? visibleDriveArea ? "Dimmed parts of the search area exceed the estimated driving limit. Hikes may extend outside."
+              ? showAreaOutline && visibleDriveArea ? "The outline shows the search area within the estimated driving limit. Hikes may extend outside."
                 : "Estimated driving time filters starting points in the search area. Hikes may extend outside."
             : "Search uses starting points inside the drawn boundary. Map movement does not change scope."}
         </p>}

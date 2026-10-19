@@ -9,6 +9,26 @@ import {
 } from "../../src/client/SearchControls.js";
 
 describe("editable search constraints", () => {
+  it("keeps high point optional, supports open bounds, and preserves exact saved elevations across units", () => {
+    const base = { ...initialDraft, sections: ["fixture"] };
+    expect(queryForDraft(base)).not.toHaveProperty("highPoint");
+    for (const bounds of [["1000", ""], ["", "9000"], ["-200", "0"], ["2000", "8000"]] as [string, string][]) {
+      const query = queryForDraft({ ...base, highPoint: bounds });
+      expect(query.highPoint).toEqual(bounds.map(value => value ? Number(value) * 0.3048 : null));
+      expect(() => validateQuery(query)).not.toThrow();
+      let copied = draftForQuery(query);
+      for (let i = 0; i < 5; i++) {
+        copied = convertDraft(copied, "imperial", "metric");
+        expect(queryForDraft(copied, "metric")).toEqual(query);
+        copied = convertDraft(copied, "metric", "imperial");
+        expect(queryForDraft(copied)).toEqual(query);
+      }
+      expect(queryForDraft({ ...copied, highPoint: ["", ""] })).not.toHaveProperty("highPoint");
+    }
+    for (const highPoint of [["9000", "1000"], ["bad", ""], ["", "Infinity"]] as [string, string][]) {
+      expect(() => queryForDraft({ ...base, highPoint })).toThrow("high point bounds");
+    }
+  });
   it("accepts standalone driving scope and retains it through copied settings and unit changes", () => {
     const standalone = { ...initialDraft, sections: [], driveTime: {
       enabled: true, minutes: "30", origin: [-122.33, 47.6] as [number, number],

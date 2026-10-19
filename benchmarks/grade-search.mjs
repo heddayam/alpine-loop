@@ -33,8 +33,8 @@ if (process.argv[2] !== '--case') {
 } else {
   const { root, dataset: directory, definition, gradesEnabled } = JSON.parse(process.argv[3]);
   const load = name => import(pathToFileURL(join(root, 'dist/server', name + '.js')));
-  const [{ readDataset }, { solveSection }, { routeGradeCheck }, { createWorkBudget }] = await Promise.all(
-    ['dataset', 'diversity', 'route-grades', 'work-budget'].map(load));
+  const [{ readDataset }, { solveSection }, { routeElevationCheck }, { createWorkBudget }] = await Promise.all(
+    ['dataset', 'diversity', 'route-elevation', 'work-budget'].map(load));
   const query = structuredClone(definition.query);
   if (!gradesEnabled) delete query.grades;
   const cpu = process.cpuUsage(), began = performance.now(), budget = createWorkBudget();
@@ -50,10 +50,10 @@ if (process.argv[2] !== '--case') {
       const { graph } = await data.select(query, chosen);
       graphPreparationMs += performance.now() - at;
       at = performance.now();
-      const check = query.grades ? await routeGradeCheck(graph,
-        data.readGeometry(chosen.section.id, new Set(graph.edges.map(edge => edge.trail))), query.grades, budget) : undefined;
+      const check = query.grades || query.highPoint ? await routeElevationCheck(graph,
+        data.readGeometry(chosen.section.id, new Set(graph.edges.map(edge => edge.trail))), query, budget) : undefined;
       gradePreparationMs += performance.now() - at;
-      const gradeCheck = check && (route => {
+      const elevationCheck = check && (route => {
         const start = performance.now();
         const accepted = check(route);
         gradeCheckMs += performance.now() - start; gradeCalls++;
@@ -61,7 +61,7 @@ if (process.argv[2] !== '--case') {
       });
       let progress;
       at = performance.now();
-      await solveSection(graph, query, { budget, gradeCheck,
+      await solveSection(graph, query, { budget, elevationCheck,
         onProgress: value => { progress = value; },
         onRoute: ({ route, groupId }) => routes.push([chosen.section.id, groupId, route.id]) });
       searchMs += performance.now() - at;

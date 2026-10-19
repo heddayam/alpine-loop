@@ -24,6 +24,7 @@ export type TrailEdge = {
 };
 export type StartKind = 'trailhead' | 'parking' | 'road-contact';
 export type TrailStart = { id: string; node: number; name: string; access: Access; kind: StartKind };
+export type AccessPoint = Omit<TrailStart, 'node'> & { position: Position; region: string };
 export type Attribution = { name: string; url: string; license: string };
 export type DatasetInfo = {
   id: string;
@@ -48,6 +49,8 @@ export type TrailGeometry = { id: string; name: string | null; coordinates: Posi
 /** Grade is percent rise/run over a centered 100 m window; distances are meters. */
 export type GradeLimit = { above: number; total: number; longest: number };
 export type GradeLimits = { uphill: GradeLimit; downhill: GradeLimit };
+/** Highest route elevation above sea level, in meters; null leaves a bound open. */
+export type HighPointRange = [minimum: number | null, maximum: number | null];
 
 /** Engine/transport measurements use meters and fractions; UI converts units. */
 export type SearchQuery = {
@@ -61,6 +64,8 @@ export type SearchQuery = {
   effort?: 'normal' | 'deep';
   distance: [minimum: number, maximum: number];
   gain: [minimum: number, maximum: number];
+  /** Omission disables the filter. Unknown elevation cannot qualify when enabled. */
+  highPoint?: HighPointRange;
   /** Maximum one-way approach distance in meters. Both stem limits apply when supplied. */
   stem?: number;
   /** Maximum one-way stem as a fraction of total hike distance. */
@@ -164,7 +169,11 @@ export type JobResults = {
   order: SortOrder;
   selectionNote: string;
 };
-export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance' | 'gain' | 'repetition' | 'roadDistance'> & { bounds: Bounds };
+export type RouteLocation = Pick<RouteChoice, 'id' | 'groupId' | 'startId' | 'startName' | 'startPosition' | 'trailNames' | 'distance' | 'gain' | 'repetition' | 'roadDistance'> & {
+  bounds: Bounds;
+  /** Derived from saved geometry, including older jobs. Null means unknown elevation. */
+  highPoint: number | null;
+};
 /** Each shared physical trail is drawn once, with its preferred hikes in distance order. */
 export type RoutePath = { id: string; routeIds: string[]; geometry: [number, number][] };
 export type SearchProgress = {

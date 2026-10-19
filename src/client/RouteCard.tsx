@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
 import { routeName } from "../route-name.js";
 import type { JobSnapshot, RouteView } from "../model.js";
+import { highestElevation } from "../grade.js";
 import { ElevationProfile, type ProfileHover } from "./ElevationProfile.js";
 import { StarIcon } from "./StarIcon.js";
+import { CollapseTab } from "./CollapseTab.js";
 import { savedResultsURL } from "./JobsDialog.js";
 import { distanceText, elevationText, stemDistance, unitsFor, type UnitSystem } from "./units.js";
 
@@ -37,14 +39,19 @@ export function RouteCard({
   const [readoutTarget, setReadoutTarget] = useState<HTMLDivElement | null>(null);
   const [plotHeight, setPlotHeight] = useState(104);
   const [allTrails, setAllTrails] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [visibleTrails, setVisibleTrails] = useState(0);
   const trails = useMemo(() => route ? [...new Set(route.trailNames)] : [], [route?.trailNames]);
+  const highPoint = useMemo(() => route ? highestElevation(route.geometry) : null, [route?.geometry]);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => () => onTrailHover(null), [onTrailHover]);
   useEffect(() => {
     const table = metrics.current;
     if (!table) return;
-    const measure = () => setPlotHeight(table.getBoundingClientRect().height);
+    const measure = () => {
+      const height = table.getBoundingClientRect().height;
+      if (height) setPlotHeight(height);
+    };
     const observer = new ResizeObserver(measure);
     observer.observe(table);
     measure();
@@ -55,6 +62,7 @@ export function RouteCard({
     const label = trailLabel.current, toggle = trailToggle.current;
     if (!row || !list || !label || !toggle) return;
     const measure = () => {
+      if (!row.clientWidth) return;
       const gap = parseFloat(getComputedStyle(row).columnGap);
       const listGap = parseFloat(getComputedStyle(list).columnGap);
       const labelWidth = label.getBoundingClientRect().width + parseFloat(getComputedStyle(label).marginRight);
@@ -98,8 +106,14 @@ export function RouteCard({
         }
       }}
     >
-      <header className="route-card-header">
-        <div className="route-card-top">
+      <CollapseTab edge="top" controls="route-card-details" label="hike details" collapsed={collapsed}
+        onToggle={() => {
+          onProfileHover(null);
+          onTrailHover(null);
+          setCollapsed(value => !value);
+        }} />
+      <div className="route-card-content">
+        <header className="route-card-top">
           <h2 ref={heading} id="route-detail-heading" tabIndex={-1} title={name}>
             {name}
           </h2>
@@ -120,47 +134,52 @@ export function RouteCard({
               </svg>
             </button>
           </div>
+        </header>
+        <div id="route-card-details" hidden={collapsed}>
+          <div className="route-card-header">
+            {route && <p className="route-card-trailhead" title={trailhead} aria-label={`Trailhead: ${trailhead}`}>{trailhead}</p>}
+            <div ref={setReadoutTarget} className="route-card-readout" />
+          </div>
+          {route ? (
+            <div className="route-detail">
+              <table ref={metrics} className="detail-metrics" aria-label="Route statistics"><tbody>
+                <tr><th scope="row">Distance</th><td>{distanceText(route.distance, units)}</td><td className="metric-unit">{display.distanceLabel}</td></tr>
+                <tr><th scope="row">Elevation gain</th><td>{elevationText(route.gain, units)}</td><td className="metric-unit">{display.elevationLabel}</td></tr>
+                <tr><th scope="row" title="Highest elevation above sea level">High Point</th><td title={highPoint === null ? "Elevation data is incomplete" : undefined}>{highPoint === null ? "—" : elevationText(highPoint, units)}</td><td className="metric-unit">{display.elevationLabel}</td></tr>
+                <tr><th scope="row" title="One-way approach walked again on the return">Approach <span className="metric-note">one way</span></th><td>{distanceText(stemDistance(route), units)}</td><td className="metric-unit">{display.distanceLabel}</td></tr>
+                <tr><th scope="row">Roads</th><td>{distanceText(route.roadDistance, units, 2)}</td><td className="metric-unit">{display.distanceLabel}, <span className="road-fraction">{(route.distance > 0 ? 100 * route.roadDistance / route.distance : 0).toFixed(1)}%</span></td></tr>
+              </tbody></table>
+              <ElevationProfile key={route.id} route={route} units={units} onHover={onProfileHover}
+                readoutTarget={readoutTarget} plotHeight={plotHeight} />
+              {!!trails.length && <footer ref={footer} className="route-card-footer">
+                  <span ref={trailLabel} className="route-footer-label">Trails</span>
+                  <ul ref={trailList} className={`trail-names${allTrails ? " is-expanded" : ""}`} id="route-trail-names">
+                    {trails.map((trail, index) => <li key={trail} hidden={!allTrails && index >= visibleTrails}>
+                      <button type="button" title={trail}
+                        onPointerEnter={() => onTrailHover(trail)}
+                        onPointerLeave={event => { if (document.activeElement !== event.currentTarget) onTrailHover(null); }}
+                        onFocus={() => onTrailHover(trail)} onBlur={() => onTrailHover(null)}>{trail}</button>
+                    </li>)}
+                  </ul>
+                  <button ref={trailToggle} type="button" className="trail-list-toggle"
+                    hidden={!allTrails && visibleTrails === trails.length}
+                    aria-expanded={allTrails} aria-controls="route-trail-names"
+                    onClick={() => { onTrailHover(null); setAllTrails(value => !value); }}>
+                    {allTrails ? "Show fewer" : `Show all ${trails.length}`}
+                  </button>
+              </footer>}
+            </div>
+          ) : (
+            <div className="route-loading">
+              <p role={error ? "alert" : "status"}>{error || "Loading hike details…"}</p>
+              {error && <button type="button" onClick={() => {
+                heading.current?.focus({ preventScroll: true });
+                onRetry();
+              }}>Retry</button>}
+            </div>
+          )}
         </div>
-        {route && <p className="route-card-trailhead" title={trailhead} aria-label={`Trailhead: ${trailhead}`}>{trailhead}</p>}
-        <div ref={setReadoutTarget} className="route-card-readout" />
-      </header>
-      {route ? (
-        <div className="route-detail">
-          <table ref={metrics} className="detail-metrics" aria-label="Route statistics"><tbody>
-            <tr><th scope="row">Distance</th><td>{distanceText(route.distance, units)}</td><td className="metric-unit">{display.distanceLabel}</td></tr>
-            <tr><th scope="row">Elevation gain</th><td>{elevationText(route.gain, units)}</td><td className="metric-unit">{display.elevationLabel}</td></tr>
-            <tr><th scope="row" title="One-way approach walked again on the return">Approach <span className="metric-note">one way</span></th><td>{distanceText(stemDistance(route), units)}</td><td className="metric-unit">{display.distanceLabel}</td></tr>
-            <tr><th scope="row">Roads</th><td>{distanceText(route.roadDistance, units, 2)}</td><td className="metric-unit">{display.distanceLabel}, <span className="road-fraction">{(route.distance > 0 ? 100 * route.roadDistance / route.distance : 0).toFixed(1)}%</span></td></tr>
-          </tbody></table>
-          <ElevationProfile key={route.id} route={route} units={units} onHover={onProfileHover}
-            readoutTarget={readoutTarget} plotHeight={plotHeight} />
-          {!!trails.length && <footer ref={footer} className="route-card-footer">
-              <span ref={trailLabel} className="route-footer-label">Trails</span>
-              <ul ref={trailList} className={`trail-names${allTrails ? " is-expanded" : ""}`} id="route-trail-names">
-                {trails.map((trail, index) => <li key={trail} hidden={!allTrails && index >= visibleTrails}>
-                  <button type="button" title={trail}
-                    onPointerEnter={() => onTrailHover(trail)}
-                    onPointerLeave={event => { if (document.activeElement !== event.currentTarget) onTrailHover(null); }}
-                    onFocus={() => onTrailHover(trail)} onBlur={() => onTrailHover(null)}>{trail}</button>
-                </li>)}
-              </ul>
-              <button ref={trailToggle} type="button" className="trail-list-toggle"
-                hidden={!allTrails && visibleTrails === trails.length}
-                aria-expanded={allTrails} aria-controls="route-trail-names"
-                onClick={() => { onTrailHover(null); setAllTrails(value => !value); }}>
-                {allTrails ? "Show fewer" : `Show all ${trails.length}`}
-              </button>
-          </footer>}
-        </div>
-      ) : (
-        <div className="route-loading">
-          <p role={error ? "alert" : "status"}>{error || "Loading hike details…"}</p>
-          {error && <button type="button" onClick={() => {
-            heading.current?.focus({ preventScroll: true });
-            onRetry();
-          }}>Retry</button>}
-        </div>
-      )}
+      </div>
     </aside>
   );
 }

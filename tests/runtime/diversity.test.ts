@@ -99,6 +99,23 @@ it('rejects road mileage and climb padding before minimum qualification', async 
   expect(necessary.every(route => route.route.roadDistance === 100)).toBe(true);
 });
 
+it('checks lower-ranked starts when the trailhead witness fails its road proof', async () => {
+  const graph = fixture([[0, 1, 50, { connector: true }],
+    [0, 2, 60, { connector: true }], [2, 1, 60, { connector: true }],
+    [5, 1, 120], [1, 3, 300], [3, 4, 300], [4, 1, 300]], [5, 1, 0]);
+  graph.starts[0]!.kind = 'parking';
+  graph.starts[1]!.kind = 'road-contact';
+  const criteria: SearchQuery = { ...query, distance: [1130, 1150], repetition: 0.2 };
+  const routes = await compareOutputs(graph, criteria);
+  expect(routes).toHaveLength(1);
+  expect(graph.starts[routes[0]!.route.start]!.kind).toBe('parking');
+  // The long road approach pads the trailhead route. Only a certified,
+  // qualifying trailhead can rule out the otherwise qualifying parking start.
+  const wider = await compareOutputs(graph, { ...criteria, distance: [990, 1150] });
+  expect(wider).toHaveLength(1);
+  expect(graph.starts[wider[0]!.route.start]!.kind).toBe('trailhead');
+});
+
 it('preserves equal-road metric witnesses and does not let uncertain shortcuts suppress known access', async () => {
   const tied = fixture([[0, 1, 1000], [1, 0, 100, { connector: true }],
     [1, 0, 100, { connector: true, gain: 20, backGain: 20 }]]);
@@ -133,6 +150,23 @@ it('keeps road-minimum certificates separate for known and uncertain starts at t
   expect(routes).toHaveLength(1);
   expect(routes.every(item => item.route.start === 0 && !item.route.uncertain
     && item.route.roadDistance === 100)).toBe(true);
+});
+
+it('keeps road proofs exact when shared destinations are reached from nearer and farther starts', async () => {
+  const graph = fixture([[0, 1, 120.5, { connector: true }],
+    [0, 2, 20.25, { connector: true }], [2, 1, 20.25, { connector: true }],
+    [5, 0, 50.25, { connector: true }], [5, 1, 200.25, { connector: true }],
+    [1, 3, 300], [3, 4, 300], [4, 1, 300]], [2, 0, 5]);
+  const criteria: SearchQuery = { ...query, distance: [1081.5, 1081.5], repetition: 0.2 };
+  const routes = await compareOutputs(graph, criteria);
+  expect(routes).toHaveLength(1);
+  expect(routes[0]!.route.roadDistance).toBe(181.5);
+  // Reversing start evaluation exercises extending a cached road search and
+  // then querying a shorter distance without trusting its tentative labels.
+  graph.starts.reverse();
+  expect((await compareOutputs(graph, criteria))[0]!.route.roadDistance).toBe(181.5);
+  // A shorter substitution below the minimum must still prevent mileage padding.
+  expect(await compareOutputs(graph, { ...criteria, distance: [1141, 1141] })).toHaveLength(0);
 });
 
 it('chooses one qualifying direction when minor witnesses differ', async () => {

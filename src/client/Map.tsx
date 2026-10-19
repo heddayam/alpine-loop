@@ -14,9 +14,10 @@ import type { Bounds, HikeRoute, RouteLocation, RoutePath, SearchBoundary } from
 import type { Boundary } from "../data-format.js";
 import type { ProfileCursor } from "./ElevationProfile.js";
 import { HikeMarkers } from "./HikeMarkers.js";
+import { AccessPoints } from "./AccessPoints.js";
 import { request } from "./request.js";
 import { mergedRegionBoundary } from "./region-outline.js";
-import { boundaryGeometry, excludedDriveArea } from "../boundary.js";
+import { boundaryGeometry } from "../boundary.js";
 import { BoundaryDrawing } from "./BoundaryDrawing.js";
 import { MapCoordinates } from "./MapCoordinates.js";
 import { routeDrawing } from "./route-drawing.js";
@@ -58,6 +59,7 @@ function peakElevationFeet(value: unknown): unknown {
 }
 export function HikeMap({
   units,
+  browsing,
   sections,
   selectedSections,
   routes,
@@ -75,6 +77,9 @@ export function HikeMap({
   hoveredTrail,
   boundary,
   driveArea,
+  showAreaOutline,
+  driveMinutes,
+  onToggleAreaOutline,
   driveOrigin,
   choosingDriveOrigin = false,
   onDriveOrigin,
@@ -84,6 +89,7 @@ export function HikeMap({
   onCancelBoundary,
 }: {
   units: UnitSystem;
+  browsing: boolean;
   sections: { id: string; boundary: Boundary }[];
   selectedSections: string[];
   routes: RouteLocation[];
@@ -92,7 +98,7 @@ export function HikeMap({
   previewRoute: HikeRoute | null;
   selectedId: string | null;
   previewId: string | null;
-  camera: { bounds: Bounds; revision: number; padding?: number; bottomPadding?: number };
+  camera: { bounds: Bounds; revision: number; padding?: number; bottomPadding?: number; center?: [number, number] };
   onSelect: (id: string) => void;
   onPreview: (id: string | null) => void;
   onBoundsChange: (bounds: Bounds, userMoved: boolean) => void;
@@ -101,6 +107,9 @@ export function HikeMap({
   hoveredTrail: string | null;
   boundary?: SearchBoundary;
   driveArea?: Boundary;
+  showAreaOutline: boolean;
+  driveMinutes?: number;
+  onToggleAreaOutline: () => void;
   driveOrigin?: [number, number];
   choosingDriveOrigin?: boolean;
   onDriveOrigin: (origin: [number, number]) => void;
@@ -277,19 +286,14 @@ export function HikeMap({
       instance.addSource("sections", {
         type: "geojson",
         data: empty,
+        attribution: 'Driving area: <a href="https://www.esri.com/">Powered by Esri</a>',
       });
       instance.addSource("route", { type: "geojson", data: empty });
       instance.addSource("profile-selection", { type: "geojson", data: empty });
       instance.addSource("preview-route", { type: "geojson", data: empty });
       instance.addSource("result-paths", { type: "geojson", data: empty });
       instance.addSource("search-boundary", { type: "geojson", data: empty });
-      instance.addSource("driving-excluded", { type: "geojson", data: empty,
-        attribution: 'Driving area: <a href="https://www.esri.com/">Powered by Esri</a>' });
       instance.addSource("driving-origin", { type: "geojson", data: empty });
-      instance.addLayer({
-        id: "driving-excluded-fill", type: "fill", source: "driving-excluded",
-        paint: { "fill-color": "#22303b", "fill-opacity": 0.22, "fill-antialias": false },
-      });
       instance.addLayer({
         id: "sections-outline",
         type: "line",
@@ -405,6 +409,11 @@ export function HikeMap({
         cancelAnimationFrame(hoverFrame);
         hoverFrame = requestAnimationFrame(() => {
           hoverFrame = 0;
+          if (instance.getLayer("access-points") && instance.queryRenderedFeatures(event.point, { layers: ["access-points"] }).length) {
+            hoverSegment();
+            instance.getCanvas().style.cursor = "pointer";
+            return;
+          }
           const feature = pathAt(event.point);
           const id = feature?.properties.id;
           instance.getCanvas().style.cursor = typeof id === "string" ? "pointer" : "";
@@ -458,28 +467,28 @@ export function HikeMap({
 
   useEffect(() => {
     if (!map) return;
+    // Saved driving geometry is already intersected with the submitted search scope.
+    const area = driveArea && !drawingBoundary ? driveArea : selectedArea;
     (map.getSource("sections") as GeoJSONSource).setData({
       type: "FeatureCollection",
-      features: selectedArea.coordinates.length
-        ? [{ type: "Feature", geometry: selectedArea, properties: {} }]
+      features: area.coordinates.length && (drawingBoundary || showAreaOutline)
+        ? [{ type: "Feature", geometry: area, properties: {} }]
         : [],
     });
-  }, [map, selectedArea]);
+  }, [map, selectedArea, driveArea, drawingBoundary, showAreaOutline]);
 
   useEffect(() => {
     if (!map) return;
-    (map.getSource("search-boundary") as GeoJSONSource).setData(boundary && !drawingBoundary
+    (map.getSource("search-boundary") as GeoJSONSource).setData(boundary && !drawingBoundary && !driveArea && showAreaOutline
       ? { type: "Feature", properties: {}, geometry: boundaryGeometry(boundary) } : empty);
-    map.setPaintProperty("sections-outline", "line-opacity", drawingBoundary ? 0.5 : boundary ? 0.25 : 0.9);
-  }, [map, boundary, drawingBoundary]);
+    map.setPaintProperty("sections-outline", "line-opacity", drawingBoundary ? 0.5 : boundary && !driveArea ? 0.25 : 0.9);
+  }, [map, boundary, driveArea, drawingBoundary, showAreaOutline]);
 
   useEffect(() => {
     if (!map) return;
-    (map.getSource("driving-excluded") as GeoJSONSource).setData(driveArea && !drawingBoundary
-      ? { type: "Feature", properties: {}, geometry: excludedDriveArea(selectedArea, driveArea, boundary) } : empty);
     (map.getSource("driving-origin") as GeoJSONSource).setData(driveOrigin && !drawingBoundary
       ? { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: driveOrigin } } : empty);
-  }, [map, selectedArea, boundary, driveArea, driveOrigin, drawingBoundary]);
+  }, [map, driveOrigin, drawingBoundary]);
 
   useEffect(() => {
     if (!map || !choosingDriveOrigin) return;
@@ -620,6 +629,10 @@ export function HikeMap({
     if (!map) return;
     map.resize();
     const padding = camera.padding ?? 40;
+    if (camera.center) {
+      map.jumpTo({ center: camera.center, zoom: 12 });
+      return;
+    }
     map.fitBounds(camera.bounds, {
       padding: { top: padding, right: padding, bottom: camera.bottomPadding ?? padding, left: padding },
       maxZoom: 17,
@@ -630,6 +643,11 @@ export function HikeMap({
   return (
     <section className="map-panel" aria-label="Hike map">
       <div className="map-canvas" ref={container} />
+      <svg className="map-center-indicator" width="22" height="22" viewBox="0 0 34 34" aria-hidden="true">
+        <path d="M17 6v6 M17 22v6 M6 17h6 M22 17h6" fill="none" stroke="#fff" strokeWidth="3.5" />
+        <path d="M17 6v6 M17 22v6 M6 17h6 M22 17h6" fill="none" stroke="#222" strokeWidth="1.5" />
+        <rect x="15.75" y="15.75" width="2.5" height="2.5" fill="#222" stroke="#fff" strokeWidth="2" paintOrder="stroke" />
+      </svg>
       <MapCoordinates map={map} />
       <HikeMarkers map={map} routes={routes} selectedId={selectedId} previewId={previewId}
         disabled={drawingBoundary || choosingDriveOrigin} onSelect={onSelect} onPreview={onPreview} onBrowse={onBrowse}
@@ -653,18 +671,28 @@ export function HikeMap({
           <button type="button" onClick={() => setPathsRetry((value) => value + 1)}>Retry</button>
         </div>
       )}
-      <a
-        className="map-provider"
-        href="https://www.maptoolkit.org/"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <img
-          src="https://www.maptoolkit.org/assets/maptoolkit-attribution.png"
-          alt="Maptoolkit"
-          height={24}
-        />
-      </a>
+      <div className={`map-context${drawingBoundary || choosingDriveOrigin ? " is-editing" : ""}`}>
+        <AccessPoints map={map} enabled={browsing && !drawingBoundary && !choosingDriveOrigin} />
+        {(driveArea || boundary || selectedArea.coordinates.length > 0) && !drawingBoundary && !choosingDriveOrigin && <div className="search-area-control">
+          <label>
+            <input type="checkbox" checked={showAreaOutline} onChange={onToggleAreaOutline} />
+            Show search area
+          </label>
+          {showAreaOutline && driveArea && <span>Within {driveMinutes} min drive</span>}
+        </div>}
+        <a
+          className="map-provider"
+          href="https://www.maptoolkit.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img
+            src="https://www.maptoolkit.org/assets/maptoolkit-attribution.png"
+            alt="Maptoolkit"
+            height={24}
+          />
+        </a>
+      </div>
     </section>
   );
 }

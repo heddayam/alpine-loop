@@ -1,4 +1,4 @@
-import { difference, intersection, union, type Geom } from 'polyclip-ts';
+import { intersection, union, type Geom } from 'polyclip-ts';
 import type { Boundary } from './data-format.js';
 import type { Bounds, Position, SearchBoundary } from './model.js';
 
@@ -66,15 +66,6 @@ export function restrictDriveArea(area: Boundary, sections: { boundary: Boundary
   const coordinates = intersection(area.coordinates as Geom, scope,
     ...(boundary ? [boundaryGeometry(boundary).coordinates as Geom] : []));
   return { type: 'MultiPolygon', coordinates };
-}
-
-/** Dim only excluded search scope, keeping reachable areas, holes and islands clear. */
-export function excludedDriveArea(scope: Boundary, area: Boundary, boundary?: SearchBoundary): Boundary {
-  const coordinates = boundary && scope.coordinates.length
-    ? intersection(scope.coordinates as Geom, boundaryGeometry(boundary).coordinates as Geom)
-    : scope.coordinates;
-  return { type: 'MultiPolygon', coordinates: coordinates.length && area.coordinates.length
-    ? difference(coordinates as Geom, area.coordinates as Geom) : coordinates };
 }
 
 export function areaBounds(area: Boundary): Bounds | undefined {

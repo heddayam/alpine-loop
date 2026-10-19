@@ -7,6 +7,8 @@ export function SteppedNumber({
   value,
   step,
   max,
+  min = 0,
+  placeholder,
   required = true,
   onChange,
 }: {
@@ -16,6 +18,8 @@ export function SteppedNumber({
   value: string;
   step: number;
   max?: number;
+  min?: number | null;
+  placeholder?: string;
   required?: boolean;
   onChange: (value: string) => void;
 }) {
@@ -23,7 +27,7 @@ export function SteppedNumber({
   const number = Number(value) || 0;
   const adjust = (direction: number) => {
     input.current?.focus();
-    const next = Math.min(max ?? Infinity, Math.max(0, number + direction * step));
+    const next = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, number + direction * step));
     // Keep fractional steps free of visible floating-point tails.
     onChange(String(step < 1 ? Number(next.toFixed(10)) : next));
   };
@@ -35,7 +39,8 @@ export function SteppedNumber({
         id={id}
         aria-label={label}
         type="number"
-        min="0"
+        min={min ?? undefined}
+        placeholder={placeholder}
         max={max}
         step="any"
         required={required}
@@ -62,7 +67,7 @@ export function SteppedNumber({
           type="button"
           tabIndex={-1}
           aria-label={`Decrease ${label.toLowerCase()} by ${step}`}
-          disabled={number <= 0}
+          disabled={min !== null && number <= min}
           onClick={() => adjust(-1)}
         >
           <span className="step-arrow down" aria-hidden="true" />

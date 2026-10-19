@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { routeGradeCheck } from '../../src/route-grades.js';
+import { routeElevationCheck } from '../../src/route-elevation.js';
 import type { GradeLimits, Position, RouteCandidate, TrailGraph } from '../../src/model.js';
 
 const position = (x: number, y: number, height?: number): Position =>
@@ -76,6 +76,32 @@ function reference(walk: Position[], limits: GradeLimits) {
 }
 
 describe('route grade constraints', () => {
+  it('checks interior peaks, open and inclusive bounds, reverse and repeated trails, and combined grade limits', async () => {
+    const network = fixture([{ from: 0, to: 1, coordinates: [position(0, 0, -30), position(50, 0, 75), position(100, 0, -10)] }]);
+    for (const edges of [[0], [1], [0, 1]]) {
+      for (const [highPoint, expected] of [
+        [[75, 75], true], [[null, 74.99], false], [[75.01, null], false], [[null, 75], true],
+      ] as [NonNullable<import('../../src/model.js').SearchQuery['highPoint']>, boolean][]) {
+        const check = await routeElevationCheck(network.graph, network.geometry(), { highPoint });
+        expect(check(route(edges))).toBe(expected);
+      }
+    }
+    const strict = { uphill: { above: 0, total: 0, longest: 0 }, downhill: { above: 0, total: 0, longest: 0 } };
+    const both = await routeElevationCheck(network.graph, network.geometry(), { highPoint: [75, 75], grades: strict });
+    expect(both(route([0]))).toBe(false);
+  });
+
+  it('rejects unknown elevations and empty shapes, and fails on missing high point geometry', async () => {
+    for (const coordinates of [[], [position(0, 0, 100), position(50, 0), position(100, 0, 0)]]) {
+      const network = fixture([{ from: 0, to: 1, coordinates }]);
+      const check = await routeElevationCheck(network.graph, network.geometry(), { highPoint: [null, 200] });
+      expect(check(route([0]))).toBe(false);
+      expect(check(route([1]))).toBe(false);
+    }
+    const network = fixture([{ from: 0, to: 1, coordinates: [position(0, 0, 100)] }]);
+    const absent = await routeElevationCheck(network.graph, (async function* () {})(), { highPoint: [null, 200] });
+    expect(() => absent(route([0]))).toThrow('missing route drawing geometry');
+  });
   it('checks total and longest independently across seams, reverse trails and repeated stems', async () => {
     const a = position(0, 0, 0), b = position(135, 0, 28);
     const c = position(280, 100, 57), d = position(140, 240, 8);
@@ -88,14 +114,14 @@ describe('route grade constraints', () => {
     for (const edges of [[0, 3, 4, 7, 1], [0, 6, 5, 2, 1]]) {
       const limits = unlimited();
       const expected = reference(network.walk(edges), limits);
-      expect(await routeGradeCheck(network.graph, network.geometry(), limits).then(check => check(route(edges)))).toBe(true);
+      expect(await routeElevationCheck(network.graph, network.geometry(), { grades: limits }).then(check => check(route(edges)))).toBe(true);
       for (const direction of ['uphill', 'downhill'] as const) {
         expect(expected[direction].total).toBeGreaterThan(expected[direction].longest + 5);
         for (const field of ['total', 'longest'] as const) {
           for (const margin of [-1, 1]) {
             const constrained = unlimited();
             constrained[direction][field] = expected[direction][field] + margin;
-            const check = await routeGradeCheck(network.graph, network.geometry(), constrained);
+            const check = await routeElevationCheck(network.graph, network.geometry(), { grades: constrained });
             expect(check(route(edges)), `${edges}: ${direction} ${field} ${margin}`).toBe(margin > 0);
           }
         }
@@ -111,11 +137,11 @@ describe('route grade constraints', () => {
       for (const direction of ['uphill', 'downhill'] as const) {
         const constrained = unlimited();
         constrained[direction].total = expected[direction].total + 0.2;
-        const check = await routeGradeCheck(network.graph, network.geometry(), constrained);
+        const check = await routeElevationCheck(network.graph, network.geometry(), { grades: constrained });
         expect(check(route(edges))).toBe(true);
         if (expected[direction].total > 0.2) {
           constrained[direction].total -= 0.4;
-          const below = await routeGradeCheck(network.graph, network.geometry(), constrained);
+          const below = await routeElevationCheck(network.graph, network.geometry(), { grades: constrained });
           expect(below(route(edges))).toBe(false);
         }
       }
@@ -124,10 +150,10 @@ describe('route grade constraints', () => {
 
   it('rejects unknown elevation and reports missing geometry rather than treating it as flat', async () => {
     const network = fixture([{ from: 0, to: 1, coordinates: [position(0, 0, 0), position(50, 0), position(100, 0, 0)] }]);
-    const check = await routeGradeCheck(network.graph, network.geometry(), unlimited());
+    const check = await routeElevationCheck(network.graph, network.geometry(), { grades: unlimited() });
     expect(check(route([0]))).toBe(false);
     expect(check(route([1]))).toBe(false);
-    const absent = await routeGradeCheck(network.graph, (async function* () {})(), unlimited());
+    const absent = await routeElevationCheck(network.graph, (async function* () {})(), { grades: unlimited() });
     expect(() => absent(route([0]))).toThrow(/missing.*geometry/i);
   });
 
@@ -135,7 +161,7 @@ describe('route grade constraints', () => {
     const network = fixture([{ from: 0, to: 1, coordinates: [position(0, 0, 0), position(100, 0, 40)] }]);
     const limits = unlimited();
     limits.uphill.total = 0;
-    const check = await routeGradeCheck(network.graph, network.geometry(), limits);
+    const check = await routeElevationCheck(network.graph, network.geometry(), { grades: limits });
     for (let i = 0; i < 3; i++) {
       expect(check(route([0]))).toBe(false);
       expect(check(route([1]))).toBe(true);

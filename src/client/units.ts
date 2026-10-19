@@ -22,6 +22,13 @@ export const distanceText = (meters: number, system: UnitSystem, digits = 1) =>
   (meters / systems[system].distance).toFixed(digits);
 export const elevationText = (meters: number, system: UnitSystem) =>
   Math.round(meters / systems[system].elevation).toLocaleString();
+export const highPointText = (range: NonNullable<SearchQuery["highPoint"]>, system: UnitSystem) => {
+  const [min, max] = range;
+  const bounds = min === null ? `≤${elevationText(max!, system)}`
+    : max === null ? `≥${elevationText(min, system)}`
+    : `${elevationText(min, system)}–${elevationText(max, system)}`;
+  return `${bounds} ${systems[system].elevationLabel}`;
+};
 export const stemDistance = (route: { distance: number; repetition: number }) =>
   route.distance * route.repetition;
 /** Older saved searches limited the stem proportionally, so this is their upper bound. */

@@ -43,6 +43,65 @@ async function finished(app: App, initial: JobSnapshot, timeout = 5000) {
 const submit = (app: App, payload = query) => app.inject({ method: 'POST', url: '/api/jobs', payload });
 
 describe('completed jobs through the actual app and worker', () => {
+  it('shows prepared access points by viewport, retaining uncertain access and omitting incomplete regions', async () => {
+    const { directory, jobDirectory, catalog } = await fixture({ startCount: 3, startNodes: [0, 1, 2], sectionCount: 2 });
+    const file = catalog.sections[0]!.files.starts;
+    const records = JSON.parse(gunzipSync(await readFile(join(directory, file.path))).toString());
+    records[0][0].kind = 'road-contact'; records[0][0].access = 'unknown';
+    records[1][0].kind = 'parking';
+    const raw = Buffer.from(JSON.stringify(records)), compressed = gzipSync(raw);
+    Object.assign(file, { bytes: compressed.length, jsonBytes: raw.length, sha256: createHash('sha256').update(compressed).digest('hex') });
+    await writeFile(join(directory, file.path), compressed);
+    await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
+    const app = await openApp(directory, jobDirectory);
+    const url = '/api/access-points?west=-122.01&south=47.04&east=-121.98&north=47.06';
+    const points = (await app.inject(url)).json();
+    expect(points).toHaveLength(6);
+    expect(new Set(points.map((point: { id: string }) => point.id)).size).toBe(6);
+    expect(points[0]).toMatchObject({ id: 'fixture-0/start-0', kind: 'road-contact', access: 'unknown', region: 'Test section 0', position: [-122.0005, 47.05, 100] });
+    expect(points[0]).not.toHaveProperty('node');
+    expect(points[1].kind).toBe('parking'); expect(points[2].kind).toBe('trailhead');
+    expect((await app.inject('/api/access-points?west=-122.0005&south=47.05&east=-122.0004&north=47.0501')).json()).toEqual([points[0]]);
+    expect((await app.inject('/api/access-points?west=0&south=0&east=1&north=1')).json()).toEqual([]);
+    for (const invalid of ['', '?west=no&south=47&east=-121&north=48', '?west=-121&south=47&east=-122&north=48', '?west=-181&south=47&east=-121&north=48', '?west=-123&west=-122&south=47&east=-121&north=48'])
+      expect((await app.inject(`/api/access-points${invalid}`)).statusCode).toBe(400);
+    await rm(join(directory, catalog.sections[1]!.files.graph.path));
+    expect((await app.inject(url)).json()).toHaveLength(3);
+  });
+  it('filters exact interior high points before publishing results and retains bounds after restart', async () => {
+    const { directory, jobDirectory, catalog } = await fixture({ routeCount: 2 });
+    const file = catalog.sections[0]!.files.geometry;
+    const shapes = gunzipSync(await readFile(join(directory, file.path))).toString().trim().split('\n').map(line => JSON.parse(line));
+    const [a, b] = shapes[0] as number[][];
+    shapes[0].splice(1, 0, [(a![0]! + b![0]!) / 2, (a![1]! + b![1]!) / 2, 300]);
+    const raw = Buffer.from(shapes.map(shape => JSON.stringify(shape) + '\n').join(''));
+    const compressed = gzipSync(raw);
+    Object.assign(file, { bytes: compressed.length, jsonBytes: raw.length, sha256: createHash('sha256').update(compressed).digest('hex') });
+    await writeFile(join(directory, file.path), compressed);
+    await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
+    let app = await openApp(directory, jobDirectory);
+    for (const highPoint of [[300, 300], [null, 120], [121, null]] as NonNullable<import('../../src/model.js').SearchQuery['highPoint']>[]) {
+      const job = await finished(app, (await submit(app, { ...query, highPoint })).json());
+      expect(job).toMatchObject({ status: 'completed', groupCount: 1, query: { highPoint } });
+      const routes = (await app.inject(`/api/jobs/${job.id}/results`)).json().routes;
+      const route = (await app.inject(`/api/jobs/${job.id}/routes/${routes[0].id}`)).json() as RouteView;
+      const peak = Math.max(...route.geometry.map(point => point[2]!));
+      const locations = (await app.inject(`/api/jobs/${job.id}/locations`)).json();
+      expect(locations[0].highPoint).toBe(peak);
+      expect(locations[0]).not.toHaveProperty('geometry');
+      expect(peak).toBeGreaterThanOrEqual(highPoint[0] ?? -Infinity);
+      expect(peak).toBeLessThanOrEqual(highPoint[1] ?? Infinity);
+      await app.close();
+      app = await openApp(directory, jobDirectory);
+      expect((await app.inject(`/api/jobs/${job.id}`)).json().query.highPoint).toEqual(highPoint);
+      expect((await app.inject(`/api/jobs/${job.id}/routes/${routes[0].id}`)).json()).toEqual(route);
+    }
+    const none = await finished(app, (await submit(app, { ...query, highPoint: [301, null] })).json());
+    expect(none).toMatchObject({ status: 'completed', groupCount: 0 });
+    for (const highPoint of [[400, 100], [null, null], [null], ['120', null], null, {}]) {
+      expect((await app.inject({ method: 'POST', url: '/api/jobs', payload: { ...query, highPoint } })).statusCode).toBe(400);
+    }
+  });
   it('reports accepted hike counts in progress before publishing completion', async () => {
     const { directory, jobDirectory } = await fixture();
     const worker = new Worker(join(process.cwd(), 'dist/server/search-worker.js'), {
@@ -244,7 +303,7 @@ describe('completed jobs through the actual app and worker', () => {
     expect(locations.some((location: { id: string }) => location.id === lastPage.routes[0]!.id)).toBe(true);
     const summary = results.routes.find(route => route.roadDistance === 200)!;
     expect(locations.find((location: { id: string }) => location.id === summary.id))
-      .toMatchObject({ distance: summary.distance, gain: summary.gain, repetition: summary.repetition });
+      .toMatchObject({ distance: summary.distance, gain: summary.gain, repetition: summary.repetition, highPoint: 120 });
     expect(summary).not.toHaveProperty('geometry');
     for (const removed of ['variantId', 'variantCount', 'groupSize', 'reverseId', 'oppositeId']) expect(summary).not.toHaveProperty(removed);
     const route = (await app.inject(`/api/jobs/${snapshot.id}/routes/${summary.id}`)).json() as RouteView;

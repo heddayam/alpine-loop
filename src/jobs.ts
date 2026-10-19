@@ -1,6 +1,6 @@
 import { DEFAULT_ROAD_LIMITS, type SearchQuery } from './model.js';
 import { boundaryError } from './boundary.js';
-import { validGradeLimits } from './grade.js';
+import { validGradeLimits, validHighPointRange } from './grade.js';
 
 export class RequestError extends Error {
   constructor(message: string, public statusCode: number) { super(message); }
@@ -9,6 +9,9 @@ export class RequestError extends Error {
 export function parseQuery(value: unknown): SearchQuery {
   if (!value || typeof value !== 'object') throw new RequestError('Choose regions and hike constraints.', 400);
   const query = value as SearchQuery;
+  if (query.highPoint !== undefined && !validHighPointRange(query.highPoint)) {
+    throw new RequestError('Use ordered, finite high point bounds, or leave a bound blank.', 400);
+  }
   if (query.grades !== undefined && !validGradeLimits(query.grades)) {
     throw new RequestError('Grade thresholds and allowed distances must be finite and zero or greater.', 400);
   }
@@ -49,6 +52,7 @@ export function parseQuery(value: unknown): SearchQuery {
     throw new RequestError('Use a nonnegative road distance and a road percentage from 0% to 100%.', 400);
   }
   return { sections: [...query.sections], effort: 'deep', distance: [...query.distance], gain: [...query.gain],
+    ...(query.highPoint ? { highPoint: [...query.highPoint] } : {}),
     ...(query.grades ? { grades: {
       uphill: { above: query.grades.uphill.above, total: query.grades.uphill.total, longest: query.grades.uphill.longest },
       downhill: { above: query.grades.downhill.above, total: query.grades.downhill.total, longest: query.grades.downhill.longest },

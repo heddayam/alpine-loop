@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { JobRegion, JobSnapshot, SearchQuery } from "../model.js";
 import { DEFAULT_ROAD_LIMITS } from "../model.js";
-import { distanceText, elevationText, hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
+import { distanceText, elevationText, highPointText, hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
 export const activeJob = (job: JobSnapshot) =>
   job.status === "queued" || job.status === "running";
@@ -240,6 +240,7 @@ export function JobsDialog({
             const criteria: [string, string][] = [
               ["Distance", `${distanceText(job.query.distance[0], units)}–${distanceText(job.query.distance[1], units)} ${display.distanceLabel}`],
               ["Elevation gain", `${elevationText(job.query.gain[0], units)}–${elevationText(job.query.gain[1], units)} ${display.elevationLabel}`],
+              ...(job.query.highPoint ? [["High Point", highPointText(job.query.highPoint, units)] as [string, string]] : []),
               ["Approach distance", job.query.stem === undefined ? "Off" : maximumDistance(job.query.stem)],
               ["Approach fraction", job.query.repetition === undefined ? "Off" : `≤${Number((job.query.repetition * 100).toFixed(1))}%`],
               ["Road distance", hasRoadLimit(job.query) ? maximumDistance(roads.distance) : "Off"],
@@ -287,7 +288,7 @@ export function JobsDialog({
                   <th scope="row" className="job-area">
                     <div className="job-area-line" title={areas.join(", ")}>
                       <span>{job.query.boundary ? `Drawn area: ${areaSummary}` : areas.length > 1 ? areaSummary : areas[0] ?? areaSummary}</span>
-                      {areas.length > 1 && <span className="job-area-count">{areas.length} sections</span>}
+                      {areas.length > 1 && <span className="job-area-count">{areas.length} regions</span>}
                     </div>
                     {job.query.driveTime && <span className="job-muted">{job.query.driveTime.minutes} min driving area</span>}
 
@@ -354,7 +355,11 @@ export function JobsDialog({
                         </tbody>
                       </table>
                       <div>
-                        {areas.length > 1 && <p><span className="job-muted">Sections:</span> {areas.join(", ")}</p>}
+                        {job.status === "running" && job.progress.currentRegion && job.progress.stage !== "driving" && <p>
+                          {job.progress.stage === "preparing" ? "Preparing" : job.progress.stage === "saving" ? "Saving" : "Searching"}{" "}
+                          {job.progress.currentRegion.name}…
+                        </p>}
+                        {areas.length > 1 && <p><span className="job-muted">Regions:</span> {areas.join(", ")}</p>}
                         {job.query.boundary && <p>Starting points inside the boundary; hikes may extend outside.</p>}
                         {job.status === "queued" && <p>Queue position {job.queuePosition ?? "—"}</p>}
                         {job.reason && <p className="job-error">{job.reason}</p>}

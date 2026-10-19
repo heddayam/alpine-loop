@@ -1,5 +1,5 @@
 import type { Boundary, SectionGraph, SectionStarts, StoredRoute } from './data-format.js';
-import type { HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
+import type { AccessPoint, Bounds, HikeRoute, JobInputs, RouteCandidate, SearchQuery } from './model.js';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -54,6 +54,22 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     }
     return result;
   }
+  async function accessPoints(bounds: Bounds): Promise<AccessPoint[]> {
+    const [west, south, east, north] = bounds;
+    if (!bounds.every(Number.isFinite) || west < -180 || east > 180 || south < -90 || north > 90 || west >= east || south >= north)
+      throw Object.assign(new Error('Choose valid map bounds.'), { statusCode: 400 });
+    const points: AccessPoint[] = [];
+    for (const section of catalog.sections) {
+      if (section.bounds[0] > east || section.bounds[2] < west || section.bounds[1] > north || section.bounds[3] < south
+        || !await sections.installed(section)) continue;
+      for (const [start, position] of await sections.read<SectionStarts>(section, 'starts')) {
+        if (position[0] < west || position[0] > east || position[1] < south || position[1] > north) continue;
+        const { node: _node, ...facts } = start;
+        points.push({ ...facts, id: `${section.id}/${start.id}`, position, region: section.name });
+      }
+    }
+    return points;
+  }
   async function select(query: SearchQuery, chosen: Awaited<ReturnType<typeof starts>>[number]) {
     const { graph, trails } = await sections.read<SectionGraph>(chosen.section, 'graph');
     graph.starts = chosen.eligible.map(start => ({ ...start, id: `${chosen.section.id}/${start.id}` }));
@@ -90,7 +106,7 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
       if (!await sections.installed(pinned.id)) throw new Error(`Prepared region was removed during this job: ${pinned.name}`);
     }
   }
-  return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, select, verifyInputs,
+  return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, accessPoints, select, verifyInputs,
     readTrailNames: async (section: JobInputs['sections'][number]) => {
       if (byId.get(section.id)?.files.graph.sha256 !== section.files.graph.sha256) return undefined;
       const { trails } = await sections.read<SectionGraph>(section.id, 'graph');

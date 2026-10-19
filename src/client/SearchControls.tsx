@@ -1,5 +1,6 @@
 import { useId, useRef, type FormEvent } from "react";
 import type { CatalogView } from "../data-format.js";
+import { validHighPointRange } from "../grade.js";
 import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type SearchQuery } from "../model.js";
 import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
 import { SteppedNumber } from "./SteppedNumber.js";
@@ -15,15 +16,18 @@ type Measurement =
   | "distanceMax"
   | "gainMin"
   | "gainMax"
+  | "highPointMin"
+  | "highPointMax"
   | "stem"
   | "roadDistance"
   | "uphillTotal" | "uphillLongest" | "downhillTotal" | "downhillLongest";
 const measurementKeys: Measurement[] = [
-  "distanceMin", "distanceMax", "gainMin", "gainMax", "stem", "roadDistance",
+  "distanceMin", "distanceMax", "gainMin", "gainMax", "highPointMin", "highPointMax", "stem", "roadDistance",
   "uphillTotal", "uphillLongest", "downhillTotal", "downhillLongest",
 ];
 const displayValue = (meters: number, divisor: number, gain: boolean) =>
   String(Number((meters / divisor).toFixed(gain ? 1 : 3)));
+const isElevation = (key: Measurement) => key.startsWith("gain") || key.startsWith("highPoint");
 
 export type SearchDraft = {
   sections: string[];
@@ -31,6 +35,7 @@ export type SearchDraft = {
   driveTime?: DriveTimeDraft;
   distance: [string, string];
   gain: [string, string];
+  highPoint: [string, string];
   approachEnabled: boolean;
   stem: string;
   stemPercent: string;
@@ -51,6 +56,8 @@ const fields = (draft: SearchDraft): Record<Measurement, string> => ({
   distanceMax: draft.distance[1],
   gainMin: draft.gain[0],
   gainMax: draft.gain[1],
+  highPointMin: draft.highPoint[0],
+  highPointMax: draft.highPoint[1],
   stem: draft.stem,
   roadDistance: draft.roadDistance,
   uphillTotal: draft.grades?.uphill.total ?? "",
@@ -63,7 +70,7 @@ const measurement = (draft: SearchDraft, key: Measurement, units: UnitSystem) =>
   const original = draft.exact?.values[key];
   return draft.exact?.units === units && original?.text === text
     ? original.meters
-    : Number(text) * unitsFor(units)[key.startsWith("gain") ? "elevation" : "distance"];
+    : Number(text) * unitsFor(units)[isElevation(key) ? "elevation" : "distance"];
 };
 function withMeasurements(
   draft: SearchDraft,
@@ -77,8 +84,8 @@ function withMeasurements(
     if (meters === undefined || !Number.isFinite(meters)) continue;
     text[key] = displayValue(
       meters,
-      unitsFor(units)[key.startsWith("gain") ? "elevation" : "distance"],
-      key.startsWith("gain"),
+      unitsFor(units)[isElevation(key) ? "elevation" : "distance"],
+      isElevation(key),
     );
     exact.values[key] = { text: text[key], meters };
   }
@@ -86,6 +93,7 @@ function withMeasurements(
     ...draft,
     distance: [text.distanceMin, text.distanceMax],
     gain: [text.gainMin, text.gainMax],
+    highPoint: [text.highPointMin, text.highPointMax],
     stem: text.stem,
     roadDistance: text.roadDistance,
     ...(draft.grades ? { grades: {
@@ -113,6 +121,7 @@ export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"
       ...(query.driveTime?.origin ? { origin: [...query.driveTime.origin] } : {}) },
     distance: ["", ""],
     gain: ["", ""],
+    highPoint: ["", ""],
     approachEnabled,
     stem: "",
     stemPercent: approachEnabled ? String((query.repetition ?? 1) * 100) : "20",
@@ -129,6 +138,8 @@ export function draftForQuery(query: SearchQuery, units: UnitSystem = "imperial"
     distanceMax: query.distance[1],
     gainMin: query.gain[0],
     gainMax: query.gain[1],
+    highPointMin: query.highPoint?.[0] ?? undefined,
+    highPointMax: query.highPoint?.[1] ?? undefined,
     stem: approachEnabled ? stemLimit(query) : 2 * MILE,
     roadDistance: roadsEnabled ? roads.distance : 0.5 * MILE,
     uphillTotal: grades.uphill.total,
@@ -168,6 +179,13 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
   const maxDistance = measurement(draft, "distanceMax", units);
   const minGain = measurement(draft, "gainMin", units);
   const maxGain = measurement(draft, "gainMax", units);
+  const highPoint: NonNullable<SearchQuery["highPoint"]> = [
+    draft.highPoint[0].trim() ? measurement(draft, "highPointMin", units) : null,
+    draft.highPoint[1].trim() ? measurement(draft, "highPointMax", units) : null,
+  ];
+  const hasHighPoint = highPoint.some(bound => bound !== null);
+  if (hasHighPoint && !validHighPointRange(highPoint))
+    throw new Error("Use ordered, finite high point bounds, or leave a bound blank.");
   if (!draft.sections.length && !draft.boundary && !draft.driveTime?.enabled)
     throw new Error("Select at least one search region, draw an area, or add driving time.");
   const drive = draft.driveTime;
@@ -186,7 +204,7 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
     minGain > maxGain
   ) {
     throw new Error(
-      "Use a positive maximum distance and ordered, nonnegative distance and elevation gain ranges. In More options, approach and road distance must be zero or greater; approach percentage must be between 0 and 100.",
+      "Use a positive maximum mileage and ordered, nonnegative mileage and elevation gain ranges. In More options, approach and road distance must be zero or greater; approach percentage must be between 0 and 100.",
     );
   }
   let grades: GradeLimits | undefined;
@@ -207,6 +225,7 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
     ...(drive?.enabled ? { driveTime: { minutes: Number(drive.minutes), origin: [...drive.origin!] } } : {}),
     distance: [minDistance, maxDistance],
     gain: [minGain, maxGain],
+    ...(hasHighPoint ? { highPoint } : {}),
     ...(draft.approachEnabled ? {
       stem: measurement(draft, "stem", units),
       repetition: Number(draft.stemPercent) / 100,
@@ -228,12 +247,14 @@ function Range({
   value,
   onChange,
   step,
+  optional = false,
 }: {
   name: string;
   unit: string;
   value: [string, string];
   onChange: (next: [string, string]) => void;
   step: number;
+  optional?: boolean;
 }) {
   const key = name.toLowerCase().replaceAll(" ", "-");
   return (
@@ -247,6 +268,9 @@ function Range({
           label={`Minimum ${name.toLowerCase()} (${unit})`}
           bound="Min"
           value={value[0]}
+          required={!optional}
+          placeholder={optional ? "Any" : undefined}
+          min={optional ? null : 0}
           step={step}
           onChange={(next) => onChange([next, value[1]])}
         />
@@ -255,6 +279,9 @@ function Range({
           label={`Maximum ${name.toLowerCase()} (${unit})`}
           bound="Max"
           value={value[1]}
+          required={!optional}
+          placeholder={optional ? "Any" : undefined}
+          min={optional ? null : 0}
           step={step}
           onChange={(next) => onChange([value[0], next])}
         />
@@ -390,7 +417,7 @@ export function SearchControls({
           </div>
         </div>
         <Range
-          name="Distance"
+          name="Mileage"
           unit={display.distanceLabel}
           step={1}
           value={draft.distance}
@@ -402,6 +429,14 @@ export function SearchControls({
           unit={display.elevationLabel}
           value={draft.gain}
           onChange={(gain) => update({ gain })}
+        />
+        <Range
+          name="High Point"
+          step={display.gainStep}
+          unit={display.elevationLabel}
+          value={draft.highPoint}
+          optional
+          onChange={(highPoint) => update({ highPoint })}
         />
         <GradeLimitsControl
           value={draft.grades ?? convertDraft(initialDraft, "imperial", units).grades!}
