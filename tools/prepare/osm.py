@@ -49,7 +49,39 @@ def extract(source, temporary):
     subprocess.run(["osmium", "add-locations-to-ways", str(filtered), "-f", "opl", "-o", str(opl)], check=True)
     subprocess.run(["osmium", "tags-filter", str(source), "r/route=road", "--omit-referenced",
                     "-f", "opl", "-o", str(temporary / "roads.opl")], check=True)
+    subprocess.run(["osmium", "tags-filter", str(source), "a/landuse=" + ",".join(DEVELOPED_LANDUSE),
+                    "a/amenity=" + ",".join(DEVELOPED_AMENITY), "-o", str(temporary / "developed.pbf")], check=True)
+    subprocess.run(["osmium", "export", str(temporary / "developed.pbf"), "-f", "geojsonseq", "--geometry-types=polygon",
+                    "-o", str(temporary / "developed.geojsonseq")], check=True)
     return opl
+
+
+DEVELOPED_LANDUSE = ("residential", "commercial", "retail", "industrial")
+DEVELOPED_AMENITY = ("university", "college", "school")
+WALKWAYS = {"footway", "path", "steps", "pedestrian", "cycleway"}
+
+
+def mark_developed_walkways(ways, positions, areas_file, footprint):
+    """A walkway mostly inside developed land is town walking: it counts as road."""
+    import json
+    from shapely import LineString, STRtree, box, intersection, union_all
+    from shapely.geometry import shape
+    bounds = box(*footprint.bounds)
+    areas = []
+    for line in areas_file.open():
+        if not line.strip("\x1e\n "):
+            continue
+        geometry = shape(json.loads(line.strip("\x1e\n "))["geometry"])
+        if geometry.intersects(bounds):
+            areas.append(geometry.buffer(0) if not geometry.is_valid else geometry)
+    tree = STRtree(areas)
+    for way in ways.values():
+        if way["tags"].get("highway") not in WALKWAYS or not routable(way):
+            continue
+        line = LineString([positions[node] for node in way["nodes"]])
+        hits = tree.query(line, predicate="intersects")
+        if len(hits) and union_all(intersection(tree.geometries.take(hits), line)).length >= 0.5 * line.length:
+            way["developed"] = True
 
 
 def way_record(identity, fields, tags):
@@ -106,4 +138,6 @@ def read_source(opl, footprint):
             if refs:
                 pois.append({"id": "r" + identity, "nodes": refs, "tags": relation["tags"], "kind": poi_kind(relation["tags"])})
     needed = {node for way in ways.values() if routable(way) for node in way["nodes"]}
+    if (opl.parent / "developed.geojsonseq").is_file():
+        mark_developed_walkways(ways, positions, opl.parent / "developed.geojsonseq", footprint)
     return ways, pois, tagged_nodes, {node: positions[node] for node in needed}
