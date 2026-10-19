@@ -75,9 +75,21 @@ def routable(way):
     return not non_current and tags.get("area") != "yes" and (highway in PATHS or highway in ROADS)
 
 
+PAVED = {"asphalt", "concrete", "concrete:plates", "paving_stones", "sett", "bricks", "paved", "metal"}
+
+
+def urban_walkway(tags):
+    # Lit pavement and pedestrian streets are town walking, counted like roads.
+    # Unpaved, unlit or untagged footways stay trail; path and bridleway always do.
+    highway = tags.get("highway")
+    return highway == "pedestrian" or (highway in ("footway", "cycleway", "steps")
+                                       and tags.get("surface") in PAVED and tags.get("lit") == "yes")
+
+
 def role(tags):
     # Candidate classification only, not proof that a mapped path is a hike.
-    return "connector" if tags.get("highway") in ROADS or tags.get("footway") in ("sidewalk", "crossing") else "trail"
+    return "connector" if (tags.get("highway") in ROADS or tags.get("footway") in ("sidewalk", "crossing")
+                           or urban_walkway(tags)) else "trail"
 
 
 def distance(a, b):
