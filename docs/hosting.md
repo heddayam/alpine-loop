@@ -7,9 +7,9 @@ HTTP ports on the VM; SSH is restricted to the deployment computer's public IP.
 ## Current release and development workflow
 
 Last verified live code on November 6, 2026 (Pacific time):
-`df5c4888ef01fc6034521ad88c5bcf70831fc13e` (Retained app features and simplified access-point preparation).
+`9074d9b82eafef7fdf23e2f8fbd7e6e1298055a5` (Developer-only access-point overlay).
 The VM is `alpine-loop-01` in resource group `alpine-loop-prod`, West US 2.
-Its release directory is `/srv/alpine-loop/releases/df5c4888ef01`, selected by
+Its release directory is `/srv/alpine-loop/releases/9074d9b82eaf`, selected by
 `/srv/alpine-loop/current`. Confirm the symlink and running app image before a
 new deployment; this record is not a live probe.
 
@@ -17,7 +17,7 @@ The hosting implementation, retained app features and simplified access-point
 preparation are integrated into `main`. Use main as the normal base for new
 `codex/` work branches. The old `codex/cloudflare-azure` branch remains historical.
 
-The November 6 (Pacific time) release rebuilds all nine sections with
+The November 6 (Pacific time) data release rebuilt all nine sections with
 simple developed-land, parking-contact and supporting-network rules, while
 preserving distinct eligible entrances. All 551 mapped trailheads remain. Local
 verification is recorded in
@@ -177,10 +177,19 @@ jobs and resume queued jobs rather than publishing partial results.
 
 ## Deployment verification
 
-The November 6, 2026 release built successfully on Azure and passed public HTTPS
+The follow-up `9074d9b82eaf` release makes access-point inspection a local
+developer tool. `ALPINE_DEV_ACCESS_POINTS=1` enables it locally; hosted mode
+always disables its layer, toggle and API, even with the flag set. Build,
+typecheck and 30 focused app/hosted checks pass. Local browsers verified both
+flag states. The public browser shows no overlay/control, makes zero access-point
+requests and has no JavaScript errors; the developer API returns 404. The running
+image and release symlink match this revision, health passes, and the prior public
+GPX remains byte-for-byte identical.
+
+The earlier November 6, 2026 release built successfully on Azure and passed public HTTPS
 verification on both hostnames. All nine rebuilt sections are installed, with
-10,558 eligible starts and all 551 prior mapped trailheads retained. The running
-image and release symlink both identify `df5c4888ef01`. The original data mount
+10,558 eligible starts and all 551 prior mapped trailheads retained. That release used
+image and release symlink `df5c4888ef01`. The original data mount
 and session secret are preserved.
 
 A public Horse Lake search returned three hikes; GPX, saved-URL reload, secure
