@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
@@ -15,7 +15,7 @@ import { ROUTES_PER_PAGE, type JobResults, type JobSnapshot, type RouteView } fr
 import { createNetworkFixture, query } from './network-fixture.js';
 
 const cleanup: (() => Promise<unknown>)[] = [];
-afterEach(async () => { for (const remove of cleanup.splice(0).reverse()) await remove(); });
+afterEach(async () => { vi.unstubAllEnvs(); for (const remove of cleanup.splice(0).reverse()) await remove(); });
 type App = Awaited<ReturnType<typeof import('../../src/server.js').createApp>>;
 async function fixture(options: Parameters<typeof createNetworkFixture>[0] = {}) {
   const data = await createNetworkFixture(options);
@@ -43,7 +43,15 @@ async function finished(app: App, initial: JobSnapshot, timeout = 5000) {
 const submit = (app: App, payload = query) => app.inject({ method: 'POST', url: '/api/jobs', payload });
 
 describe('completed jobs through the actual app and worker', () => {
+  it('keeps the access-point developer API disabled by default', async () => {
+    vi.stubEnv('ALPINE_DEV_ACCESS_POINTS', '');
+    const { directory, jobDirectory } = await fixture();
+    const app = await openApp(directory, jobDirectory);
+    expect((await app.inject('/api/catalog')).json().devAccessPoints).toBe(false);
+    expect((await app.inject('/api/access-points?west=-123&south=47&east=-121&north=48')).statusCode).toBe(404);
+  });
   it('shows prepared access points by viewport, retaining uncertain access and omitting incomplete regions', async () => {
+    vi.stubEnv('ALPINE_DEV_ACCESS_POINTS', '1');
     const { directory, jobDirectory, catalog } = await fixture({ startCount: 3, startNodes: [0, 1, 2], sectionCount: 2 });
     const file = catalog.sections[0]!.files.starts;
     const records = JSON.parse(gunzipSync(await readFile(join(directory, file.path))).toString());
@@ -54,6 +62,7 @@ describe('completed jobs through the actual app and worker', () => {
     await writeFile(join(directory, file.path), compressed);
     await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
     const app = await openApp(directory, jobDirectory);
+    expect((await app.inject('/api/catalog')).json().devAccessPoints).toBe(true);
     const url = '/api/access-points?west=-122.01&south=47.04&east=-121.98&north=47.06';
     const points = (await app.inject(url)).json();
     expect(points).toHaveLength(6);

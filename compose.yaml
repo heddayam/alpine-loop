@@ -4,6 +4,7 @@ services:
     init: true
     environment:
       ARCGIS_API_KEY: ${ARCGIS_API_KEY:-}
+      ALPINE_DEV_ACCESS_POINTS: ${ALPINE_DEV_ACCESS_POINTS:-0}
     ports:
       - "127.0.0.1:${ALPINE_PORT:-3000}:3000"
     volumes:

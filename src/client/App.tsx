@@ -842,6 +842,7 @@ export function App() {
             >
               <HikeMap
                 browsing={!viewedJob}
+                devAccessPoints={dataset?.devAccessPoints === true}
                 units={units}
                 sections={mapDataset.sections}
                 selectedSections={

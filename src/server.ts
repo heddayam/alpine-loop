@@ -12,6 +12,7 @@ import type { FastifyRequest } from 'fastify';
 
 export async function createApp(directory: string, clientDirectory?: string, jobDirectory = resolve('.local-data/jobs'), hosting: HostingOptions = {}, driving: DrivingOptions = {}) {
   const access = createHostedAccess(hosting);
+  const devAccessPoints = !access && process.env.ALPINE_DEV_ACCESS_POINTS === '1';
   // Saved jobs remain usable even when the prepared catalog has been removed.
   let dataset = await readDataset(directory).catch(() => undefined);
   const jobs = await createJobs(directory, jobDirectory, driving);
@@ -63,11 +64,11 @@ export async function createApp(directory: string, clientDirectory?: string, job
   };
   app.get('/health', async () => ({ status: 'ok' }));
   app.get('/api/catalog', async () => {
-    const catalog = { ...await (await availableData()).view(), driveTimeAvailable: jobs.driveTimeAvailable };
+    const catalog = { ...await (await availableData()).view(), driveTimeAvailable: jobs.driveTimeAvailable, devAccessPoints };
     return access ? { ...catalog, hosted: true } : catalog;
   });
   app.post('/api/coverage', async request => (await availableData()).coverage(parseQuery(request.body)));
-  app.get<{ Querystring: { west?: string; south?: string; east?: string; north?: string } }>('/api/access-points', async request => {
+  if (devAccessPoints) app.get<{ Querystring: { west?: string; south?: string; east?: string; north?: string } }>('/api/access-points', async request => {
     return (await availableData()).accessPoints([request.query.west, request.query.south, request.query.east, request.query.north]
       .map(value => typeof value !== 'string' || !value.trim() ? NaN : Number(value)) as Bounds);
   });

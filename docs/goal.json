@@ -680,5 +680,10 @@
     "date": "2026-11-06",
     "scope": "Keep driving-time, grade, high-point, route-card and navigation features. Freeze optimization work. Include campus/urban preparation cleanup while retaining distinct eligible starts. Release only verified committed app source and a pinned published prepared catalog.",
     "status": "Deployed committed revision df5c4888ef01fc6034521ad88c5bcf70831fc13e to alpineloop.org. Both public HTTPS hostnames, all nine installed sections, public search/GPX/reconnect/privacy, real driving filtering, and preservation of a prior GPX and browser ownership passed. Main contains the integrated source; deployment verification is recorded in docs/hosting.md."
+  },
+  "developerAccessPoints": {
+    "date": "2026-11-06",
+    "decision": "Access-point inspection is a developer tool. It is disabled by default and may be enabled locally with ALPINE_DEV_ACCESS_POINTS=1. Hosted mode always disables its overlay, toggle and API, even if the flag is set.",
+    "implementation": "A server-owned catalog flag gates mounting the overlay; the development API is registered only for opted-in local mode. The flag is evaluated at server startup, so no client rebuild is required."
   }
 }

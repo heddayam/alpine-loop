@@ -60,6 +60,7 @@ function peakElevationFeet(value: unknown): unknown {
 export function HikeMap({
   units,
   browsing,
+  devAccessPoints = false,
   sections,
   selectedSections,
   routes,
@@ -90,6 +91,7 @@ export function HikeMap({
 }: {
   units: UnitSystem;
   browsing: boolean;
+  devAccessPoints?: boolean;
   sections: { id: string; boundary: Boundary }[];
   selectedSections: string[];
   routes: RouteLocation[];
@@ -678,7 +680,7 @@ export function HikeMap({
         </div>
       )}
       <div className={`map-context${drawingBoundary || choosingDriveOrigin ? " is-editing" : ""}`}>
-        <AccessPoints map={map} enabled={browsing && !drawingBoundary && !choosingDriveOrigin} />
+        {devAccessPoints && <AccessPoints map={map} enabled={browsing && !drawingBoundary && !choosingDriveOrigin} />}
         {(driveArea || boundary || selectedArea.coordinates.length > 0) && !drawingBoundary && !choosingDriveOrigin && <div className="search-area-control">
           <label>
             <input type="checkbox" checked={showAreaOutline} onChange={onToggleAreaOutline} />

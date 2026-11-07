@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,7 +7,7 @@ import type { JobSnapshot } from '../../src/model.js';
 
 type App = Awaited<ReturnType<typeof import('../../src/server.js').createApp>>;
 const cleanup: (() => Promise<unknown>)[] = [];
-afterEach(async () => { for (const action of cleanup.splice(0).reverse()) await action(); });
+afterEach(async () => { vi.unstubAllEnvs(); for (const action of cleanup.splice(0).reverse()) await action(); });
 const secret = 'offline-fixture-persistent-secret-1234567890';
 const origin = 'https://alpineloop.test';
 const headers = (cookie?: string) => ({ host: 'alpineloop.test', origin, ...(cookie ? { cookie } : {}) });
@@ -41,6 +41,12 @@ async function finished(app: App, cookie: string, id: string) {
 }
 
 describe('hosted anonymous search ownership', () => {
+  it('never enables developer access points in hosted mode, even with the flag set', async () => {
+    vi.stubEnv('ALPINE_DEV_ACCESS_POINTS', '1');
+    const { app } = await fixture();
+    expect((await app.inject('/api/catalog')).json().devAccessPoints).toBe(false);
+    expect((await app.inject('/api/access-points?west=-123&south=47&east=-121&north=48')).statusCode).toBe(404);
+  });
   it('requires a persistent secret, rejects mutation origins, and keeps health checks session-free', async () => {
     const { createApp } = await import('../../dist/server/server.js');
     await expect(createApp('/unused', undefined, '/unused', { enabled: true, secret: 'short' })).rejects.toThrow('ALPINE_SESSION_SECRET');

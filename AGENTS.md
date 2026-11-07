@@ -26,6 +26,8 @@ do not resume their gates or carry their architecture into the replacement.
   wording and appearance against the user's next decision.
 - Never use middle-dot separators in UI text or proposed UI designs. Use commas,
   plain wording, or spacing instead.
+- The access-point overlay is a developer tool. Local use requires
+  `ALPINE_DEV_ACCESS_POINTS=1`; hosted mode must never expose its layer, toggle or API.
 - Longer searches are acceptable. Prioritize thorough exploration, useful route
   choices, clear progress and responsive cancellation over sub-10-second results.
   Do not add machinery or truncate work solely to satisfy earlier speed targets.

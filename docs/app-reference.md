@@ -161,11 +161,17 @@ starred groups independently.
 Typed values remain unrestricted within valid
 limits. The profile uses the dock's width,
 with elevation labels inside the plot and pointer/keyboard tracking on the route.
-When no saved results are open, **Show access points** displays prepared starts
+The access-point overlay is a local developer tool, disabled by default. Opt in
+with `ALPINE_DEV_ACCESS_POINTS=1 npm start` (or prefix the local Compose launch
+with the same flag). Hosted mode always disables its map layer, control and API,
+regardless of the flag. No client rebuild is needed when changing this flag;
+restart the local server.
+
+When enabled and no saved results are open, **Show access points** displays prepared starts
 from all installed regions in the map view. Trailheads are green, parking blue,
 and road contacts orange; outlined points have uncertain access. Clicking a point
 shows its name, type, access status, region and OpenStreetMap link. Road contacts
-are labeled as unverified parking. The layer is on by default and hides while
+are labeled as unverified parking. The developer toggle starts checked and hides while
 viewing results, drawing an area or choosing a driving origin. It does not change
 search scope.
 
