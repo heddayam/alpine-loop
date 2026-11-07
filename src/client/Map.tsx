@@ -491,22 +491,28 @@ export function HikeMap({
   }, [map, driveOrigin, drawingBoundary]);
 
   useEffect(() => {
-    if (!map || !choosingDriveOrigin) return;
-    const canvas = map.getCanvas();
+    if (!choosingDriveOrigin) return;
+    const canvas = map?.getCanvas();
     clearSegmentHover.current();
     setStartLabel(null);
-    canvas.style.cursor = "crosshair";
-    canvas.focus();
+    if (canvas) {
+      canvas.style.cursor = "crosshair";
+      canvas.focus();
+    }
     const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") { event.preventDefault(); callbacks.current.onCancelDriveOrigin(); }
-      if (event.key === "Enter") {
+      if (event.key === "Enter" && map && event.target === canvas) {
         event.preventDefault();
         const center = map.getCenter();
         callbacks.current.onDriveOrigin([center.lng, center.lat]);
       }
     };
-    canvas.addEventListener("keydown", key);
-    return () => { canvas.style.cursor = ""; canvas.removeEventListener("keydown", key); };
+    document.addEventListener("keydown", key);
+    return () => {
+      if (canvas) canvas.style.cursor = "";
+      document.removeEventListener("keydown", key);
+    };
   }, [map, choosingDriveOrigin]);
 
   useEffect(() => {
