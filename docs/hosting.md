@@ -6,10 +6,10 @@ HTTP ports on the VM; SSH is restricted to the deployment computer's public IP.
 
 ## Current release and development workflow
 
-Last verified live code on October 8, 2026:
-`041e4fc490be51e1502f99f1644aa3843dba3bab` (Supported regions in hosted Settings).
+Last verified live code on November 6, 2026 (Pacific time):
+`df5c4888ef01fc6034521ad88c5bcf70831fc13e` (Retained app features and simplified access-point preparation).
 The VM is `alpine-loop-01` in resource group `alpine-loop-prod`, West US 2.
-Its release directory is `/srv/alpine-loop/releases/041e4fc490be`, selected by
+Its release directory is `/srv/alpine-loop/releases/df5c4888ef01`, selected by
 `/srv/alpine-loop/current`. Confirm the symlink and running app image before a
 new deployment; this record is not a live probe.
 
@@ -17,13 +17,14 @@ The hosting implementation, retained app features and simplified access-point
 preparation are integrated into `main`. Use main as the normal base for new
 `codex/` work branches. The old `codex/cloudflare-azure` branch remains historical.
 
-The November 6 (Pacific time) release candidate rebuilds all nine sections with
+The November 6 (Pacific time) release rebuilds all nine sections with
 simple developed-land, parking-contact and supporting-network rules, while
 preserving distinct eligible entrances. All 551 mapped trailheads remain. Local
 verification is recorded in
 [`benchmarks/release-verification-2026-11-07.json`](../benchmarks/release-verification-2026-11-07.json).
-The production record above remains the last verified release until deployment
-and public verification complete; source integration does not deploy the site.
+The pinned data release is `data-v2-2026-11-07-access`, with catalog SHA-256
+`4d2ef9bd95383ff619a43a24d4a5a9ab13da901813c08b78c45e500ffa0821df`.
+Source integration alone does not deploy the site.
 
 | Action | What changes |
 | --- | --- |
@@ -175,6 +176,30 @@ container's SQLite WAL through the host filesystem. Restarts interrupt active
 jobs and resume queued jobs rather than publishing partial results.
 
 ## Deployment verification
+
+The November 6, 2026 release built successfully on Azure and passed public HTTPS
+verification on both hostnames. All nine rebuilt sections are installed, with
+10,558 eligible starts and all 551 prior mapped trailheads retained. The running
+image and release symlink both identify `df5c4888ef01`. The original data mount
+and session secret are preserved.
+
+A public Horse Lake search returned three hikes; GPX, saved-URL reload, secure
+cookies, isolated browser histories and rejected foreign/missing-origin mutations
+passed in the browser. A real 30-minute Hoh driving search returned 34 hikes from
+one eligible start; its saved area contains the start, and another browser cannot
+see the precise driving origin. A previously saved public GPX remains byte-for-byte
+identical, and its original browser cookie retains management rights. The ten
+pre-existing searches remain completed; no search was active or queued at release.
+The driving-service key was added through encrypted SSH input while preserving
+the existing root-owned, mode-600 environment file and session secret.
+
+Local validation includes build/typecheck, the offline suite, focused checks
+after the map-cancellation fix, independent geometry audits of all sections,
+55 source-verified real hikes, and an isolated hosted HTTPS browser preview.
+All 14 existing local result files remain untouched and an old GPX still opens.
+See the release verification report linked above.
+
+### October 8 baseline
 
 The October 8, 2026 deployment passed 27 focused runtime checks, build, and
 typecheck. On Azure, all nine published sections were installed; a real bounded

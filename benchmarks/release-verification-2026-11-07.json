@@ -1,6 +1,6 @@
 {
   "verifiedAtUtc": "2026-11-07",
-  "scope": "Verified local release candidate. Production verification remains recorded separately in docs/hosting.md.",
+  "scope": "Verified local app and public production release.",
   "dataRelease": {
     "catalogUrl": "https://github.com/heddayam/alpine-loop/releases/download/data-v2-2026-11-07-access/catalog.json",
     "catalogSha256": "4d2ef9bd95383ff619a43a24d4a5a9ab13da901813c08b78c45e500ffa0821df"
@@ -382,5 +382,44 @@
     "completedJobs": 10,
     "activeJobs": 0,
     "queuedJobs": 0
+  },
+  "production": {
+    "revision": "df5c4888ef01fc6034521ad88c5bcf70831fc13e",
+    "releaseDirectory": "/srv/alpine-loop/releases/df5c4888ef01",
+    "healthy": true,
+    "installedSections": 9,
+    "publicBrowser": {
+      "https": true,
+      "sections": 9,
+      "hikes": 3,
+      "secureCookie": true,
+      "isolatedHistories": true,
+      "foreignMutationRejected": true,
+      "missingOriginRejected": true,
+      "supportedSettings": true,
+      "gpx": true,
+      "reconnect": true
+    },
+    "publicDriving": {
+      "status": "completed",
+      "starts": 1,
+      "hikes": 34,
+      "elapsedMs": 5039,
+      "minutes": 30,
+      "originRedactedForForeignBrowser": true,
+      "savedDrivingArea": true
+    },
+    "savedDrivingAreaIndependentlyChecked": true,
+    "previousPublicResult": {
+      "gpxIdentical": true,
+      "ownershipRetained": true,
+      "oldJobStatus": "completed"
+    },
+    "existingCompletedJobsRetained": 10,
+    "httpsHosts": [
+      "alpineloop.org",
+      "www.alpineloop.org"
+    ],
+    "httpRedirectsToHttps": true
   }
 }

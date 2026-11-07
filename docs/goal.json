@@ -19,7 +19,7 @@
     "date": "2026-10-08",
     "delivery": "Hosted delivery is now live at https://alpineloop.org through Cloudflare Tunnel and a persistent Azure VM; this supersedes the earlier hosting deferral.",
     "development": "Default to local development and running-app verification. Git pushes do not deploy; release when the user requests a live update or the active task includes production deployment.",
-    "lastVerifiedRelease": "041e4fc490be51e1502f99f1644aa3843dba3bab",
+    "lastVerifiedRelease": "df5c4888ef01fc6034521ad88c5bcf70831fc13e",
     "productionSourceBranch": "main",
     "reference": "docs/hosting.md records the last verified production release, storage and manual release process. Main contains the integrated hosted implementation. Inspect actual Git and VM state before releasing."
   },
@@ -102,7 +102,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "Release candidate retains the existing driving-time, grade, high-point, result-card and navigation features. Access preparation uses simple developed-land, parking-contact and 500 m supporting-network rules, preserving every distinct eligible entrance. No proximity grouping or separate access-policy subsystem remains. All nine rebuilt sections pass independent geometry and start audits. Three real searches produce 55 source-verified hikes; a campus search honestly completes with no eligible starts. Build, typecheck and focused runtime/browser checks pass. Production status is recorded in docs/hosting.md.",
+  "state": "The released app retains the existing driving-time, grade, high-point, result-card and navigation features. Access preparation uses simple developed-land, parking-contact and 500 m supporting-network rules, preserving every distinct eligible entrance. No proximity grouping or separate access-policy subsystem remains. All nine rebuilt sections pass independent geometry and start audits. Three real searches produce 55 source-verified hikes; a campus search honestly completes with no eligible starts. Build, typecheck and focused runtime/browser checks pass. Production status is recorded in docs/hosting.md.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -679,6 +679,6 @@
   "releaseStabilization": {
     "date": "2026-11-06",
     "scope": "Keep driving-time, grade, high-point, route-card and navigation features. Freeze optimization work. Include campus/urban preparation cleanup while retaining distinct eligible starts. Release only verified committed app source and a pinned published prepared catalog.",
-    "status": "Verified local app and isolated hosted HTTPS preview. All nine sections published and automatically installed through the pinned release. Existing local history and GPX remain usable. Production preflight verified revision 041e4fc490be, mounted data storage and no active/queued jobs. Production deployment and public verification are next."
+    "status": "Deployed committed revision df5c4888ef01fc6034521ad88c5bcf70831fc13e to alpineloop.org. Both public HTTPS hostnames, all nine installed sections, public search/GPX/reconnect/privacy, real driving filtering, and preservation of a prior GPX and browser ownership passed. Main contains the integrated source; deployment verification is recorded in docs/hosting.md."
   }
 }
