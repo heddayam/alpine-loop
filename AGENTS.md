@@ -19,8 +19,9 @@ do not resume their gates or carry their architecture into the replacement.
   stable completed-result URLs. On server restart, interrupt running jobs and
   continue queued jobs; automatic mid-search resume and legacy APIs/data formats
   are not compatibility requirements.
-- Washington first; California later. No universal mileage cap, mountain-core
-  qualification, drive-time service, or steepness controls in the first release.
+- Support the published Washington and Bay Area sections. Keep the existing
+  optional driving-time, grade and high-point controls. No universal mileage
+  cap or mountain-core qualification. New feature work follows the active user goal.
 - Focus on desktop UI for now. Challenge each element's purpose, position,
   wording and appearance against the user's next decision.
 - Never use middle-dot separators in UI text or proposed UI designs. Use commas,
@@ -41,8 +42,8 @@ do not resume their gates or carry their architecture into the replacement.
   again for a release already authorized in that task.
 - A new session first checks Git status, the active branch, current remote refs,
   and `docs/hosting.md`. Do not infer the deployed version from `main` or HEAD.
-  Until integrated into main, `codex/cloudflare-azure` contains the hosted app;
-  main alone does not contain the hosting setup or all hosted UI changes.
+  Main contains the hosted implementation and is the base for new `codex/`
+  work branches. The old hosting branch is historical, not the release source.
 - Use `npm start` for native development or the local `compose.yaml`. After each
   app fix, build, typecheck, restart/rebuild the relevant local instance, and
   verify the affected flow in the running app. Run appropriate focused tests.

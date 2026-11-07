@@ -1,0 +1,386 @@
+{
+  "verifiedAtUtc": "2026-11-07",
+  "scope": "Verified local release candidate. Production verification remains recorded separately in docs/hosting.md.",
+  "dataRelease": {
+    "catalogUrl": "https://github.com/heddayam/alpine-loop/releases/download/data-v2-2026-11-07-access/catalog.json",
+    "catalogSha256": "4d2ef9bd95383ff619a43a24d4a5a9ab13da901813c08b78c45e500ffa0821df"
+  },
+  "preparation": {
+    "sections": [
+      {
+        "name": "Mount St. Helens & Mount Adams",
+        "before": 1609,
+        "after": 1086,
+        "retainedMappedTrailheads": 52
+      },
+      {
+        "name": "Mount Rainier & Central Cascades",
+        "before": 2098,
+        "after": 1334,
+        "retainedMappedTrailheads": 117
+      },
+      {
+        "name": "Alpine Lakes",
+        "before": 2669,
+        "after": 1596,
+        "retainedMappedTrailheads": 69
+      },
+      {
+        "name": "Glacier Peak & Mountain Loop",
+        "before": 2156,
+        "after": 1406,
+        "retainedMappedTrailheads": 123
+      },
+      {
+        "name": "Mount Baker & North Cascades",
+        "before": 1655,
+        "after": 1183,
+        "retainedMappedTrailheads": 60
+      },
+      {
+        "name": "Olympic Mountains",
+        "before": 879,
+        "after": 616,
+        "retainedMappedTrailheads": 85
+      },
+      {
+        "name": "Santa Cruz Mountains",
+        "before": 2517,
+        "after": 1362,
+        "retainedMappedTrailheads": 10
+      },
+      {
+        "name": "Diablo Range & East Bay",
+        "before": 3697,
+        "after": 1219,
+        "retainedMappedTrailheads": 21
+      },
+      {
+        "name": "Sonoma\u2013Marin Coast",
+        "before": 1450,
+        "after": 756,
+        "retainedMappedTrailheads": 14
+      }
+    ],
+    "beforeStarts": 18730,
+    "afterStarts": 10558,
+    "mappedTrailheadsRetained": 551,
+    "frozenWitnessStarts": {
+      "checked": 14,
+      "retained": 13,
+      "qualifying": 7,
+      "qualifyingRetained": 7
+    },
+    "centralBerkeleyCampus": {
+      "bounds": [
+        -122.265,
+        37.868,
+        -122.254,
+        37.875
+      ],
+      "before": 168,
+      "after": 0
+    },
+    "checks": [
+      "unchanged exact section footprints and highway partitions",
+      "all previously mapped trailheads retained",
+      "all previously qualifying frozen starts retained",
+      "campus candidate starts removed"
+    ]
+  },
+  "independentGeometryAudit": {
+    "sections": 9,
+    "checks": [
+      "all compressed/decoded sizes and SHA-256 hashes",
+      "exact planned geometry and unchanged geographic scope",
+      "finite measured 3D geometry within boundaries and off highway dividers",
+      "maximum 25 m sample spacing",
+      "every directed edge distance, gain, endpoints, access and road role",
+      "start identity, counts and no generated frontier starts"
+    ]
+  },
+  "offlineChecks": {
+    "build": "passed",
+    "typecheck": "passed",
+    "vitest": 216,
+    "node": 13,
+    "focusedAfterMapCancellationFix": 22,
+    "preparationEntranceCases": 5,
+    "freshCompilerCases": 2
+  },
+  "realSearches": [
+    {
+      "area": "cascades",
+      "start": "Trail entrance",
+      "query": {
+        "sections": [
+          "mountain-60d1645c19ea502342caf8cc"
+        ],
+        "distance": [
+          8046.72,
+          19312.128
+        ],
+        "gain": [
+          0,
+          1219.2
+        ],
+        "stem": 3218.688,
+        "repetition": 0.2,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 804.672,
+          "fraction": 1
+        },
+        "boundary": [
+          [
+            -120.383088,
+            47.4618913
+          ],
+          [
+            -120.382888,
+            47.4618913
+          ],
+          [
+            -120.382888,
+            47.462091300000004
+          ],
+          [
+            -120.383088,
+            47.462091300000004
+          ]
+        ]
+      },
+      "completedStarts": 1,
+      "hikes": 3,
+      "independentlyCheckedRoutes": 3,
+      "elapsedMs": 9183,
+      "checks": [
+        "completed real search",
+        "independent directed source-walk correctness",
+        "full saved geometry matches source drawings",
+        "exact constraints and road distance",
+        "GPX",
+        "reopen with retained results"
+      ]
+    },
+    {
+      "area": "olympics",
+      "start": "Hoh River Trailhead",
+      "query": {
+        "sections": [
+          "mountain-bb2cb496168b80274cee6d05"
+        ],
+        "distance": [
+          800,
+          20000
+        ],
+        "gain": [
+          0,
+          2500
+        ],
+        "stem": 5000,
+        "repetition": 1,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1600,
+          "fraction": 1
+        },
+        "boundary": [
+          [
+            -123.9344928,
+            47.860369799999994
+          ],
+          [
+            -123.9342928,
+            47.860369799999994
+          ],
+          [
+            -123.9342928,
+            47.8605698
+          ],
+          [
+            -123.9344928,
+            47.8605698
+          ]
+        ]
+      },
+      "completedStarts": 1,
+      "hikes": 34,
+      "independentlyCheckedRoutes": 34,
+      "elapsedMs": 2020,
+      "checks": [
+        "completed real search",
+        "independent directed source-walk correctness",
+        "full saved geometry matches source drawings",
+        "exact constraints and road distance",
+        "GPX",
+        "reopen with retained results"
+      ]
+    },
+    {
+      "area": "santa-cruz",
+      "start": "Hoffman Creek Trailhead",
+      "query": {
+        "sections": [
+          "mountain-d5b14bac855a248d8ce12be9"
+        ],
+        "distance": [
+          800,
+          20000
+        ],
+        "gain": [
+          0,
+          2500
+        ],
+        "stem": 5000,
+        "repetition": 1,
+        "includeUnknown": true,
+        "roads": {
+          "distance": 1600,
+          "fraction": 1
+        },
+        "boundary": [
+          [
+            -122.2853393,
+            37.2738278
+          ],
+          [
+            -122.2851393,
+            37.2738278
+          ],
+          [
+            -122.2851393,
+            37.274027800000006
+          ],
+          [
+            -122.2853393,
+            37.274027800000006
+          ]
+        ]
+      },
+      "completedStarts": 1,
+      "hikes": 18,
+      "independentlyCheckedRoutes": 18,
+      "elapsedMs": 3525,
+      "checks": [
+        "completed real search",
+        "independent directed source-walk correctness",
+        "full saved geometry matches source drawings",
+        "exact constraints and road distance",
+        "GPX",
+        "reopen with retained results"
+      ]
+    }
+  ],
+  "campusSearch": {
+    "query": {
+      "sections": [
+        "mountain-40d6e4337b00acd0d18af3cb"
+      ],
+      "distance": [
+        800,
+        20000
+      ],
+      "gain": [
+        0,
+        2500
+      ],
+      "stem": 5000,
+      "repetition": 1,
+      "includeUnknown": true,
+      "roads": {
+        "distance": 804.672,
+        "fraction": 1
+      },
+      "boundary": [
+        [
+          -122.265,
+          37.868
+        ],
+        [
+          -122.254,
+          37.868
+        ],
+        [
+          -122.254,
+          37.875
+        ],
+        [
+          -122.265,
+          37.875
+        ]
+      ]
+    },
+    "status": "completed",
+    "starts": 0,
+    "hikes": 0,
+    "elapsedMs": 794
+  },
+  "drivingSearch": {
+    "status": "completed",
+    "starts": 1,
+    "hikes": 34,
+    "elapsedMs": 5660,
+    "sameRoutes": true,
+    "origin": [
+      -123.9348,
+      47.8605
+    ],
+    "minutes": 30
+  },
+  "browserChecks": [
+    "terrain and access-point rendering",
+    "Escape cancels driving-origin selection before basemap loads",
+    "driving duration retained on cancellation",
+    "metric conversion and preference reload",
+    "stable completed-result URL",
+    "all-result browsing and selected route/profile",
+    "GPX download",
+    "high-point sorting",
+    "starred route persists after reload"
+  ],
+  "limitations": [
+    "Bounded discovery does not establish exhaustive hike recall.",
+    "The 500 m preparation rule is undirected component support, not a directed walking-distance guarantee.",
+    "Developed-land classification uses majority overlap of source ways, not maintenance evidence.",
+    "Mapped road contacts do not certify legal parking.",
+    "Real-data timings are single observations, not latency promises."
+  ],
+  "publishedData": "Catalog downloaded anonymously and verified against its pinned SHA-256; all 32 release assets match packaged names and sizes.",
+  "hostedHttpsPreview": {
+    "https": true,
+    "sections": 9,
+    "hikes": 3,
+    "secureCookie": true,
+    "isolatedHistories": true,
+    "foreignMutationRejected": true,
+    "missingOriginRejected": true,
+    "supportedSettings": true,
+    "gpx": true,
+    "reconnect": true
+  },
+  "maintainedSource": {
+    "files": 77,
+    "lines": 12934
+  },
+  "automaticPublicDataInstallation": {
+    "sections": 9,
+    "installed": 9,
+    "checks": "Pinned catalog and every prepared section downloaded through the ordinary installer and verified before use."
+  },
+  "localHistory": {
+    "sections": 9,
+    "allInstalled": true,
+    "historyJobs": 16,
+    "oldGpx": 200,
+    "retainedResultFiles": 14,
+    "untouched": true
+  },
+  "productionPreflight": {
+    "revision": "041e4fc490be",
+    "dataDiskMounted": true,
+    "completedJobs": 10,
+    "activeJobs": 0,
+    "queuedJobs": 0
+  }
+}

@@ -1,12 +1,13 @@
 {
   "objective": "Replace Alpine Loop with the smallest trustworthy app that finds useful constraint-based loop hikes, proven on real Washington data.",
   "accessPointDecision": {
-    "date": "2026-10-19",
-    "approved": "Replace the offline access-point policy with preparation rules. Group duplicate exits into places and search one start per place. Remove as much machinery as possible while keeping hike quality.",
-    "rule": "Walkways mostly inside mapped developed land (residential, commercial, retail, industrial, university, college, school) count as road. Parking must touch a trail. A road contact or parking lot must join at least 500 m of connected trail without road walking; unpaved tracks count toward that network only. Mapped trailheads are their own evidence. Entrances within 150 m of walking of a stronger one form one place; its strongest entrance is the start.",
-    "implementation": "Compiler rules in tools/prepare/graph.py and one land-use extract in osm.py. No policy file, runtime filter, job pin or comparison UI. Discovery uses geometry identities, so renumbered trails return identical hikes.",
-    "validation": "Olympics 879 exits to 475 starts and Diablo 3,697 to 813. UC Berkeley campus places 49 to 0 and campus hikes 5 to 0; named mountain trails untouched; 13 of 14 frozen witness starts keep their place (north-bend-short was an all-road walk). Renumbering a real graph changed about two thirds of Diablo hikes before the identity fix and none after.",
-    "superseded": "The offline policy work is preserved on codex/access-point-policy-archive."
+    "date": "2026-11-06",
+    "approved": "Keep the existing app features and the simple campus/parking/supporting-network preparation rules. Remove destructive nearby-entrance merging. Rebuild and validate all nine sections before publishing the cleanup.",
+    "rule": "Walkways mostly inside mapped developed land count as road. Parking and road contacts must touch a trail in a supporting component containing at least 500 m of trails and tracks without explicit paved-surface evidence. Unknown track surfaces remain eligible; all tracks still count as road walking. Mapped trailheads are their own entrance evidence. Preserve every distinct eligible entrance.",
+    "implementation": "Compiler rules only, with no policy file, runtime filter, job pin or comparison UI. No proximity grouping: starts can differ in access, direction, road distance and drawn-area eligibility. Discovery remains independent of trail numbering.",
+    "limitations": "The 500 m rule is coarse undirected component evidence, not a directed walking-distance guarantee. Developed-land classification is based on majority source-way overlap and is not a maintenance or parking certification.",
+    "validation": "All nine sections rebuilt and independently audited. All 551 mapped trailheads remain, with 10,558 starts versus 18,730 previously. All seven previously qualifying frozen starts remain. Central Berkeley campus has zero starts versus 168 previously. Real Horse Lake, Hoh River and Hoffman Creek searches produce 55 independently checked hikes. See benchmarks/release-verification-2026-11-07.json.",
+    "superseded": "The offline policy work remains archived on codex/access-point-policy-archive. The 150 m one-start-per-place experiment is removed."
   },
   "highPointDecision": {
     "date": "2026-10-12",
@@ -19,8 +20,8 @@
     "delivery": "Hosted delivery is now live at https://alpineloop.org through Cloudflare Tunnel and a persistent Azure VM; this supersedes the earlier hosting deferral.",
     "development": "Default to local development and running-app verification. Git pushes do not deploy; release when the user requests a live update or the active task includes production deployment.",
     "lastVerifiedRelease": "041e4fc490be51e1502f99f1644aa3843dba3bab",
-    "productionSourceBranch": "codex/cloudflare-azure",
-    "reference": "docs/hosting.md records the current branch caveat, release process, storage, and verification. Inspect actual Git and VM state before releasing."
+    "productionSourceBranch": "main",
+    "reference": "docs/hosting.md records the last verified production release, storage and manual release process. Main contains the integrated hosted implementation. Inspect actual Git and VM state before releasing."
   },
   "drawnBoundaryDecision": {
     "date": "2026-10-07",
@@ -101,7 +102,7 @@
       "Approximate matches and a persistent solver cache or exhaustive prepared loop catalog."
     ]
   },
-  "state": "The updated local app is running at http://127.0.0.1:3000 with all five Washington regions installed and all eight existing saved jobs preserved. New jobs save one preferred valid walk per displayed hike; loop/start/direction alternatives are removed from results and UI. The real all-region default completed all 10,187 starts in 488.3 seconds, retaining 918 displayed hikes and 918 walks in 14.9 MB instead of 1,286,407 walks in 8.45 GB. Backend OS peak RSS fell from 660.2 MB to 356.7 MB; active search averages 43.7% of one core. All 918 walks and their 803,177 geometry points independently pass route, road, drawing and main-loop checks. Build, typecheck, 102 Vitest checks, five Node checks and two preparation fixture checks pass. Native continuous scrolling, keyboard navigation, history pages, old/new saved URLs and GPX pass browser/live checks. Browser/GPU memory remains material and can spike on cold loading/zoom; details and primary-source research are in benchmarks/local-resource-improvements.json. No new dependency; maintained source is 8,727 lines across 44 files after the dock, unit, stem and map-browsing refinements. The latest 45 focused client, saved-route, query and whole-app checks pass; 62 independent engine/query/diversity checks also pass. Absolute stem limits and remembered imperial/metric units are implemented. Markers use charcoal and white, with constant-size selection; route traces use a single burnt-orange stroke without an outline. Task worktrees are archived and task branches removed. Muted deduplicated route paths now support area comparison from zoom 9; orange remains reserved for hover/selection.",
+  "state": "Release candidate retains the existing driving-time, grade, high-point, result-card and navigation features. Access preparation uses simple developed-land, parking-contact and 500 m supporting-network rules, preserving every distinct eligible entrance. No proximity grouping or separate access-policy subsystem remains. All nine rebuilt sections pass independent geometry and start audits. Three real searches produce 55 source-verified hikes; a campus search honestly completes with no eligible starts. Build, typecheck and focused runtime/browser checks pass. Production status is recorded in docs/hosting.md.",
   "dataPartitionPolicy": {
     "date": "2026-10-05",
     "userDecision": "Use GMBA outlines for data/graph preparation regions, keeping each whole whenever it is reasonably sized. Within oversized regions, prioritize and keep the most major through-highway cuts, then make the fewest additional lower-tier cuts needed. The user delegates the engineering size measure and accepts prompting for missing prepared-data downloads. Hikes crossing applied highway dividers are outside the accepted search scope, including pedestrian bridges and underpasses.",
@@ -619,13 +620,13 @@
         "sourceSegments": 640044
       },
       {
-        "name": "Sonoma–Marin Coast",
+        "name": "Sonoma\u2013Marin Coast",
         "gmbaId": "17173",
         "starts": 1450,
         "sourceSegments": 268103
       }
     ],
-    "coverage": "Santa Cruz Mountains includes Montara and Big Basin; Diablo Range includes Mount Diablo and Tilden; Sonoma–Marin includes Mount Tamalpais. Exact GMBA boundaries remain authoritative and exclude San Bruno Mountain. Full named ranges extend beyond the immediate Bay Area.",
+    "coverage": "Santa Cruz Mountains includes Montara and Big Basin; Diablo Range includes Mount Diablo and Tilden; Sonoma\u2013Marin includes Mount Tamalpais. Exact GMBA boundaries remain authoritative and exclude San Bruno Mountain. Full named ranges extend beyond the immediate Bay Area.",
     "partitionPolicy": "All four additions are below 700,000 candidate source segments and remain whole, with no highway dividers.",
     "validation": "benchmarks/olympics-bay-preparation.json",
     "hosting": "Prepared data is now published through the pinned GitHub release. Application hosting remains local."
@@ -640,14 +641,14 @@
   },
   "gradeLimitsDecision": {
     "date": "2026-10-07",
-    "approved": "Optional Grade limits checkbox and anchored popover, matching the compact search controls. Separate uphill/downhill threshold percentages, total allowed distance and longest stretch. Disabled by default; disabling retains draft values. No Settings changed indicator or hover fill. Inactive trigger is muted. Right-aligned single-line slope guidance: 5–10% moderate, 10–15% steep, 15–20% very steep and >20% extreme. No heading or dot separators.",
+    "approved": "Optional Grade limits checkbox and anchored popover, matching the compact search controls. Separate uphill/downhill threshold percentages, total allowed distance and longest stretch. Disabled by default; disabling retains draft values. No Settings changed indicator or hover fill. Inactive trigger is muted. Right-aligned single-line slope guidance: 5\u201310% moderate, 10\u201315% steep, 15\u201320% very steep and >20% extreme. No heading or dot separators.",
     "semantics": "Signed grade uses the same centered 100 m window as profile hover, clipped at walk endpoints. Exact continuous threshold crossings measure total and longest exposure along the ordered walk, including return stems and trail joins. All limits apply before preferred start/direction selection and grouping. Unknown elevation never qualifies when grade limits are active. Immutable jobs retain their submitted grade limits.",
     "architecture": "Shared pure elevation/grade module; enabled searches stream one section into compact distance/elevation pairs. Existing search preference and road proofs receive a grade predicate. No new dependency, prepared-data format or saved-result schema.",
     "validation": "Build, typecheck, 102 focused checks (including the local HTTP download fixture with networking) and browser editing, enable/disable, retained values, Escape/focus and popover placement pass. Real Horse Lake searches consider all five starts: four hikes with initial limits and three with tighter 200 m total / 100 m longest budgets, about 17.3 seconds each. Independent Python 1 m integration of saved geometry verifies every returned budget. Evidence: .local-data/grade-review.json and .local-data/grade-review-strict.json. Existing six saved jobs remain available after local server restart. Maintained source: 10,170 lines across 57 files.",
     "optimization": {
       "design": "Linear merge of sorted 100 m window breakpoints with monotone interpolation cursors, compact per-trail profiles and one reusable ordered-walk buffer per section. Reject immediately when a directional distance budget is exceeded. No persistent cache, schema, search cap or dependency.",
       "validation": "Build and typecheck pass; 24 focused checks include independent numerical exposure, actual-worker direction selection and missing elevations, immutable queries, hover grade and successive route decisions. Differential comparison across 20,000 generated profiles agrees within 8e-12 m. All six frozen real-data observations retain exact route hashes, starts, expansions and grade-check counts.",
-      "performance": "Grade-enabled Horse Lake 16.31→10.15 s, Teanaway 19.92→16.47 s, Olympics 37.79→7.57 s. Grade-check time falls 89–93%; single-run peak RSS varies and does not demonstrate a memory improvement. Core search timing excludes result storage. Evidence: benchmarks/grade-search-results.json; harness and frozen queries in benchmarks/grade-search.mjs and grade-search-queries.json.",
+      "performance": "Grade-enabled Horse Lake 16.31\u219210.15 s, Teanaway 19.92\u219216.47 s, Olympics 37.79\u21927.57 s. Grade-check time falls 89\u201393%; single-run peak RSS varies and does not demonstrate a memory improvement. Core search timing excludes result storage. Evidence: benchmarks/grade-search-results.json; harness and frozen queries in benchmarks/grade-search.mjs and grade-search-queries.json.",
       "userQuery": "The latest saved five-Cascades request also produces the same 27 public hike identities, all 10,187 starts and 15,771,724 expansions. Optimized preparation plus solving takes 56.54 s; the historical 299.68 s whole-job time also includes storage/verification, so timing scopes differ. Evidence: .local-data/grade-optimization-user-query.json.",
       "maintainedSourceLines": 10272,
       "maintainedSourceFiles": 58
@@ -674,5 +675,10 @@
     "usage": "One billable submission per uncached request, bounded 30-minute cache, persistent conservative 4,500 submissions per UTC month. Cancellation aborts provider waiting and lets queued work proceed.",
     "ui": "One Search area label groups the region picker, Draw and Add drive time on one desktop row. Active driving shows Within N min with edit and remove actions. Any supported area chooses standalone driving. Choosing on map closes the popover into explicit map selection with Enter/Escape; accepting or cancelling reopens settings, cancellation retains the previous origin. Explicit geolocation and retained removed draft settings. Use the existing solid region boundary style for the effective search area: driving reach intersected with the selected region or drawing. Omit excluded region edges, separate drawing edges and all dimming. User approved consistent optional search outlines for named regions, drawings and driving: hidden by default, a Show search area checkbox reveals the existing outlines and saved driving minute limit when checked. Maptoolkit attribution has separate space in the same control stack and remains visible during hike inspection. Editing settings hides it. Visibility changes no filtering and makes no provider request.",
     "validation": "Build and typecheck pass. 72 focused provider, geometry, client, jobs and whole-app checks pass; the localhost download fixture requires network access. Browser verified the single Search area grouping, add/remove with retained draft, standalone-to-region transitions, popover map handoff and Escape restoration, saved standalone results and clear reachable terrain. The subsequent boundary presentation change passes build, typecheck and 16 focused checks; saved region-and-driving and drawing-and-driving maps show a single effective-area outline with no dimming. Public Wenatchee standalone 30-minute search completes all 387 starts across two regions and 21 hikes in 39.55 s. Independent winding-number checks count 285 Alpine Lakes starts and 102 Glacier Peak / Mountain Loop starts, matching the worker, and verify all 21 returned hike starts are inside the saved driving area. A Horse Lake drawing with the same origin completes all 5 starts and 4 hikes in 22.98 s, compared with 36.34 s on the job endpoint. One isolated direct provider request took 6.57 s. For 120 minutes, async took 21.42 s with automatic region versus 29.04 s with NorthAmerica, so no region hint was added. Single-run timings are observations, not performance guarantees. Maintained source: 12,350 lines across 73 files, 576 lines above branch baseline, no new dependencies."
+  },
+  "releaseStabilization": {
+    "date": "2026-11-06",
+    "scope": "Keep driving-time, grade, high-point, route-card and navigation features. Freeze optimization work. Include campus/urban preparation cleanup while retaining distinct eligible starts. Release only verified committed app source and a pinned published prepared catalog.",
+    "status": "Verified local app and isolated hosted HTTPS preview. All nine sections published and automatically installed through the pinned release. Existing local history and GPX remain usable. Production preflight verified revision 041e4fc490be, mounted data storage and no active/queued jobs. Production deployment and public verification are next."
   }
 }

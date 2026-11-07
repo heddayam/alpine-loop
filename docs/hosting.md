@@ -13,12 +13,17 @@ Its release directory is `/srv/alpine-loop/releases/041e4fc490be`, selected by
 `/srv/alpine-loop/current`. Confirm the symlink and running app image before a
 new deployment; this record is not a live probe.
 
-The hosting implementation is on `codex/cloudflare-azure` and has not yet been
-merged into `main`. Main includes the blue styling, but does not yet include the
-hosted runtime, deployment configuration, or supported-regions Settings section.
-Until the hosting branch is integrated, use it as the base for work that needs
-the hosted implementation. After integration, use main as the normal base for
-new `codex/` work branches.
+The hosting implementation, retained app features and simplified access-point
+preparation are integrated into `main`. Use main as the normal base for new
+`codex/` work branches. The old `codex/cloudflare-azure` branch remains historical.
+
+The November 6 (Pacific time) release candidate rebuilds all nine sections with
+simple developed-land, parking-contact and supporting-network rules, while
+preserving distinct eligible entrances. All 551 mapped trailheads remain. Local
+verification is recorded in
+[`benchmarks/release-verification-2026-11-07.json`](../benchmarks/release-verification-2026-11-07.json).
+The production record above remains the last verified release until deployment
+and public verification complete; source integration does not deploy the site.
 
 | Action | What changes |
 | --- | --- |

@@ -134,13 +134,15 @@ shared source nodes; no nearest-trail connection is invented.
 Prepared starts carry explicit `trailhead`, `parking`, or `road-contact` metadata
 from mapped entrance evidence. A trailhead outranks co-located parking; names
 never infer a kind. A road contact or parking lot must touch a trail, and that
-trail must join at least 500 m of connected trail without road walking; unpaved
-tracks count toward this network only, and still count as road for hike limits.
+trail must join a supporting component containing at least 500 m of trail and
+tracks without explicit paved-surface evidence. Unknown track surfaces remain
+eligible. This is coarse network evidence, not a directed walking-distance
+guarantee; tracks still count as road for hike limits.
 This removes town stairways, street-to-street paths and lots that touch only
 roads, including where land use is unmapped. Mapped trailheads are their own
-evidence. Entrances within 150 m of walking of a stronger one (trailhead, then
-parking, then road contact; public access, then ID) form one place, and only
-its strongest entrance is emitted as a start; the others stay graph nodes.
+evidence. Every distinct eligible entrance remains a start. Nearby entrances
+can differ in access, walking direction, road distance and inclusion in a drawn
+area, so preparation does not replace them with a single representative.
 
 Road-contact starts resolve car access in the order `motorcar`, `motor_vehicle`,
 `vehicle`, `access`, including directional restrictions. An explicit vehicle

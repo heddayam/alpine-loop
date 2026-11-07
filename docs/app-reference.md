@@ -169,13 +169,16 @@ are labeled as unverified parking. The layer is on by default and hides while
 viewing results, drawing an area or choosing a driving origin. It does not change
 search scope.
 
-Starts are decided once, during preparation. A start is a mapped trailhead, a
-parking lot touching a trail, or a road touching a trail; the trail must join at
-least 500 m of connected trail (fire roads count) without road walking. Walkways
-mostly inside mapped developed land count as road. Entrances within 150 m of
-walking of a stronger one form one place, and each place is one start and one
-map point. There is no separate eligibility file; uncertain access remains
-included by default and explicit prohibitions remain enforced.
+Starts are decided once, during preparation. Mapped trailheads supply their own
+entrance evidence. Other starts must be parking lots or roads touching a trail
+in a supporting component with at least 500 m of trail and tracks without known
+paving. Tracks still count as road walking in routes. Walkways mostly inside
+mapped developed land count as road. Every distinct eligible entrance remains
+available: proximity alone does not make starts interchangeable under access,
+walking-direction or drawn-area constraints. There is no separate eligibility
+file; uncertain access remains included by default and explicit prohibitions
+remain enforced. These are mapped-source rules, not verified parking or trail
+maintenance claims.
 
 The map shows all result locations as compact hollow circles and numbered cluster
 circles. Counts use 28 px circles with 13 px semibold numbers; larger counts get

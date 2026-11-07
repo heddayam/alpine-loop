@@ -1,6 +1,9 @@
 # Alpine Loop
 
-TaaS
+Find loops and lollipops from prepared mountain trail data, with distance,
+elevation and optional approach, road, high-point and grade limits.
+
+Use [alpineloop.org](https://alpineloop.org), or run the app locally below.
 
 ## Install and start
 
