@@ -207,8 +207,8 @@ class FreshCompiler(unittest.TestCase):
             self.assertEqual(len(audit["frontiers"]), 5, "Paths and ordinary roads crossing the footprint retain their boundary intersections")
             self.assertTrue(all(lineage["nodeIds"][start["node"]] not in audit["frontiers"] for start in graph["starts"]))
             self.assertEqual(audit["unresolvedPois"][0]["id"], "n20")
-            self.assertEqual({lineage["nodeIds"][start["node"]] for start in graph["starts"]}, {"n1", "n50"},
-                             "One start per place: the lot's trailhead represents all of its exits")
+            self.assertEqual({lineage["nodeIds"][start["node"]] for start in graph["starts"]}, {"n1", "n2", "n3", "n4", "n5", "n50"},
+                             "Every distinct eligible entrance stays available to query filtering")
             starts = {node: dict(entry, kind={2: "trailhead", 1: "parking"}.get(entry.get("rank", 0), "road-contact"))
                       for node, entry in audit["entrances"].items()}
             self.assertEqual(set(starts), {"n1", "n2", "n3", "n4", "n5", "n50"}, "Distinct parking exits and road/track-to-trail contacts are classified")

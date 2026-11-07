@@ -1,38 +1,43 @@
-"""Independent place grouping boundaries for duplicate hiking starts."""
+"""Independent entrance preservation and supporting-network boundaries."""
 import sys
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/prepare'))
-from graph import assemble, measure, places, topology
+from graph import assemble, measure, topology
 
 
-def start(node, kind='road-contact', access='unknown'):
-    return {'id': f'osm-entrance:{node}', 'node': node, 'kind': kind, 'access': access}
+def compile_graph(ways, pois, points, node_tags=None):
+    corridors, _, entrances, _ = topology(ways, pois, node_tags or {}, points, [-.01, -.01, .02, .02])
+    measure(corridors, lambda positions: [100] * len(positions))
+    return assemble(corridors, entrances, {'id': 'fixture'})[0]
 
 
-def path(*pairs):
-    return [{'from': a, 'to': b, 'distance': length} for a, b, length in pairs]
+class StartEntrances(unittest.TestCase):
+    def test_public_parking_survives_nearby_uncertain_trailhead(self):
+        points = {'1': (0, 0), '2': (.0004, 0), '3': (.004, .004)}
+        ways = {'loop': {'id': 'loop', 'nodes': ['1', '2', '3', '1'], 'tags': {'highway': 'path'}}}
+        pois = [{'id': 'n1', 'kind': 'trailhead', 'nodes': ['1'], 'tags': {'highway': 'trailhead'}},
+                {'id': 'w2', 'kind': 'parking', 'nodes': ['2'], 'tags': {'amenity': 'parking', 'access': 'yes'}}]
+        graph = compile_graph(ways, pois, points)
+        self.assertEqual([(start['id'], start['access']) for start in graph['starts']],
+                         [('osm-entrance:1', 'unknown'), ('osm-entrance:2', 'public')])
+        # Public-only queries must retain the parking entrance.
+        self.assertEqual([start['id'] for start in graph['starts'] if start['access'] == 'public'], ['osm-entrance:2'])
 
+    def test_one_way_connection_does_not_remove_either_start(self):
+        points = {'1': (0, 0), '2': (.0004, 0)}
+        ways = {'path': {'id': 'path', 'nodes': ['2', '1'], 'tags': {'highway': 'path', 'oneway:foot': 'yes'}}}
+        pois = [{'id': 'n' + node, 'kind': 'trailhead', 'nodes': [node], 'tags': {'highway': 'trailhead'}}
+                for node in points]
+        graph = compile_graph(ways, pois, points)
+        self.assertEqual({start['id'] for start in graph['starts']}, {'osm-entrance:1', 'osm-entrance:2'})
+        self.assertEqual(len(graph['edges']), 1)
+        edge = graph['edges'][0]
+        self.assertEqual((graph['nodes'][edge['from']][:2], graph['nodes'][edge['to']][:2]),
+                         ([.0004, 0], [0, 0]))
 
-class StartPlaces(unittest.TestCase):
-    def test_lot_sharing_nodes_joins_nearby_trailhead(self):
-        starts = [start(0, 'parking'), start(1, 'parking'), start(2, 'parking'), start(3, 'trailhead')]
-        # The far lot node is beyond walking reach of the trailhead but belongs to the same lot.
-        edges = path((3, 0, 80), (0, 1, 100), (1, 2, 150))
-        self.assertEqual(set(places(starts, edges, [['w10'], ['w10'], ['w10'], ['n3']])), {'osm-entrance:3'})
-
-    def test_distant_road_contacts_stay_separate(self):
-        starts = [start(0), start(1)]
-        self.assertEqual(places(starts, path((0, 1, 400)), [[], []]), ['osm-entrance:0', 'osm-entrance:1'])
-
-    def test_nearby_contacts_do_not_chain_into_one_place(self):
-        starts = [start(node) for node in range(5)]
-        edges = path(*((node, node + 1, 100) for node in range(4)))
-        self.assertEqual(places(starts, edges, [[]] * 5),
-                         ['osm-entrance:0', 'osm-entrance:0', 'osm-entrance:2', 'osm-entrance:2', 'osm-entrance:4'])
-
-    def test_compiled_lot_with_several_exits_is_one_start(self):
+    def test_all_distinct_lot_exits_keep_their_positions(self):
         # A lot touches the trail at three nodes, one of them a mapped trailhead,
         # and a road reaches the lot. A distant road contact stays its own start.
         points = {'1': (0, 0), '2': (.0004, 0), '3': (.0008, 0), '4': (.0012, 0), '5': (.006, .003),
@@ -48,8 +53,16 @@ class StartPlaces(unittest.TestCase):
         measure(corridors, lambda positions: [100] * len(positions))
         graph, _, _ = assemble(corridors, entrances, {'id': 'fixture'})
         self.assertEqual([(start['id'], start['kind'], start['name']) for start in graph['starts']],
-                         [('osm-entrance:3', 'trailhead', 'Lot Trailhead'), ('osm-entrance:5', 'road-contact', 'Trail entrance')])
-        self.assertEqual(graph['info']['startCount'], 2)
+                         [('osm-entrance:2', 'parking', 'Mapped parking access'),
+                          ('osm-entrance:3', 'trailhead', 'Lot Trailhead'),
+                          ('osm-entrance:4', 'parking', 'Mapped parking access'),
+                          ('osm-entrance:5', 'road-contact', 'Trail entrance')])
+        self.assertEqual(graph['info']['startCount'], 4)
+        self.assertEqual([graph['nodes'][start['node']][:2] for start in graph['starts']],
+                         [list(points[node]) for node in ['2', '3', '4', '5']])
+        # A boundary around exit 2 can select it independently of exit 3.
+        self.assertEqual([start['id'] for start in graph['starts']
+                          if graph['nodes'][start['node']][0] < .0006], ['osm-entrance:2'])
 
     def test_parking_must_meet_a_trail(self):
         # One lot touches only its road; the other touches the trail. Neither is a mapped trailhead.
@@ -73,9 +86,20 @@ class StartPlaces(unittest.TestCase):
                 'nature': {'id': 'nature', 'nodes': ['s3', 'c'], 'tags': {'highway': 'path'}}}
         trailhead = {'highway': 'trailhead', 'name': 'Nature Walk'}
         pois = [{'id': 'nc', 'kind': 'trailhead', 'nodes': ['s3'], 'tags': trailhead}]
-        _, _, entrances, audit = topology(ways, pois, {'s3': trailhead}, points, [-.01, -.01, .02, .02])
-        self.assertEqual(set(entrances), {'ns2', 'ns3'})
-        self.assertEqual(audit['counts']['isolatedEntrances'], 1)
+        for surface in [None, 'gravel', 'asphalt', 'concrete', 'paved', 'paving_stones']:
+            with self.subTest(surface=surface):
+                if surface is None:
+                    ways['fire']['tags'].pop('surface', None)
+                else:
+                    ways['fire']['tags']['surface'] = surface
+                corridors, _, entrances, audit = topology(ways, pois, {'s3': trailhead}, points, [-.01, -.01, .02, .02])
+                supports = surface in (None, 'gravel')
+                self.assertEqual(set(entrances), {'ns2', 'ns3'} if supports else {'ns3'})
+                self.assertEqual(audit['counts']['isolatedEntrances'], 1 if supports else 2)
+                fire = [corridor for corridor in corridors
+                        if any(source['way'] == 'fire' for member in corridor['source'] for source in member['source'])]
+                self.assertTrue(fire, 'Paved tracks stay walkable; they only cease supporting a hiking entrance')
+                self.assertTrue(all(corridor['kind'] == 'connector' for corridor in fire))
 
 
 if __name__ == '__main__':

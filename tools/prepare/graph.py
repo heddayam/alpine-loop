@@ -1,6 +1,5 @@
 """Compile one finite source footprint without a hike-distance admission rule."""
 import hashlib
-import heapq
 import math
 from collections import defaultdict
 
@@ -191,11 +190,10 @@ def topology(ways, pois, tags_by_node, positions, footprint):
             evidence = "public" if "public" in (entry.get("access"), access) else "unknown"
             entry["access"] = combine(evidence, crossing(tags_by_node.get(node[1:], {})))
             entry["sources"].append(poi["id"])
-            entry.setdefault("pois", []).append(poi["id"])
     # A stub of town walkway between streets is not a way into a hike. Except at a
     # mapped trailhead, the touched trail must join a network of at least
-    # NETWORK_METERS without road walking. Unpaved tracks (fire roads) join
-    # networks here only; they still count as road for hike limits.
+    # NETWORK_METERS of supporting network. Tracks without explicit paved surface
+    # evidence join networks here only; they still count as road for hike limits.
     network = connected_lengths(usable, points, ways)
     for node in [node for node, entry in entrances.items() if entry.get("rank") != 2 and network.get(node, 0) < NETWORK_METERS]:
         counts["isolatedEntrances"] = counts.get("isolatedEntrances", 0) + 1
@@ -243,10 +241,16 @@ def topology(ways, pois, tags_by_node, positions, footprint):
 
 
 NETWORK_METERS = 500
+PAVED_SURFACES = {"paved", "asphalt", "concrete", "concrete:lanes", "concrete:plates",
+                  "paving_stones", "sett", "cobblestone"}
 
 
 def connected_lengths(usable, points, ways):
-    """Length of the trail network (trails plus unpaved tracks) each node belongs to."""
+    """Supporting component length: trails and tracks without known paving.
+
+    Unknown track surfaces remain eligible. This is coarse network evidence,
+    not a claim that the component can be walked in both directions.
+    """
     parent = {}
     def root(node):
         parent.setdefault(node, node)
@@ -255,7 +259,8 @@ def connected_lengths(usable, points, ways):
             node = parent[node]
         return node
     walking = [segment for segment in usable if segment["kind"] == "trail"
-               or any(ways[source["way"]]["tags"].get("highway") == "track" for source in segment["source"])]
+               or (any(ways[source["way"]]["tags"].get("highway") == "track" for source in segment["source"])
+                   and all(ways[source["way"]]["tags"].get("surface") not in PAVED_SURFACES for source in segment["source"]))]
     for segment in walking:
         parent[root(segment["ends"][0])] = root(segment["ends"][1])
     totals = defaultdict(float)
@@ -307,67 +312,9 @@ def assemble(corridors, entrances, info):
     starts = [{"id": entrances[node]["id"], "node": indexes[node], "name": entrances[node]["name"], "access": entrances[node]["access"],
                "kind": {2: "trailhead", 1: "parking"}.get(entrances[node].get("rank", 0), "road-contact")}
               for node in sorted(entrances)]
-    # One start per place: its strongest member. The other entrances stay graph nodes.
-    place = places(starts, edges, [entrances[node].get("pois", []) for node in sorted(entrances)])
-    starts = [start for start, founder in zip(starts, place) if founder == start["id"]]
+    # Keep distinct entrances: nearby starts can differ in access, direction,
+    # road walking, or inclusion in the submitted starting-point boundary.
     info = dict(info, startCount=len(starts))
     return {"version": 1, "info": info, "nodes": nodes, "edges": edges, "starts": starts}, geometry, {
         "nodeIds": node_ids, "edgeIds": edge_ids,
         "trails": [{"id": corridor["id"], "kind": corridor["kind"], "nodes": corridor["nodes"], "segments": corridor["source"]} for corridor in corridors]}
-
-
-PLACE_METERS = 150
-KIND_STRENGTH = {"trailhead": 0, "parking": 1, "road-contact": 2}
-
-
-def places(starts, edges, pois):
-    """Group starts a hiker would call one place; returns each start's founding start ID.
-
-    Strongest starts found places first. A founder claims unclaimed starts within
-    PLACE_METERS of walking, measured from the founder only, so chains of nearby
-    road contacts do not merge. Starts mapped from one parking or trailhead
-    feature always move together.
-    """
-    adjacent = defaultdict(list)
-    for edge in edges:
-        adjacent[edge["from"]].append((edge["to"], edge["distance"]))
-        adjacent[edge["to"]].append((edge["from"], edge["distance"]))
-    parent = list(range(len(starts)))
-    def root(index):
-        while parent[index] != index:
-            parent[index] = parent[parent[index]]
-            index = parent[index]
-        return index
-    first = {}
-    for index, features in enumerate(pois):
-        for feature in features:
-            parent[root(index)] = root(first.setdefault(feature, index))
-    members, at_node = defaultdict(list), defaultdict(list)
-    for index, start in enumerate(starts):
-        members[root(index)].append(index)
-        at_node[start["node"]].append(index)
-    order = sorted(range(len(starts)), key=lambda index: (KIND_STRENGTH[starts[index]["kind"]],
-                                                           starts[index]["access"] != "public", starts[index]["id"]))
-    place = [None] * len(starts)
-    def claim(index, identity):
-        for member in members[root(index)]:
-            place[member] = identity
-    for founder in order:
-        if place[founder] is not None:
-            continue
-        identity = starts[founder]["id"]
-        claim(founder, identity)
-        reached, queue = {starts[founder]["node"]: 0}, [(0, starts[founder]["node"])]
-        while queue:
-            walked, node = heapq.heappop(queue)
-            if walked != reached[node]:
-                continue
-            for index in at_node[node]:
-                if place[index] is None:
-                    claim(index, identity)
-            for neighbor, length in adjacent[node]:
-                total = walked + length
-                if total <= PLACE_METERS and total < reached.get(neighbor, math.inf):
-                    reached[neighbor] = total
-                    heapq.heappush(queue, (total, neighbor))
-    return place
