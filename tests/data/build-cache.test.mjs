@@ -38,7 +38,7 @@ test('launch reuses manual installs and repairs changed locks or missing depende
 test('launch reuses complete outputs and rebuilds after source, configuration or output changes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'alpine-build-cache-'));
   try {
-    for (const dir of ['src', 'scripts', 'dist/client', 'dist/server']) await mkdir(join(root, dir), { recursive: true });
+    for (const dir of ['src', 'public', 'scripts', 'dist/client', 'dist/server']) await mkdir(join(root, dir), { recursive: true });
     for (const file of ['src/app.ts', 'index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.server.json', 'vite.config.ts', 'scripts/start.mjs', 'scripts/stamp-install.mjs']) await writeFile(join(root, file), file);
     let builds = 0;
     const build = async () => {

@@ -17,7 +17,7 @@ const selected = dataset.selectedSections(query);
 const inputs: JobInputs = { version: dataset.catalog.info.id,
   ...(driveArea ? { driveArea: { ...driveArea, geometry: restrictDriveArea(driveArea.geometry, selected, query.boundary) } } : {}),
   sections: selected.map(({ id, name, state, regionId, regionName, bounds, boundary, files }) => ({ id, name, state, regionId, regionName, bounds, boundary, files })) };
-let progress: JobProgress = { stage: 'preparing', completedRegions: [], totalRegions: selected.length,
+const progress: JobProgress = { stage: 'preparing', completedRegions: [], totalRegions: selected.length,
   elapsedMs: 0, expansions: 0, totalStarts: 0, completedStarts: 0 };
 const send = (includeInputs = false) => parentPort!.postMessage({ type: 'progress', ...(includeInputs ? { inputs } : {}),
   progress: { ...progress, elapsedMs: performance.now() - started } });
@@ -106,7 +106,6 @@ try {
   for (const chosen of selections) await completeRegion(chosen);
   progress.stage = 'saving'; delete progress.currentRegion; send();
   await verify();
-  if (verification) await verification;
   const counts = store.counts;
   store.close();
   await dataset.downloads.close();

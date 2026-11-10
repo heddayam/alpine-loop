@@ -1,12 +1,23 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { StoredRoute } from './data-format.js';
 import { MIN_LOOP_SIMILARITY } from './diversity.js';
+import { highestElevation } from './grade.js';
 import { ROUTES_PER_PAGE, type Bounds, type JobResults, type Position, type ResultSort, type RouteChoice, type RouteLocation, type RoutePath, type RouteSegment, type RouteView, type SortOrder } from './model.js';
 
 export type SavedChoice = { route: StoredRoute; groupId: string };
 type Counts = { routeCount: number; groupCount: number };
 type ChoiceRow = { summary: string; groupId: string };
 type StoreOptions = { writable?: boolean; revision?: number; counts?: Counts };
+const extentOf = (points: Position[]): Bounds => {
+  const extent: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [longitude, latitude] of points) {
+    extent[0] = Math.min(extent[0], longitude);
+    extent[1] = Math.min(extent[1], latitude);
+    extent[2] = Math.max(extent[2], longitude);
+    extent[3] = Math.max(extent[3], latitude);
+  }
+  return extent;
+};
 const choice = (row: ChoiceRow): RouteChoice => {
   const summary = JSON.parse(row.summary);
   // Older files include links to alternatives; the public result now has one walk.
@@ -60,6 +71,12 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
     const columns = 'r.summary, r.group_id AS groupId';
     const detail = db.prepare(`SELECT ${columns}, r.steps FROM routes r WHERE ${revisionFilter} AND r.id = ?`);
     const getGeometry = db.prepare('SELECT points FROM geometry WHERE section_id = ? AND trail_id = ?');
+    const shape = (step: StoredRoute['sections'][number]): Position[] => {
+      const row = getGeometry.get(step.section, step.id);
+      const points = row && JSON.parse(row.points as string) as Position[];
+      if (!points?.length) throw new Error('Saved route drawing is missing');
+      return points;
+    };
     const addRoute = writable ? db.prepare('INSERT INTO routes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)') : undefined;
     const addGeometry = writable ? db.prepare('INSERT OR IGNORE INTO geometry VALUES (?, ?, ?)') : undefined;
     const saveCounts = writable ? db.prepare('UPDATE results SET routeCount = ?, groupCount = ? WHERE revision = ?') : undefined;
@@ -114,20 +131,8 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
             const key = `${step.section}:${step.id}`;
             let facts = shapes.get(key);
             if (!facts) {
-              const shape = getGeometry.get(step.section, step.id);
-              if (!shape) throw new Error('Saved route drawing is missing');
-              const points = JSON.parse(shape.points as string) as Position[];
-              if (!points.length) throw new Error('Saved route drawing is missing');
-              const extent: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
-              let peak: number | null = -Infinity;
-              for (const [longitude, latitude, elevation] of points) {
-                extent[0] = Math.min(extent[0], longitude);
-                extent[1] = Math.min(extent[1], latitude);
-                extent[2] = Math.max(extent[2], longitude);
-                extent[3] = Math.max(extent[3], latitude);
-                peak = peak !== null && Number.isFinite(elevation) ? Math.max(peak, elevation!) : null;
-              }
-              facts = { bounds: extent, highPoint: peak };
+              const points = shape(step);
+              facts = { bounds: extentOf(points), highPoint: highestElevation(points) };
               shapes.set(key, facts);
             }
             bounds[0] = Math.min(bounds[0], facts.bounds[0]);
@@ -146,17 +151,7 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
           for (const step of JSON.parse(row.steps) as StoredRoute['sections']) {
             const key = `${step.section}:${step.id}`;
             if (!paths.has(key)) {
-              const shape = getGeometry.get(step.section, step.id);
-              if (!shape) throw new Error('Saved route drawing is missing');
-              const points = JSON.parse(shape.points as string) as Position[];
-              if (!points.length) throw new Error('Saved route drawing is missing');
-              const extent: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
-              for (const [longitude, latitude] of points) {
-                extent[0] = Math.min(extent[0], longitude);
-                extent[1] = Math.min(extent[1], latitude);
-                extent[2] = Math.max(extent[2], longitude);
-                extent[3] = Math.max(extent[3], latitude);
-              }
+              const points = shape(step), extent = extentOf(points);
               const visible = extent[0] <= bounds[2] && extent[2] >= bounds[0]
                 && extent[1] <= bounds[3] && extent[3] >= bounds[1];
               paths.set(key, visible ? { id: key, routeIds: [], geometry: points.map(([lon, lat]) => [lon, lat]) } : null);
@@ -174,13 +169,7 @@ export function createRouteStore(path: string, { writable = false, revision = 0,
         for (const step of JSON.parse(row.steps) as StoredRoute['sections']) {
           const key = `${step.section}:${step.id}`;
           let points = shapes.get(key);
-          if (!points) {
-            const shape = getGeometry.get(step.section, step.id);
-            if (!shape) throw new Error('Saved route drawing is missing');
-            points = JSON.parse(shape.points as string) as Position[];
-            if (!points.length) throw new Error('Saved route drawing is missing');
-            shapes.set(key, points);
-          }
+          if (!points) shapes.set(key, points = shape(step));
           const previous = coordinates.at(-1), first = points[step.reverse ? points.length - 1 : 0]!;
           if (previous && (previous[0] !== first[0] || previous[1] !== first[1])) throw new Error('Saved route drawing has a broken connection');
           const start = Math.max(0, coordinates.length - 1);

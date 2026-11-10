@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { join, relative, resolve, sep } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { statfs } from 'node:fs/promises';
 import { gpx, readDataset } from './dataset.js';

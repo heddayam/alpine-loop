@@ -109,7 +109,7 @@ export function createDriveTime(options: Options) {
     const stopReading = () => { void reader.cancel().catch(() => {}); };
     signal.addEventListener('abort', stopReading, { once: true });
     const chunks: Uint8Array[] = [];
-    let size = 0;
+    let size = 0, payload: unknown;
     try {
       for (;;) {
         signal.throwIfAborted();
@@ -118,12 +118,13 @@ export function createDriveTime(options: Options) {
         if ((size += value.byteLength) > MAX_BYTES) throw invalid();
         chunks.push(value);
       }
-      const payload: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      if (!record(payload)) throw invalid();
-      if (payload.error) throw failure();
-      return payload;
+      payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch { throw invalid(); }
     finally { signal.removeEventListener('abort', stopReading); stopReading(); reader.releaseLock(); }
+    if (!record(payload)) throw invalid();
+    // Provider error details can contain secrets; report only that the calculation failed.
+    if (payload.error) throw failure();
+    return payload;
   }
   return {
     available: !!apiKey,

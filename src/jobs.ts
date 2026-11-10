@@ -115,7 +115,7 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
   const update = db.prepare('UPDATE jobs SET snapshot = ?, status = ? WHERE id = ?');
   const saveInputs = db.prepare('INSERT OR REPLACE INTO job_inputs VALUES (?, ?)');
   const loadInputs = db.prepare('SELECT facts FROM job_inputs WHERE id = ?');
-  const rows = () => db.prepare('SELECT snapshot FROM jobs ORDER BY position').all()
+  const rows = (where: string) => db.prepare(`SELECT snapshot FROM jobs WHERE ${where} ORDER BY position`).all()
     .map(row => JSON.parse(row.snapshot as string) as JobSnapshot);
   let currentProgress: JobSnapshot | undefined;
   const find = (id: string): JobSnapshot => {
@@ -153,16 +153,17 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
   // Reconcile old metadata once on startup; routine status reads touch only active rows.
   db.exec("UPDATE jobs SET status = json_extract(snapshot, '$.status') WHERE status != json_extract(snapshot, '$.status')");
   // Inputs are separate from frequently polled compact status/history metadata.
-  for (const job of rows()) if (job.inputs) {
+  for (const job of rows("json_extract(snapshot, '$.inputs') IS NOT NULL")) if (job.inputs) {
     saveInputs.run(job.id, JSON.stringify(job.inputs));
     job.regions = job.inputs.sections.map(({ id, name, state, regionId, regionName }) => ({ id, name, state, regionId, regionName }));
     delete job.inputs; save(job);
   }
-  for (const job of rows()) if (job.status === 'running') {
+  for (const job of rows("status = 'running'")) {
     restore(job, 'interrupted', 'The app restarted before this search finished.');
     await discard(job.id, job);
   }
-  const known = new Set(rows().filter(published).map(job => publishedPath(job).slice(directory.length + 1)));
+  // Interrupted jobs above keep only previously published results, which are always completed.
+  const known = new Set(rows("status = 'completed'").filter(published).map(job => publishedPath(job).slice(directory.length + 1)));
   for (const file of await readdir(directory)) {
     if (/^[a-f0-9-]{36}(\.staging|\.results-\d+)?\.sqlite(?:-journal|-wal|-shm)?$/.test(file) && !known.has(file)) {
       await rm(join(directory, file), { force: true });

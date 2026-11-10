@@ -93,16 +93,26 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     }
     return { graph, describe };
   }
+  // Workers verify about once a second; re-read the multi-megabyte catalog only after its file changes.
+  let verifiedCatalog: { inputs: JobInputs; fingerprint: string } | undefined;
   async function verifyInputs(inputs: JobInputs): Promise<void> {
     const file = join(directory, 'catalog.json');
-    if ((await stat(file)).size > 16 * 1024 * 1024) throw new Error('Prepared catalog changed during this job.');
-    const current = JSON.parse(await readFile(file, 'utf8')) as typeof catalog;
-    if (current.info?.id !== inputs.version) throw new Error('Prepared data changed during this job. Submit a new job.');
+    const info = await stat(file);
+    if (info.size > 16 * 1024 * 1024) throw new Error('Prepared catalog changed during this job.');
+    const fingerprint = `${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+    if (verifiedCatalog?.inputs !== inputs || verifiedCatalog.fingerprint !== fingerprint) {
+      verifiedCatalog = undefined;
+      const current = JSON.parse(await readFile(file, 'utf8')) as typeof catalog;
+      if (current.info?.id !== inputs.version) throw new Error('Prepared data changed during this job. Submit a new job.');
+      for (const pinned of inputs.sections) {
+        const entry = current.sections?.find(section => section.id === pinned.id);
+        const facts = entry && { id: entry.id, name: entry.name, bounds: entry.bounds, boundary: entry.boundary, files: entry.files };
+        const { state, regionId, regionName, ...pinnedData } = pinned;
+        if (!isDeepStrictEqual(facts, pinnedData)) throw new Error(`Prepared region changed during this job: ${pinned.name}`);
+      }
+      verifiedCatalog = { inputs, fingerprint };
+    }
     for (const pinned of inputs.sections) {
-      const entry = current.sections?.find(section => section.id === pinned.id);
-      const facts = entry && { id: entry.id, name: entry.name, bounds: entry.bounds, boundary: entry.boundary, files: entry.files };
-      const { state, regionId, regionName, ...pinnedData } = pinned;
-      if (!isDeepStrictEqual(facts, pinnedData)) throw new Error(`Prepared region changed during this job: ${pinned.name}`);
       if (!await sections.installed(pinned.id)) throw new Error(`Prepared region was removed during this job: ${pinned.name}`);
     }
   }

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import type { JobRegion, JobSnapshot, SearchQuery } from "../model.js";
+import type { JobRegion, JobSnapshot } from "../model.js";
 import { DEFAULT_ROAD_LIMITS } from "../model.js";
 import { distanceText, elevationText, highPointText, hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
@@ -26,10 +26,6 @@ export const storage = (bytes: number) =>
   bytes < 1_000_000
     ? `${(bytes / 1_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} KB`
     : `${(bytes / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`;
-export const requestSummary = (query: SearchQuery, units: UnitSystem = "imperial") => {
-  const display = unitsFor(units);
-  return `${query.driveTime ? `${query.driveTime.minutes} min driving area, ` : ""}${distanceText(query.distance[0], units)}–${distanceText(query.distance[1], units)} ${display.distanceLabel}, ${elevationText(query.gain[0], units)}–${elevationText(query.gain[1], units)} ${display.elevationLabel} Elev. Gain`;
-};
 export const jobRegionName = (
   job: JobSnapshot,
   id: string,

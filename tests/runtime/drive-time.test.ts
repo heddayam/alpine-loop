@@ -78,7 +78,7 @@ describe('ArcGIS driving-time filter', () => {
     expect(reserve).toHaveBeenCalledTimes(2);
     const broken = vi.fn<typeof globalThis.fetch>(async () => json({ error: { message: 'private-key' } }));
     const denied = createDriveTime({ apiKey: 'private-key', reserve: () => {}, fetch: broken });
-    await expect(denied.resolve({ origin, minutes: 30 }, signal())).rejects.not.toThrow('private-key');
+    await expect(denied.resolve({ origin, minutes: 30 }, signal())).rejects.toThrow('could not calculate');
     expect(broken).toHaveBeenCalledOnce();
   });
 

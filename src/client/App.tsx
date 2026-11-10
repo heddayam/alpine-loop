@@ -21,7 +21,6 @@ import type {
 } from "../data-format.js";
 import {
   JobsDialog,
-  activeJob,
   hasSavedResults,
   savedResultsURL,
   elapsed,

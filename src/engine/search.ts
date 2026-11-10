@@ -605,7 +605,7 @@ function stemDistanceBudget(index: Index, query: SearchQuery, ceiling: number): 
  * ceiling independent of start rotation. For a reversible stem F <= k B,
  * and B / D <= r gives D <= C / (1-(k+1)r). Infinite/unsafe bounds disable
  * the shortcut; they never change final feasibility. */
-function distanceCeiling(graph: TrailGraph, index: Index, query: SearchQuery, core: Circuit): number {
+function distanceCeiling(index: Index, query: SearchQuery, core: Circuit): number {
   const upper = core.upperDistance;
   if (query.stem !== undefined) {
     if (!Number.isSafeInteger(upper) || !Number.isFinite(index.rounding)) return query.distance[1];
@@ -619,7 +619,7 @@ function* connections(graph: TrailGraph, index: Index, query: SearchQuery, core:
   const uphill = [0, 2, 8, 0][mode]!, pavement = 12;
   const knownOnly = mode === 3, labels = new Map<number, number>(), parents = new Map<number, number>(), heap = new Heap();
   const coreNodes = new Set(core.nodes);
-  const ceiling = distanceCeiling(graph, index, query, core);
+  const ceiling = distanceCeiling(index, query, core);
   const distanceBudget = Math.max(0, Math.min(query.distance[1] - core.minDistance,
     stemDistanceBudget(index, query, ceiling)) + index.rounding);
   const gainBudget = Number.isSafeInteger(Math.floor(query.gain[1])) ? query.gain[1] - core.minGain : Infinity;
@@ -658,7 +658,7 @@ function* connections(graph: TrailGraph, index: Index, query: SearchQuery, core:
   return parents;
 }
 function* witnesses(graph: TrailGraph, index: Index, query: SearchQuery, core: Circuit, modes: number[], proofBudget: number): Generator<RouteCandidate | undefined> {
-  if (distanceCeiling(graph, index, query, core) + index.rounding < query.distance[0]) return;
+  if (distanceCeiling(index, query, core) + index.rounding < query.distance[0]) return;
   const emitted = new Set<string>(), best = new Map<number, RouteMetrics>(), coreNodes = new Set(core.nodes);
   let preferred: RouteCandidate | undefined;
   const rings = core.rings.map(ring => {

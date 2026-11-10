@@ -8,10 +8,9 @@ export type HostingOptions = { enabled?: boolean; secret?: string };
 export function createHostedAccess({ enabled = process.env.ALPINE_HOSTED === '1', secret = process.env.ALPINE_SESSION_SECRET }: HostingOptions = {}) {
   if (!enabled) return undefined;
   if (!secret || Buffer.byteLength(secret) < 32) throw new Error('Hosted mode requires a persistent ALPINE_SESSION_SECRET of at least 32 bytes.');
-  const key = secret;
   const sessions = new WeakMap<FastifyRequest, string>();
   const cookieName = '__Host-alpine_session';
-  const sign = (id: string) => createHmac('sha256', key).update(id).digest('base64url');
+  const sign = (id: string) => createHmac('sha256', secret).update(id).digest('base64url');
   return {
     identify(request: FastifyRequest, reply: FastifyReply) {
       const cookie = request.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);

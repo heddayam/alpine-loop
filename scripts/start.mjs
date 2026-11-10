@@ -43,7 +43,7 @@ async function files(directory) {
 /** Build outputs are disposable; invalidate on source/config/lock changes or a missing output. */
 export async function ensureBuild(directory, build) {
   const hash = createHash('sha256');
-  const inputs = [...await files(join(directory, 'src')), ...['index.html', 'package.json', 'package-lock.json',
+  const inputs = [...await files(join(directory, 'src')), ...await files(join(directory, 'public')), ...['index.html', 'package.json', 'package-lock.json',
     'tsconfig.json', 'tsconfig.server.json', 'vite.config.ts', 'scripts/start.mjs', 'scripts/stamp-install.mjs'].map(file => join(directory, file))].sort();
   for (const file of inputs) hash.update(file.slice(directory.length)).update('\0').update(await readFile(file)).update('\0');
   const fingerprint = hash.digest('hex'), stamp = join(directory, '.local-data', 'build.json');
