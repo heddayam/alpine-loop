@@ -24,7 +24,7 @@ async function fixture(dense = false) {
   return { ...data, jobs, open, app: await open() };
 }
 async function visitor(app: App) {
-  const response = await app.inject({ url: '/api/jobs', headers: headers() });
+  const response = await app.inject({ url: '/api/jobs/history', headers: headers() });
   return String(response.headers['set-cookie']).split(';')[0]!;
 }
 const submit = (app: App, cookie: string, dense = false) => app.inject({ method: 'POST', url: '/api/jobs', headers: headers(cookie),
@@ -65,7 +65,7 @@ describe('hosted anonymous search ownership', () => {
         ...(invalid ? { origin: invalid } : {}) }, payload: query })).statusCode).toBe(403);
     }
     expect((await app.inject({ method: 'POST', url: '/api/jobs', headers: { ...headers(cookie), 'sec-fetch-site': 'cross-site' }, payload: query })).statusCode).toBe(403);
-    expect((await app.inject({ url: '/api/jobs', headers: headers(cookie) })).json()).toEqual([]);
+    expect((await app.inject({ url: '/api/jobs/history', headers: headers(cookie) })).json().jobs).toEqual([]);
     for (const url of ['/api/downloads', '/api/downloads/stop']) {
       expect((await app.inject({ method: 'POST', url, headers: headers(cookie), payload: { sections: query.sections } })).statusCode).toBe(503);
     }
@@ -87,14 +87,14 @@ describe('hosted anonymous search ownership', () => {
     for (const suffix of ['', '/results', '/locations', '/paths?west=-122&south=47&east=-121&north=48', '/routes/absent', '/routes/absent.gpx']) {
       expect((await app.inject({ url: `/api/jobs/${first.id}${suffix}`, headers: headers(bob) })).statusCode).toBe(404);
     }
-    for (const url of ['/api/jobs', '/api/jobs/active', '/api/jobs/history']) {
+    for (const url of ['/api/jobs/active', '/api/jobs/history']) {
       const response = (await app.inject({ url, headers: headers(bob) })).json();
       expect(url.endsWith('history') ? response.jobs : response).toEqual([]);
     }
     expect((await app.inject({ url: `/api/jobs/history?before=${first.id}`, headers: headers(bob) })).statusCode).toBe(404);
     expect((await app.inject({ method: 'POST', url: `/api/jobs/${first.id}/cancel`, headers: headers(bob) })).statusCode).toBe(404);
     expect((await app.inject({ method: 'DELETE', url: `/api/jobs/${first.id}`, headers: headers(bob) })).statusCode).toBe(404);
-    const history = (await app.inject({ url: '/api/jobs', headers: headers(alice) })).json();
+    const history = (await app.inject({ url: '/api/jobs/history', headers: headers(alice) })).json().jobs;
     expect(history.map((job: JobSnapshot) => job.id)).toEqual([second.id, first.id]);
     expect(JSON.stringify(history)).not.toContain(alice.split('=')[1]!.split('.')[0]);
     await app.close();
@@ -107,7 +107,7 @@ describe('hosted anonymous search ownership', () => {
   it('shares completed immutable results without granting management and retains ownership across restart', async () => {
     const source = await fixture();
     let app = source.app;
-    const aliceResponse = await app.inject({ url: '/api/jobs', headers: headers() });
+    const aliceResponse = await app.inject({ url: '/api/jobs/history', headers: headers() });
     expect(aliceResponse.headers['set-cookie']).toMatch(/Secure; HttpOnly; SameSite=Lax/);
     const alice = String(aliceResponse.headers['set-cookie']).split(';')[0]!, bob = await visitor(app);
     const first = (await submit(app, alice)).json();
@@ -123,15 +123,15 @@ describe('hosted anonymous search ownership', () => {
       expect((await app.inject({ method, url, headers: headers(bob) })).statusCode).toBe(403);
     }
     const tampered = alice.slice(0, -1) + (alice.endsWith('a') ? 'b' : 'a');
-    const tamperedResponse = await app.inject({ url: '/api/jobs', headers: headers(tampered) });
-    expect(tamperedResponse.json()).toEqual([]);
+    const tamperedResponse = await app.inject({ url: '/api/jobs/history', headers: headers(tampered) });
+    expect(tamperedResponse.json().jobs).toEqual([]);
     expect(tamperedResponse.headers['set-cookie']).toBeDefined();
     await app.close();
     await rm(source.directory, { recursive: true, force: true });
     app = await source.open();
     expect((await app.inject({ url: `/api/jobs/${first.id}`, headers: headers(alice) })).json().canManage).toBe(true);
-    expect((await app.inject({ url: '/api/jobs', headers: headers(alice) })).json()).toHaveLength(1);
-    expect((await app.inject({ url: '/api/jobs', headers: headers(bob) })).json()).toEqual([]);
+    expect((await app.inject({ url: '/api/jobs/history', headers: headers(alice) })).json().jobs).toHaveLength(1);
+    expect((await app.inject({ url: '/api/jobs/history', headers: headers(bob) })).json().jobs).toEqual([]);
     expect((await app.inject({ url: routeUrl, headers: headers(bob) })).statusCode).toBe(200);
     expect((await app.inject({ method: 'DELETE', url: `/api/jobs/${first.id}`, headers: headers(alice) })).statusCode).toBe(204);
   });
@@ -146,6 +146,6 @@ describe('hosted anonymous search ownership', () => {
     const rejected = await submit(app, visitors[10]!, true);
     expect(rejected.statusCode).toBe(429);
     expect(rejected.json().message).toMatch(/queue is full/);
-    expect((await app.inject({ url: '/api/jobs', headers: headers(visitors[10]) })).json()).toEqual([]);
+    expect((await app.inject({ url: '/api/jobs/history', headers: headers(visitors[10]) })).json().jobs).toEqual([]);
   });
 });

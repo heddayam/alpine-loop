@@ -126,10 +126,7 @@ describe('driving filters through the actual app and search worker', () => {
       expect(point[1]!).toBeLessThanOrEqual(source.catalog.sections[0]!.bounds[3]);
     }
     expect((await app.inject(`/api/jobs/${job.id}?inputs=false`)).json()).not.toHaveProperty('inputs');
-    for (const url of ['/api/jobs', '/api/jobs/history']) {
-      const history = (await app.inject(url)).json();
-      expect(JSON.stringify(history)).not.toContain('driveArea');
-    }
+    expect(JSON.stringify((await app.inject('/api/jobs/history')).json())).not.toContain('driveArea');
     await app.close();
     await rm(source.directory, { recursive: true, force: true });
     app = await source.open(api.fetch);
@@ -204,7 +201,7 @@ describe('driving filters through the actual app and search worker', () => {
     let app = await source.open(api.fetch, false, '');
     expect((await app.inject('/api/catalog')).json().driveTimeAvailable).toBe(false);
     expect((await submit(app)).statusCode).toBe(503);
-    expect((await app.inject('/api/jobs')).json()).toEqual([]);
+    expect((await app.inject('/api/jobs/history')).json().jobs).toEqual([]);
     await app.close();
     app = await source.open(api.fetch);
     expect((await app.inject('/api/catalog')).json().driveTimeAvailable).toBe(true);
@@ -212,7 +209,7 @@ describe('driving filters through the actual app and search worker', () => {
       { minutes: 5.5, origin }, { minutes: '120', origin }, { minutes: 120, origin: [181, 47] },
       { minutes: 120, origin: [-122, 86] }, { minutes: 120, origin: [-122, 47, 1] }, { minutes: 120, origin: ['-122', 47] }])
       expect((await submit(app, { ...query, driveTime })).statusCode).toBe(400);
-    expect((await app.inject('/api/jobs')).json()).toEqual([]);
+    expect((await app.inject('/api/jobs/history')).json().jobs).toEqual([]);
     expect(api.submissions()).toBe(0);
   });
 
@@ -221,7 +218,7 @@ describe('driving filters through the actual app and search worker', () => {
     const api = provider();
     const app = await source.open(api.fetch, true);
     const headers = (cookie?: string): Headers => ({ host: 'alpineloop.test', origin: 'https://alpineloop.test', ...(cookie ? { cookie } : {}) });
-    const visitor = async () => String((await app.inject({ url: '/api/jobs', headers: headers() })).headers['set-cookie']).split(';')[0]!;
+    const visitor = async () => String((await app.inject({ url: '/api/jobs/history', headers: headers() })).headers['set-cookie']).split(';')[0]!;
     const alice = headers(await visitor()), bob = headers(await visitor());
     const job = await finished(app, (await submit(app, drivingQuery, alice)).json().id, alice);
     expect(job).toMatchObject({ status: 'completed', canManage: true, query: { driveTime: { origin, minutes: 120 } } });

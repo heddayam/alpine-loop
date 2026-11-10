@@ -244,7 +244,8 @@ export function App() {
     setShowSearchArea(true);
     localURL();
   };
-  const openResults = async (job: JobSnapshot) => {
+  /** Opens saved results; pass `full` when `job` was already fetched with its inputs. */
+  const openResults = async (job: JobSnapshot, full = false) => {
     setChoosingDriveOrigin(false);
     setDrawingBoundary(false);
     if (!hasSavedResults(job)) {
@@ -259,7 +260,7 @@ export function App() {
     setError("");
     setJobActionError("");
     try {
-      const fullJob = await request<JobSnapshot>(
+      const fullJob = full ? job : await request<JobSnapshot>(
         `/api/jobs/${encodeURIComponent(job.id)}`,
         controller.signal,
       );
@@ -316,13 +317,14 @@ export function App() {
     if (!id) return;
     const controller = new AbortController();
     void request<JobSnapshot>(
-      `/api/jobs/${encodeURIComponent(id)}?inputs=false`,
+      `/api/jobs/${encodeURIComponent(id)}`,
       controller.signal,
     )
       .then((job) => {
         if (!controller.signal.aborted) {
-          jobHistory.upsert(job);
-          void openResults(job);
+          const { inputs: _inputs, ...summary } = job;
+          jobHistory.upsert(summary);
+          void openResults(job, true);
         }
       })
       .catch((failure) => {
@@ -380,7 +382,6 @@ export function App() {
     return () => controller.abort();
   }, [
     viewedJob?.id,
-    viewedJob?.resultsRevision,
     activeId,
     selectedId,
     routeRetry,

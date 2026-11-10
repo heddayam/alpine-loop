@@ -21,7 +21,7 @@ export function validateQuery(query: SearchQuery): void {
   if (query.stem === undefined && query.repetition === undefined) throw new Error('Specify a stem distance or percentage limit');
   if (query.stem !== undefined && (!Number.isFinite(query.stem) || query.stem < 0)) throw new Error('Stem distance must be finite and nonnegative');
   if (query.repetition !== undefined && (!Number.isFinite(query.repetition) || query.repetition < 0 || query.repetition > 1)) {
-    throw new Error('Legacy repeated-trail limits must be a fraction between zero and one');
+    throw new Error('Stem percentage limits must be a fraction between zero and one');
   }
   const roads = query.roads ?? DEFAULT_ROAD_LIMITS;
   if (!Number.isFinite(roads.distance) || roads.distance < 0 || !Number.isFinite(roads.fraction)
@@ -321,7 +321,7 @@ function* roadDominated(graph: TrailGraph, index: Index, query: SearchQuery, rou
 /** A deterministic discovery pass changes its anchor and positive edge cost,
  * yielding a different shortest-path forest. Every non-tree corridor closes
  * one simple fundamental circuit; this avoids enumerating all simple paths. */
-const DISCOVERY = { normal: { passes: 8, circuits: 256, proofs: 128 }, deep: { passes: 24, circuits: 256, proofs: 128 } };
+const DISCOVERY = { passes: 24, circuits: 256, proofs: 128 };
 type Tree = { parent: Int32Array; edge: Int32Array; depth: Int32Array; distance: Float64Array;
   gain: Float64Array; road: Float64Array; upper: Float64Array; ancestors: Int32Array[] };
 type Forest = { tree: Tree; labels: Float64Array; weights: Float64Array };
@@ -594,7 +594,7 @@ function localCircuits(graph: TrailGraph, index: Index, query: SearchQuery, core
 }
 
 /** Both approach traversals satisfy F + B <= (k + 1) B. Absolute searches
- * bound B directly; immutable legacy searches use their recorded B / D limit. */
+ * bound B directly; percentage searches use their B / D limit. */
 function stemDistanceBudget(index: Index, query: SearchQuery, ceiling: number): number {
   if (query.stem === 0) return 0;
   if (!Number.isFinite(index.stemRatio)) return Infinity;
@@ -755,12 +755,10 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   if ((query.grades || query.highPoint) && !options.elevationCheck) throw new Error('Elevation-constrained search requires elevation geometry');
   query = { ...query, sections: [...query.sections], distance: [...query.distance], gain: [...query.gain],
     ...(query.highPoint ? { highPoint: [...query.highPoint] } : {}), roads: { ...(query.roads ?? DEFAULT_ROAD_LIMITS) } };
-  const plan = DISCOVERY[query.effort ?? 'normal'];
-  if (!plan) throw new Error('Unknown discovery effort');
   const maximum = allowance(options.maxExpansions), maxResults = allowance(options.maxResults), slice = options.sliceExpansions ?? 8192;
   if (!Number.isSafeInteger(slice) || slice < 1) throw new Error('Search slices must be positive integers');
   const started = Date.now(), progress: SearchProgress = { totalStarts: graph.starts.filter(start => query.includeUnknown || start.access === 'public').length,
-    attemptedStarts: 0, completedStarts: 0, expansions: 0, elapsedMs: 0, totalSearchPoints: plan.passes * (plan.circuits + 1), completedSearchPoints: 0 };
+    attemptedStarts: 0, completedStarts: 0, expansions: 0, elapsedMs: 0, totalSearchPoints: DISCOVERY.passes * (DISCOVERY.circuits + 1), completedSearchPoints: 0 };
   const snapshot = () => ({ ...progress, elapsedMs: Date.now() - started });
   yield { type: 'progress', progress: snapshot() };
   await new Promise<void>(resolve => setTimeout(resolve, 0));
@@ -773,10 +771,10 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
   let results = 0, yieldedAt = performance.now();
   const visit = function* (): Generator<RouteCandidate | undefined> {
     if (!index.eligible.length) return;
-    for (let pass = 0; pass < plan.passes; pass++) {
+    for (let pass = 0; pass < DISCOVERY.passes; pass++) {
       const roots = groups.map(group => anchor(graph, index, group, pass));
       const tree = yield* forest(graph, index, roots, pass, workspace), choices = yield* proposals(graph, index, query, tree, groups);
-      progress.completedSearchPoints = pass * (plan.circuits + 1) + 1;
+      progress.completedSearchPoints = pass * (DISCOVERY.circuits + 1) + 1;
       let trials = 0, turn = 0;
       const pending: { core: Circuit; depth: number }[] = [];
       for (let choice = 0; choice < choices.length || pending.length; ) {
@@ -786,14 +784,14 @@ export async function* search(graph: TrailGraph, query: SearchQuery, options: Op
           ? pending.shift()! : { core: circuit(graph, index, tree, choices[choice++]!), depth: 0 };
         const core = item.core;
         if (!core || seen.has(core.key)) continue;
-        if (trials++ >= plan.circuits) break;
+        if (trials++ >= DISCOVERY.circuits) break;
         seen.add(core.key);
         if (item.depth < 2) for (const variant of localCircuits(graph, index, query, core)) pending.push({ core: variant, depth: item.depth + 1 });
-        yield* witnesses(graph, index, query, core, [0, 1, 2, 3], plan.proofs);
-        progress.completedSearchPoints = pass * (plan.circuits + 1) + 1 + trials;
+        yield* witnesses(graph, index, query, core, [0, 1, 2, 3], DISCOVERY.proofs);
+        progress.completedSearchPoints = pass * (DISCOVERY.circuits + 1) + 1 + trials;
         yield undefined;
       }
-      progress.completedSearchPoints = (pass + 1) * (plan.circuits + 1);
+      progress.completedSearchPoints = (pass + 1) * (DISCOVERY.circuits + 1);
       yield undefined;
     }
 

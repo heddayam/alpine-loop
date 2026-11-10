@@ -221,62 +221,6 @@ describe('completed jobs through the actual app and worker', () => {
     expect((await app.inject(`/api/jobs/${snapshot.id}/locations`)).json()).toEqual([]);
   });
 
-  it.each(['matching', 'replaced', 'removed'] as const)('uses only pinned source names for older saved segments with %s data', async source => {
-    const { directory, jobDirectory, catalog } = await fixture();
-    let app = await openApp(directory, jobDirectory);
-    const job = await finished(app, (await submit(app)).json());
-    const routeId = (await app.inject(`/api/jobs/${job.id}/results`)).json().routes[0].id;
-    const url = `/api/jobs/${job.id}/routes/${routeId}`;
-    const original = (await app.inject(url)).json() as RouteView;
-    await app.close();
-    const file = join(jobDirectory, (await readdir(jobDirectory)).find(name => name.startsWith(job.id) && name.endsWith('.sqlite'))!);
-    const db = new DatabaseSync(file);
-    try {
-      const rows = db.prepare('SELECT id, steps FROM routes').all();
-      for (const row of rows) {
-        const steps = JSON.parse(row.steps as string);
-        for (const step of steps) delete step.name;
-        db.prepare('UPDATE routes SET steps = ? WHERE id = ?').run(JSON.stringify(steps), row.id as string);
-      }
-    } finally { db.close(); }
-    if (source === 'removed') await rm(directory, { recursive: true, force: true });
-    if (source === 'replaced') {
-      catalog.sections[0]!.files.graph.sha256 = '0'.repeat(64);
-      await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
-    }
-    const before = await readFile(file);
-    app = await openApp(directory, jobDirectory);
-    const restored = (await app.inject(url)).json() as RouteView;
-    expect(restored.geometry).toEqual(original.geometry);
-    expect(restored.segments).toEqual(original.segments!.map(segment => {
-      if (source === 'matching') return segment;
-      const { name: _, ...withoutName } = segment;
-      return withoutName;
-    }));
-    expect((await app.inject(url)).json()).toEqual(restored);
-    expect(await readFile(file)).toEqual(before);
-  });
-
-  it.each(['missing', 'disconnected', 'shifted'] as const)('rejects %s drawing geometry before publication', async fault => {
-    const { directory, jobDirectory, catalog } = await fixture();
-    const file = catalog.sections[0]!.files.geometry;
-    const geometry: SectionGeometry = gunzipSync(await readFile(join(directory, file.path))).toString().trimEnd().split('\n').map(line => ({ id: '', name: null, coordinates: JSON.parse(line) }));
-    if (fault === 'missing') geometry[0]!.coordinates = [];
-    else if (fault === 'disconnected') geometry[0]!.coordinates[0]![0] += .01;
-    else for (const shape of geometry) for (const point of shape.coordinates) point[0] += .01;
-    const raw = Buffer.from(geometry.map(shape => JSON.stringify(shape.coordinates) + '\n').join('')), compressed = gzipSync(raw);
-    Object.assign(file, { bytes: compressed.length, jsonBytes: raw.length, sha256: createHash('sha256').update(compressed).digest('hex') });
-    await writeFile(join(directory, file.path), compressed);
-    await writeFile(join(directory, 'catalog.json'), JSON.stringify(catalog));
-    const app = await openApp(directory, jobDirectory);
-    const snapshot = await finished(app, (await submit(app)).json());
-    expect(snapshot.status).toBe('failed');
-    expect(snapshot.reason).toMatch(/drawing/i);
-    expect((await app.inject(`/api/jobs/${snapshot.id}/results`)).statusCode).toBe(409);
-    await app.close();
-    expect((await readdir(jobDirectory)).some(name => name.startsWith(snapshot.id))).toBe(false);
-  });
-
   it('publishes stable grouped pages, all locations and preferred GPX; retains them after source removal and restart', async () => {
     const count = ROUTES_PER_PAGE + 1;
     const { directory, jobDirectory, firstLoop } = await fixture({ startCount: count, routeCount: count,
@@ -284,7 +228,7 @@ describe('completed jobs through the actual app and worker', () => {
     const { repetition: _, ...limits } = query;
     const criteria = { ...limits, stem: 0, roads: { distance: 200, fraction: 1 / 3 } };
     let app = await openApp(directory, jobDirectory);
-    expect((await app.inject('/api/jobs')).json()).toEqual([]);
+    expect((await app.inject('/api/jobs/history')).json().jobs).toEqual([]);
     const response = await submit(app, criteria);
     expect(response.statusCode).toBe(202);
     const initial = response.json() as JobSnapshot;
@@ -294,7 +238,7 @@ describe('completed jobs through the actual app and worker', () => {
     const snapshot = await finished(app, initial);
     expect(snapshot.status).toBe('completed');
     expect((await app.inject({ method: 'POST', url: `/api/jobs/${snapshot.id}/deepen` })).statusCode).toBe(404);
-    expect(snapshot.query).toEqual({ ...criteria, effort: 'deep' });
+    expect(snapshot.query).toEqual(criteria);
     expect(snapshot.query).not.toHaveProperty('repetition');
     expect(snapshot).not.toHaveProperty('routes');
     expect(snapshot.progress).toMatchObject({ completedRegions: ['fixture-0'], totalRegions: 1, totalStarts: count, completedStarts: count });
@@ -352,7 +296,7 @@ describe('completed jobs through the actual app and worker', () => {
     expect((await app.inject(pathsURL)).json()).toEqual(paths);
     expect((await app.inject(`/api/jobs/${snapshot.id}/routes/${route.id}.gpx`)).body).toBe(exported.body);
     expect((await app.inject({ method: 'DELETE', url: `/api/jobs/${snapshot.id}` })).statusCode).toBe(204);
-    expect((await app.inject('/api/jobs')).json()).toEqual([]);
+    expect((await app.inject('/api/jobs/history')).json().jobs).toEqual([]);
     expect((await readdir(jobDirectory)).filter(file => !['metadata.sqlite', 'owner.sqlite', 'owner.sqlite-journal'].includes(file))).toEqual([]);
   });
 
@@ -373,18 +317,18 @@ describe('completed jobs through the actual app and worker', () => {
     const empty = (await app.inject(`/api/jobs/${second.id}/results`)).json() as JobResults;
     expect(empty).toMatchObject({ routes: [], groupCount: 0, routeCount: 0, pageTotal: 0 });
     expect((await app.inject(`/api/jobs/${second.id}/locations`)).json()).toEqual([]);
-    const history = (await app.inject('/api/jobs')).json() as JobSnapshot[];
+    const history = (await app.inject('/api/jobs/history')).json().jobs as JobSnapshot[];
     expect(history.map(job => job.id)).toEqual([second.id, first.id]);
     expect(history.every(job => !('routes' in job) && !('inputs' in job))).toBe(true);
     expect(history.every(job => job.regions?.length === 2)).toBe(true);
     expect((await app.inject(`/api/jobs/${first.id}`)).json().inputs.sections).toHaveLength(2);
-    expect(history.find(job => job.id === first.id)!.query).toEqual({ ...criteria, effort: 'deep', roads: { distance: 1609.344, fraction: .1 } });
+    expect(history.find(job => job.id === first.id)!.query).toEqual({ ...criteria, roads: { distance: 1609.344, fraction: .1 } });
   });
 
   it('pages retained history by a stable cursor and serves compact active status', async () => {
     const { directory, jobDirectory } = await fixture();
     const metadata = new DatabaseSync(join(jobDirectory, 'metadata.sqlite'));
-    metadata.exec('CREATE TABLE jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, snapshot TEXT, status TEXT)');
+    metadata.exec('CREATE TABLE jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL, status TEXT NOT NULL, visitor TEXT)');
     const ids: string[] = [];
     for (let index = 0; index < 123; index++) {
       const id = randomUUID(); ids.unshift(id);
@@ -456,7 +400,7 @@ describe('completed jobs through the actual app and worker', () => {
     await expect(createApp(directory, undefined, jobDirectory)).rejects.toThrow('already using this job storage');
     await app.close();
     const reopened = await openApp(directory, jobDirectory);
-    expect((await reopened.inject('/api/jobs')).json()).toEqual([]);
+    expect((await reopened.inject('/api/jobs/history')).json().jobs).toEqual([]);
   });
 
   it('recovers an actually killed app process, discards its active work and continues its saved queue', async () => {
@@ -504,8 +448,7 @@ describe('completed jobs through the actual app and worker', () => {
     // This is the durable state of a crash between file rename and metadata publication.
     const metadata = new DatabaseSync(join(jobDirectory, 'metadata.sqlite'));
     const unpublished = { ...job, status: 'running' };
-    delete unpublished.resultsRevision;
-    metadata.prepare('UPDATE jobs SET snapshot = ? WHERE id = ?').run(JSON.stringify(unpublished), job.id);
+    metadata.prepare('UPDATE jobs SET snapshot = ?, status = ? WHERE id = ?').run(JSON.stringify(unpublished), 'running', job.id);
     metadata.close();
     app = await openApp(directory, jobDirectory);
     expect((await app.inject(`/api/jobs/${job.id}`)).json().status).toBe('interrupted');
@@ -538,15 +481,13 @@ describe('completed jobs through the actual app and worker', () => {
       expect((await submit(app, { ...query, sections } as never)).statusCode).toBe(400);
     }
     expect((await submit(app, { ...query, distance: [100, 10] })).statusCode).toBe(400);
-    expect((await submit(app, { ...query, effort: 'unbounded' } as never)).statusCode).toBe(400);
-    expect((await submit(app, { ...query, effort: 'normal' })).statusCode).toBe(400);
     expect((await app.inject('/api/jobs/expired')).statusCode).toBe(404);
     expect((await app.inject('/api/search')).statusCode).toBe(404);
     for (const method of ['POST', 'DELETE'] as const) {
       expect((await app.inject({ method, url: method === 'POST' ? '/api/jobs' : '/api/jobs/expired', payload: method === 'POST' ? query : undefined,
         headers: { origin: 'https://elsewhere.example' } })).statusCode).toBe(403);
     }
-    expect((await app.inject('/api/jobs')).json()).toEqual([]);
+    expect((await app.inject('/api/jobs/history')).json().jobs).toEqual([]);
   });
 });
 
@@ -571,7 +512,7 @@ it('preserves missing-data download flow and submits the unchanged request after
   const required = (await app.inject({ method: 'POST', url: '/api/coverage', payload: query })).json();
   expect(required).toMatchObject({ sections: ['fixture-0'], missing: ['fixture-0'] });
   expect((await submit(app)).statusCode).toBe(409);
-  expect((await app.inject('/api/jobs')).json()).toEqual([]);
+  expect((await app.inject('/api/jobs/history')).json().jobs).toEqual([]);
   const initial = await app.inject({ method: 'POST', url: '/api/downloads', payload: { sections: required.missing } });
   expect(initial.statusCode).toBe(202);
   let download = initial.json();
@@ -581,5 +522,5 @@ it('preserves missing-data download flow and submits the unchanged request after
   }
   expect(download).toMatchObject({ status: 'complete', completedBytes: required.bytes, totalBytes: required.bytes });
   const job = await finished(app, (await submit(app)).json());
-  expect(job).toMatchObject({ status: 'completed', query: { ...query, effort: 'deep', roads: { distance: 1609.344, fraction: .1 } }, groupCount: 1 });
+  expect(job).toMatchObject({ status: 'completed', query: { ...query, roads: { distance: 1609.344, fraction: .1 } }, groupCount: 1 });
 });

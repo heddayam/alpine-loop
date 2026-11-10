@@ -236,7 +236,6 @@ export function queryForDraft(draft: SearchDraft, units: UnitSystem = "imperial"
       fraction: draft.roadsEnabled ? (draft.roadFraction ?? 1) : 1,
     },
     includeUnknown: true,
-    effort: "deep",
   };
 }
 

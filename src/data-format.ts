@@ -25,4 +25,4 @@ export type DownloadSnapshot = {
 export type SectionGraph = { graph: TrailGraph; trails: { name: string | null; kind: 'trail' | 'connector' }[] };
 export type SectionStarts = [start: TrailStart, position: Position][];
 export type SectionGeometry = TrailGeometry[];
-export type StoredRoute = { summary: RouteSummary; sections: { section: string; id: number; reverse: boolean; name?: string | null }[] };
+export type StoredRoute = { summary: RouteSummary; sections: { section: string; id: number; reverse: boolean; name: string | null }[] };

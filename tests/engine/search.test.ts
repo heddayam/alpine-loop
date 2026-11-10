@@ -256,13 +256,13 @@ describe('independent legality oracle and explicit discovery quality', () => {
 
 describe('private candidate lifecycle', () => {
   const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100]], [0, 1, 2]);
-  it('requires one finite stem limit while retaining recorded legacy fractions', async () => {
+  it('requires one finite stem limit and a valid stem percentage', async () => {
     for (const criteria of [{ ...stemQuery, stem: undefined },
       { ...stemQuery, stem: -1 }, { ...stemQuery, stem: NaN }, { ...stemQuery, stem: Infinity }]) {
       await expect(collect(graph, criteria)).rejects.toThrow(/stem/i);
     }
     for (const repetition of [-1, 1.1, NaN, Infinity]) {
-      await expect(collect(graph, { ...query, repetition })).rejects.toThrow(/legacy/i);
+      await expect(collect(graph, { ...query, repetition })).rejects.toThrow(/percentage/i);
     }
     expect((await collect(graph, { ...stemQuery, stem: 0 })).done.status).toBe('complete');
   });
@@ -347,7 +347,7 @@ it('reports monotonic completion of selected discovery work and preserves interr
 
 it('preserves every preferred circuit and completed discovery point when work is scheduled', async () => {
   const graph = fixture([[0, 1, 100], [1, 2, 100], [2, 0, 100], [0, 3, 150], [3, 2, 150]], [0, 1, 2, 3]);
-  const criteria: SearchQuery = { ...query, effort: 'deep' };
+  const criteria: SearchQuery = query;
   const uninterrupted = await collect(graph, criteria), scheduled = await collect(graph, criteria, {
     sliceExpansions: 32,
     budget: { checkpoint: () => new Promise<void>(resolve => setTimeout(resolve, 0)) },

@@ -62,7 +62,6 @@ describe("editable search constraints", () => {
       gain: [670.56, 822.96],
       stem: 1612.994,
       includeUnknown: false,
-      effort: "deep",
       roads: { distance: 1232.994, fraction: 0.35 },
     };
     const editableQuery = { ...query, repetition: 1, includeUnknown: true };

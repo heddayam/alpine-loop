@@ -5,16 +5,14 @@ import { distanceText, elevationText, highPointText, hasApproachLimit, hasRoadLi
 
 export const activeJob = (job: JobSnapshot) =>
   job.status === "queued" || job.status === "running";
-export const hasSavedResults = (job: JobSnapshot) =>
-  job.resultsRevision !== undefined || job.status === "completed";
+export const hasSavedResults = (job: JobSnapshot) => job.status === "completed";
 export const savedResultsURL = (
-  job: Pick<JobSnapshot, "id" | "resultsRevision">,
+  job: Pick<JobSnapshot, "id">,
   path: string,
   query = "",
 ) => {
-  const parameters = new URLSearchParams(query);
-  parameters.set("revision", String(job.resultsRevision ?? 0));
-  return `/api/jobs/${encodeURIComponent(job.id)}/${path}?${parameters}`;
+  const parameters = new URLSearchParams(query).toString();
+  return `/api/jobs/${encodeURIComponent(job.id)}/${path}${parameters ? `?${parameters}` : ""}`;
 };
 export const elapsed = (ms: number) => {
   const seconds = Math.max(0, Math.floor(ms / 1000));

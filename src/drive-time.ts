@@ -1,5 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { pointInRing } from './boundary.js';
 import type { Boundary } from './data-format.js';
+import type { Position } from './model.js';
 
 const ENDPOINT = 'https://logistics.arcgis.com/arcgis/rest/services/World/ServiceAreas/GPServer/GenerateServiceAreas';
 const DIRECT = 'https://route-api.arcgis.com/arcgis/rest/services/World/ServiceAreas/NAServer/ServiceArea_World/solveServiceArea';
@@ -32,16 +34,6 @@ const travelMode = {
     ({ attributeName, parameterName: 'Restriction Usage', value })),
 };
 
-function contains(point: number[], ring: number[][]): boolean {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const a = ring[i]!, b = ring[j]!;
-    if ((a[1]! > point[1]!) !== (b[1]! > point[1]!) &&
-      point[0]! < (b[0]! - a[0]!) * (point[1]! - a[1]!) / (b[1]! - a[1]!) + a[0]!) inside = !inside;
-  }
-  return inside;
-}
-
 /** Esri exterior rings are clockwise; holes may precede their owning exterior. */
 function geometry(payload: Record<string, unknown>): Boundary {
   const value = payload.value;
@@ -72,7 +64,7 @@ function geometry(payload: Record<string, unknown>): Boundary {
     const outer = rings.filter(r => r.area < 0).map(r => ({ ...r, polygon: [r.ring] }));
     if (!outer.length) throw invalid();
     for (const hole of rings.filter(r => r.area > 0)) {
-      const parent = outer.filter(r => Math.abs(r.area) > hole.area && contains(hole.ring[0]!, r.ring))
+      const parent = outer.filter(r => Math.abs(r.area) > hole.area && pointInRing(hole.ring[0] as Position, r.ring as Position[]))
         .sort((a, b) => Math.abs(a.area) - Math.abs(b.area))[0];
       if (!parent) throw invalid();
       parent.polygon.push(hole.ring);

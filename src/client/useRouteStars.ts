@@ -3,8 +3,9 @@ import type { JobSnapshot } from "../model.js";
 
 type Stars = { ids: string[]; collapsed: boolean };
 const emptyStars = (): Stars => ({ ids: [], collapsed: false });
-export const routeStarsKey = (job: Pick<JobSnapshot, "id" | "resultsRevision">) =>
-  `alpine-loop:route-stars:${job.id}:${job.resultsRevision ?? 0}`;
+// The trailing 0 keeps stars that browsers saved under the earlier key format.
+export const routeStarsKey = (job: Pick<JobSnapshot, "id">) =>
+  `alpine-loop:route-stars:${job.id}:0`;
 
 export function readRouteStars(key: string): Stars {
   try {

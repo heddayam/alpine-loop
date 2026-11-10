@@ -18,7 +18,7 @@ describe('persisted stem search constraints', () => {
     expect(parseQuery({ ...query, repetition: 0.2 })).toMatchObject({ stem: query.stem, repetition: 0.2 });
   });
 
-  it('preserves legacy limits for immutable saved and queued searches', () => {
+  it('accepts a percentage-only stem limit', () => {
     const parsed = parseQuery({ ...query, stem: undefined, repetition: 0.2 });
     expect(parsed.repetition).toBe(0.2);
     expect(parsed).not.toHaveProperty('stem');

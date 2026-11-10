@@ -10,7 +10,7 @@ const route: RouteView = {
   startPosition: geometry[0]!, trailNames: ["Ridge Loop"], distance: 5000, gain: 50,
   roadDistance: 0, repetition: 0, kind: "loop", uncertain: false, geometry,
 };
-const job = { id: "job", resultsRevision: 0 } as JobSnapshot;
+const job = { id: "job" } as JobSnapshot;
 const render = (points = geometry, units: "imperial" | "metric" = "imperial") =>
   renderToStaticMarkup(createElement(RouteCard, {
     route: { ...route, geometry: points }, job, units, error: "", starred: false,

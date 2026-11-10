@@ -28,7 +28,6 @@ export function parseQuery(value: unknown): SearchQuery {
       throw new RequestError('Choose a driving origin on the map and a whole number of minutes from 5 to 240.', 400);
     }
   }
-  if (query.effort !== undefined && query.effort !== 'deep') throw new RequestError('Submit a search using the current search settings.', 400);
   const range = (values: unknown, length: number): values is number[] => Array.isArray(values)
     && values.length === length && values.every(number => typeof number === 'number' && Number.isFinite(number));
   if (!Array.isArray(query.sections) || (!query.sections.length && !query.boundary && !query.driveTime) || new Set(query.sections).size !== query.sections.length
@@ -51,7 +50,7 @@ export function parseQuery(value: unknown): SearchQuery {
     || typeof roads.fraction !== 'number' || !Number.isFinite(roads.fraction) || roads.fraction < 0 || roads.fraction > 1) {
     throw new RequestError('Use a nonnegative road distance and a road percentage from 0% to 100%.', 400);
   }
-  return { sections: [...query.sections], effort: 'deep', distance: [...query.distance], gain: [...query.gain],
+  return { sections: [...query.sections], distance: [...query.distance], gain: [...query.gain],
     ...(query.highPoint ? { highPoint: [...query.highPoint] } : {}),
     ...(query.grades ? { grades: {
       uphill: { above: query.grades.uphill.above, total: query.grades.uphill.total, longest: query.grades.uphill.longest },
@@ -69,8 +68,8 @@ import { mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
-import type { JobHistoryPage, JobInputs, JobProgress, JobSnapshot, ResultSort, SortOrder } from './model.js';
-import { createRouteStore } from './route-store.js';
+import type { Bounds, JobHistoryPage, JobInputs, JobProgress, JobSnapshot, ResultSort, RouteLocation, SortOrder } from './model.js';
+import { createRouteStore, visiblePaths, type IndexedPath } from './route-store.js';
 import { createDriveTime } from './drive-time.js';
 
 export type DrivingOptions = Omit<Parameters<typeof createDriveTime>[0], 'reserve'>;
@@ -97,7 +96,7 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
   catch (error) { await release(); throw error; }
   try {
   db.exec(`PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;
-    CREATE TABLE IF NOT EXISTS jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL, status TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS jobs (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, snapshot TEXT NOT NULL, status TEXT NOT NULL, visitor TEXT);
     CREATE TABLE IF NOT EXISTS job_inputs (id TEXT PRIMARY KEY, facts TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS driving_usage (month TEXT PRIMARY KEY, used INTEGER NOT NULL);`);
   const driving = createDriveTime({ ...drivingOptions, reserve: () => {
@@ -107,8 +106,6 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
       ON CONFLICT(month) DO UPDATE SET used = used + 1 WHERE used < 4500 RETURNING used`).get(month);
     if (!row) throw new RequestError('The monthly driving-area allowance has been reached. Try again next month or turn off the driving filter.', 429);
   } });
-  if (!db.prepare('PRAGMA table_info(jobs)').all().some(column => column.name === 'status')) db.exec("ALTER TABLE jobs ADD COLUMN status TEXT NOT NULL DEFAULT ''");
-  if (!db.prepare('PRAGMA table_info(jobs)').all().some(column => column.name === 'visitor')) db.exec('ALTER TABLE jobs ADD COLUMN visitor TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status, position)');
   db.exec('CREATE INDEX IF NOT EXISTS jobs_visitor ON jobs(visitor, position)');
   const insert = db.prepare('INSERT INTO jobs(id, snapshot, status, visitor) VALUES (?, ?, ?, ?)');
@@ -128,44 +125,31 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
     update.run(JSON.stringify(job), job.status, job.id);
     if (currentProgress?.id === job.id) currentProgress = structuredClone(job);
   };
-  const resultPath = (id: string, staging = false, revision = 0) => join(directory,
-    `${id}${staging ? '.staging' : revision ? `.results-${revision}` : ''}.sqlite`);
-  const published = (job: JobSnapshot) => job.resultsRevision !== undefined || job.status === 'completed';
-  const publishedPath = (job: JobSnapshot) => resultPath(job.id, false, job.resultsRevision ?? 0);
+  const resultPath = (id: string, staging = false) => join(directory, `${id}${staging ? '.staging' : ''}.sqlite`);
+  /** Removes every file of a job, except the published results of a completed job being kept. */
   const discard = async (id: string, keep?: JobSnapshot) => {
-    for (const file of await readdir(directory)) if (file.startsWith(`${id}.`) && file.endsWith('.sqlite')
-      || file.startsWith(`${id}.`) && /\.sqlite-(journal|wal|shm)$/.test(file)) {
-      if (keep && published(keep) && join(directory, file) === publishedPath(keep)) continue;
+    for (const file of await readdir(directory)) if (file.startsWith(`${id}.`) && /\.sqlite(-journal|-wal|-shm)?$/.test(file)) {
+      if (keep?.status === 'completed' && file === `${id}.sqlite`) continue;
       await rm(join(directory, file), { force: true });
     }
   };
   const restore = (job: JobSnapshot, status: 'failed' | 'cancelled' | 'interrupted', reason: string) => {
     if (job.startedAt) job.progress.elapsedMs = Date.now() - Date.parse(job.startedAt);
-    job.status = published(job) ? 'completed' : status;
+    job.status = status; job.reason = reason;
     job.finishedAt = new Date().toISOString(); delete job.queuePosition;
-    job.reason = published(job) ? `${reason} Existing results were kept.` : reason;
     save(job);
   };
   const nextQueued = () => {
     const row = db.prepare("SELECT snapshot FROM jobs WHERE status = 'queued' ORDER BY position LIMIT 1").get();
     return row && JSON.parse(row.snapshot as string) as JobSnapshot | undefined;
   };
-  // Reconcile old metadata once on startup; routine status reads touch only active rows.
-  db.exec("UPDATE jobs SET status = json_extract(snapshot, '$.status') WHERE status != json_extract(snapshot, '$.status')");
-  // Inputs are separate from frequently polled compact status/history metadata.
-  for (const job of rows("json_extract(snapshot, '$.inputs') IS NOT NULL")) if (job.inputs) {
-    saveInputs.run(job.id, JSON.stringify(job.inputs));
-    job.regions = job.inputs.sections.map(({ id, name, state, regionId, regionName }) => ({ id, name, state, regionId, regionName }));
-    delete job.inputs; save(job);
-  }
   for (const job of rows("status = 'running'")) {
     restore(job, 'interrupted', 'The app restarted before this search finished.');
     await discard(job.id, job);
   }
-  // Interrupted jobs above keep only previously published results, which are always completed.
-  const known = new Set(rows("status = 'completed'").filter(published).map(job => publishedPath(job).slice(directory.length + 1)));
+  const known = new Set(rows("status = 'completed'").map(job => `${job.id}.sqlite`));
   for (const file of await readdir(directory)) {
-    if (/^[a-f0-9-]{36}(\.staging|\.results-\d+)?\.sqlite(?:-journal|-wal|-shm)?$/.test(file) && !known.has(file)) {
+    if (/^[a-f0-9-]{36}(\.staging)?\.sqlite(?:-journal|-wal|-shm)?$/.test(file) && !known.has(file)) {
       await rm(join(directory, file), { force: true });
     }
   }
@@ -192,7 +176,6 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
     let persistedAt = Date.now();
     let done: Extract<JobWorkerEvent, { type: 'done' }> | undefined, failure: string | undefined;
     let worker: Worker;
-    const revision = 0;
     try {
       const driveArea = job.query.driveTime
         ? await driving.resolve({ minutes: job.query.driveTime.minutes, origin: job.query.driveTime.origin! }, controller.signal)
@@ -243,16 +226,15 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
     if (current.status === 'running' && done && !failure && !closed) {
       try {
         const counts = done.counts;
-        await rename(resultPath(job.id, true), resultPath(job.id, false, revision));
+        await rename(resultPath(job.id, true), resultPath(job.id));
         const folder = await open(directory, 'r');
         try { await folder.sync(); } finally { await folder.close(); }
-        const storageBytes = (await stat(resultPath(job.id, false, revision))).size;
+        const storageBytes = (await stat(resultPath(job.id))).size;
         // Cancellation/close can arrive during filesystem awaits. Publication itself
         // is synchronous, so the final state check and metadata commit are indivisible.
         current = find(job.id);
         if (current.status === 'running' && !closed) {
           const completed = { ...current, ...counts, storageBytes, status: 'completed' as const,
-            resultsRevision: revision,
             progress: { ...done.progress, elapsedMs: Date.now() - Date.parse(current.startedAt!) }, finishedAt: new Date().toISOString() };
           db.exec('BEGIN');
           try { save(completed); db.exec('COMMIT'); }
@@ -283,16 +265,21 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
   }
   const startPump = () => { void pump(); };
   startPump();
-  function results<T>(id: string, read: (store: ReturnType<typeof createRouteStore>) => T, revision?: number): T {
-    const job = find(id);
-    if (!published(job)) throw new RequestError('Results are available after this job completes.', 409);
-    revision ??= job.resultsRevision ?? 0;
-    if (!Number.isSafeInteger(revision) || revision < 0 || revision > (job.resultsRevision ?? 0)) {
-      throw new RequestError('Choose a published results revision.', 400);
-    }
-    const store = createRouteStore(publishedPath(job), { revision, counts: revision === (job.resultsRevision ?? 0) && job.routeCount !== undefined && job.groupCount !== undefined
-      ? { routeCount: job.routeCount, groupCount: job.groupCount } : undefined });
+  function results<T>(id: string, read: (store: ReturnType<typeof createRouteStore>) => T): T {
+    if (find(id).status !== 'completed') throw new RequestError('Results are available after this job completes.', 409);
+    const store = createRouteStore(resultPath(id));
     try { return read(store); } finally { store.close(); }
+  }
+  // Published results never change, so the whole-result reads behind opening a
+  // result are kept for the few most recently opened jobs.
+  type Opened = { locations?: RouteLocation[]; paths?: IndexedPath[] };
+  const opened = new Map<string, Opened>();
+  function remembered<K extends keyof Opened>(id: string, key: K, read: () => NonNullable<Opened[K]>): NonNullable<Opened[K]> {
+    let entry = opened.get(id);
+    if (entry) opened.delete(id); else entry = {};
+    opened.set(id, entry);
+    if (opened.size > 4) opened.delete(opened.keys().next().value!);
+    return (entry[key] ??= read()) as NonNullable<Opened[K]>;
   }
   return {
     driveTimeAvailable: driving.available,
@@ -330,26 +317,26 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
       return canManage;
     },
     get: snapshot,
-    page(id: string, offset = 0, sort: ResultSort = 'distance', order: SortOrder = 'asc', revision?: number) {
+    page(id: string, offset = 0, sort: ResultSort = 'distance', order: SortOrder = 'asc') {
       if (!Number.isSafeInteger(offset) || offset < 0 || !['distance', 'gain', 'repetition', 'roadDistance'].includes(sort) || !['asc', 'desc'].includes(order)) {
         throw new RequestError('Choose a valid results page and sort order.', 400);
       }
-      return results(id, store => store.page(offset, sort, order), revision);
+      return results(id, store => store.page(offset, sort, order));
     },
-    locations: (id: string, revision?: number) => results(id, store => store.locations(), revision),
-    paths(id: string, bounds: number[], revision?: number) {
+    locations: (id: string) => remembered(id, 'locations', () => results(id, store => store.locations())),
+    paths(id: string, bounds: number[]) {
       if (bounds.length !== 4 || bounds.some(value => !Number.isFinite(value))
         || bounds[0]! > bounds[2]! || bounds[1]! > bounds[3]!
         || bounds[0]! < -180 || bounds[2]! > 180 || bounds[1]! < -90 || bounds[3]! > 90) {
         throw new RequestError('Choose valid map bounds.', 400);
       }
-      return results(id, store => store.paths(bounds as [number, number, number, number]), revision);
+      return visiblePaths(remembered(id, 'paths', () => results(id, store => store.paths())), bounds as Bounds);
     },
-    route: (id: string, routeId: string, revision?: number) => results(id, store => {
+    route: (id: string, routeId: string) => results(id, store => {
       const route = store.route(routeId);
       if (!route) throw new RequestError('This route is not available.', 404);
       return route;
-    }, revision),
+    }),
     async cancel(id: string) {
       const job = snapshot(id, false);
       if (terminal(job)) {
@@ -367,7 +354,7 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
       if (!terminal(job)) throw new RequestError('Cancel this job before deleting it.', 409);
       const pending = active?.id === id ? active.finished : undefined;
       if (pending) await pending;
-      await discard(id);
+      await discard(id); opened.delete(id);
       db.exec('BEGIN');
       try { db.prepare('DELETE FROM job_inputs WHERE id = ?').run(id); db.prepare('DELETE FROM jobs WHERE id = ?').run(id); db.exec('COMMIT'); }
       catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error; }

@@ -362,23 +362,14 @@ it('groups qualified circuits when tied road mileage moves a road from approach 
   expect(routes[0]!.route.repetition).toBe(100 / 1310);
 });
 
-it('extends the normal candidate pool when searching deeper and regroups the expanded discoveries deterministically', async () => {
+it('regroups discoveries deterministically', async () => {
   const graph = fixture([[0, 1, 9500], [1, 0, 100], [1, 0, 200], [1, 2, 700], [2, 0, 700],
     [0, 3, 2000], [3, 4, 2500], [4, 0, 3000]], [0, 1, 2, 3, 4]);
   const criteria: SearchQuery = { ...query, distance: [7000, 12_000], repetition: 0.2,
     roads: { distance: 0, fraction: 0 } };
-  const pool = async (effort: 'normal' | 'deep') => {
-    const keys = new Set<string>();
-    for await (const event of search(graph, { ...criteria, effort })) if (event.type === 'route') {
-      keys.add(`${event.route.start}:${event.route.edges.join(',')}`);
-    }
-    return keys;
-  };
-  const normal = await pool('normal'), deeper = await pool('deep');
-  expect(normal.size).toBeGreaterThan(0);
-  expect([...normal].every(key => deeper.has(key))).toBe(true);
-  const routes = await compareOutputs(graph, { ...criteria, effort: 'deep' });
-  const repeated = await compareOutputs(graph, { ...criteria, effort: 'deep' });
+  const routes = await compareOutputs(graph, criteria);
+  expect(routes.length).toBeGreaterThan(0);
+  const repeated = await compareOutputs(graph, criteria);
   expect(repeated).toEqual(routes);
 });
 
@@ -406,7 +397,7 @@ it('retains independently qualified witnesses on weighted directed tiny graphs',
 
 it('scheduling leaves displayed route choices and stable family IDs unchanged', async () => {
   const graph = fixture([[0, 1, 2500], [0, 1, 2500], [1, 2, 2500], [1, 2, 2500], [2, 0, 5000]], [0, 1, 2]);
-  const criteria: SearchQuery = { ...query, distance: [10_000, 10_000], repetition: 0, effort: 'deep' };
+  const criteria: SearchQuery = { ...query, distance: [10_000, 10_000], repetition: 0 };
   expect(await solveSection(graph, criteria, { budget: createWorkBudget() })).toEqual(await solveSection(graph, criteria));
 });
 

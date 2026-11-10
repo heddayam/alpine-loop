@@ -180,8 +180,8 @@ describe("saved-job interface boundaries", () => {
     expect(jobAreaSummary({ ...selected, regions: sections })).toBe("WA Cascades");
     expect(jobAreaSummary({ ...selected, regions: sections }, sections.map(section => ({ ...section, regionName: "Renamed" })))).toBe("WA Cascades");
   });
-  it("keeps saved result reads pinned to their selected publication", () => {
-    const old = { id: "saved/job", resultsRevision: 0 };
+  it("encodes saved result reads and keeps their query", () => {
+    const old = { id: "saved/job" };
     for (const path of [
       "results",
       "locations",
@@ -193,13 +193,10 @@ describe("saved-job interface boundaries", () => {
         "http://localhost",
       );
       expect(url.pathname).toBe(`/api/jobs/saved%2Fjob/${path}`);
-      expect(url.searchParams.get("revision")).toBe("0");
       expect(url.searchParams.get("offset")).toBe("50");
       expect(url.searchParams.get("group")).toBe("hike");
     }
-    expect(savedResultsURL({ id: "legacy" }, "results")).toContain(
-      "revision=0",
-    );
+    expect(savedResultsURL({ id: "job" }, "results")).toBe("/api/jobs/job/results");
   });
   it("groups only exact shared starts before proximity clustering, preserving every hike", () => {
     const locations = [location("a", 0), location("b", 0), location("nearby", 0.001)];

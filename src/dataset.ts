@@ -117,11 +117,6 @@ export async function readDataset(directory: string, budget?: WorkBudget) {
     }
   }
   return { info: catalog.info, catalog, selectedSections: selected, coverage, starts, accessPoints, select, verifyInputs,
-    readTrailNames: async (section: JobInputs['sections'][number]) => {
-      if (byId.get(section.id)?.files.graph.sha256 !== section.files.graph.sha256) return undefined;
-      const { trails } = await sections.read<SectionGraph>(section.id, 'graph');
-      return trails.map(trail => trail.name);
-    },
     readGeometry: (id: string, trails: ReadonlySet<number>) => sections.geometry(id, trails),
     view: sections.view, downloads: sections.downloads };
 }

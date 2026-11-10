@@ -9,7 +9,7 @@ const location = (id: string, distance: number): RouteLocation => ({
   id, groupId: id, startId: id, startName: id, startPosition: [0, 0], bounds: [0, 0, 1, 1],
   trailNames: [id], distance, gain: 100, highPoint: 1000, roadDistance: 0, repetition: 0,
 });
-const job = { id: "one", resultsRevision: 0, query: { distance: [0, 10000], gain: [0, 1000] } } as JobSnapshot;
+const job = { id: "one", query: { distance: [0, 10000], gain: [0, 1000] } } as JobSnapshot;
 const pinned = location("pinned", 9000);
 const ordinary = location("ordinary", 1000);
 const render = (routes: RouteLocation[], collapsed = false, scope: "view" | "all" | ReadonlySet<string> = "view") =>
@@ -66,7 +66,7 @@ describe("personal route pins", () => {
   it("isolates preferences by saved search and publication", () => {
     expect(routeStarsKey({ id: "one" })).toBe(routeStarsKey(job));
     expect(routeStarsKey({ id: "two" })).not.toBe(routeStarsKey(job));
-    expect(routeStarsKey({ ...job, resultsRevision: 1 })).not.toBe(routeStarsKey(job));
+    expect(routeStarsKey(job)).toBe("alpine-loop:route-stars:one:0");
     vi.stubGlobal("localStorage", { getItem: (key: string) => key === routeStarsKey(job)
       ? JSON.stringify({ ids: ["pinned", "pinned"], collapsed: true }) : null });
     expect(readRouteStars(routeStarsKey(job))).toEqual({ ids: ["pinned"], collapsed: true });

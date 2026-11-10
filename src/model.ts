@@ -60,8 +60,6 @@ export type SearchQuery = {
   boundary?: SearchBoundary;
   /** Estimated typical driving area, intersected with the selected search area. */
   driveTime?: DriveTime;
-  /** Internal discovery plans. Public jobs always use the deep plan. */
-  effort?: 'normal' | 'deep';
   distance: [minimum: number, maximum: number];
   gain: [minimum: number, maximum: number];
   /** Omission disables the filter. Unknown elevation cannot qualify when enabled. */
@@ -141,8 +139,6 @@ export type JobSnapshot = {
   canManage?: boolean;
   query: SearchQuery;
   status: JobStatus;
-  /** Identifies the saved result set, including previously completed local jobs. */
-  resultsRevision?: number;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;

@@ -16,9 +16,6 @@ export async function createApp(directory: string, clientDirectory?: string, job
   // Saved jobs remain usable even when the prepared catalog has been removed.
   let dataset = await readDataset(directory).catch(() => undefined);
   const jobs = await createJobs(directory, jobDirectory, driving);
-  // Old immutable results lack per-trail names. Retain only one section's names,
-  // never its graph, and share concurrent reads. New jobs save names themselves.
-  let trailNames: { key: string; pending: Promise<(string | null)[] | undefined> } | undefined;
   const availableData = async () => {
     if (!dataset) dataset = await readDataset(directory).catch(() => undefined);
     if (!dataset) throw new RequestError('Prepared trail data is unavailable. Saved jobs remain available in Jobs.', 503);
@@ -80,7 +77,6 @@ export async function createApp(directory: string, clientDirectory?: string, job
     return reply.code(202).send((await availableData()).downloads.start(ids));
   });
   app.post('/api/downloads/stop', async () => { requireDownloads(); return (await availableData()).downloads.stop(); });
-  app.get('/api/jobs', async request => jobs.history(undefined, visitor(request)).jobs.map(job => view(request, job)));
   app.get('/api/jobs/active', async request => jobs.active(visitor(request)).map(job => view(request, job)));
   app.get<{ Querystring: { before?: string } }>('/api/jobs/history', async request => {
     const page = jobs.history(request.query.before, visitor(request));
@@ -101,32 +97,16 @@ export async function createApp(directory: string, clientDirectory?: string, job
     return reply.code(202).send(view(request, jobs.start(query, visitor(request))));
   });
   app.get<{ Params: { id: string }; Querystring: { inputs?: string } }>('/api/jobs/:id', async request => view(request, jobs.get(request.params.id, request.query.inputs !== 'false')));
-  const revision = (value?: string) => value === undefined ? undefined : Number(value);
-  app.get<{ Params: { id: string }; Querystring: { offset?: string; sort?: ResultSort; order?: SortOrder; revision?: string } }>('/api/jobs/:id/results', async request =>
-    jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.sort, request.query.order, revision(request.query.revision)));
-  app.get<{ Params: { id: string }; Querystring: { revision?: string } }>('/api/jobs/:id/locations', async request => jobs.locations(request.params.id, revision(request.query.revision)));
-  app.get<{ Params: { id: string }; Querystring: { west?: string; south?: string; east?: string; north?: string; revision?: string } }>('/api/jobs/:id/paths', async request =>
-    jobs.paths(request.params.id, [request.query.west, request.query.south, request.query.east, request.query.north].map(value => value === undefined || !value.trim() ? NaN : Number(value)), revision(request.query.revision)));
+  app.get<{ Params: { id: string }; Querystring: { offset?: string; sort?: ResultSort; order?: SortOrder } }>('/api/jobs/:id/results', async request =>
+    jobs.page(request.params.id, Number(request.query.offset ?? 0), request.query.sort, request.query.order));
+  app.get<{ Params: { id: string } }>('/api/jobs/:id/locations', async request => jobs.locations(request.params.id));
+  app.get<{ Params: { id: string }; Querystring: { west?: string; south?: string; east?: string; north?: string } }>('/api/jobs/:id/paths', async request =>
+    jobs.paths(request.params.id, [request.query.west, request.query.south, request.query.east, request.query.north].map(value => value === undefined || !value.trim() ? NaN : Number(value))));
   app.post<{ Params: { id: string } }>('/api/jobs/:id/cancel', async request => view(request, await jobs.cancel(request.params.id)));
   app.delete<{ Params: { id: string } }>('/api/jobs/:id', async (request, reply) => { await jobs.delete(request.params.id); return reply.code(204).send(); });
-  app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string } }>('/api/jobs/:id/routes/:routeId', async request => {
-    const route = jobs.route(request.params.id, request.params.routeId, revision(request.query.revision));
-    if (!dataset || !route.segments?.some(segment => segment.name === undefined)) return route;
-    for (const section of jobs.get(request.params.id).inputs?.sections ?? []) {
-      const missing = route.segments.filter(segment => segment.name === undefined && segment.id.startsWith(`${section.id}:`));
-      if (!missing.length) continue;
-      const key = `${section.id}:${section.files.graph.sha256}`;
-      if (trailNames?.key !== key) trailNames = { key, pending: dataset.readTrailNames(section).catch(() => undefined) };
-      const names = await trailNames.pending;
-      for (const segment of missing) {
-        const name = names?.[Number(segment.id.slice(section.id.length + 1))];
-        if (name !== undefined) segment.name = name;
-      }
-    }
-    return route;
-  });
-  app.get<{ Params: { id: string; routeId: string }; Querystring: { revision?: string; units?: string } }>('/api/jobs/:id/routes/:routeId.gpx', async (request, reply) => {
-    const route = jobs.route(request.params.id, request.params.routeId, revision(request.query.revision));
+  app.get<{ Params: { id: string; routeId: string } }>('/api/jobs/:id/routes/:routeId', async request => jobs.route(request.params.id, request.params.routeId));
+  app.get<{ Params: { id: string; routeId: string }; Querystring: { units?: string } }>('/api/jobs/:id/routes/:routeId.gpx', async (request, reply) => {
+    const route = jobs.route(request.params.id, request.params.routeId);
     return reply.type('application/gpx+xml').header('Content-Disposition', `attachment; filename="${gpxFilename(route, request.query.units === 'metric' ? 'metric' : 'imperial')}"`).send(gpx(route));
   });
   if (clientDirectory) await app.register(fastifyStatic, {

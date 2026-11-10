@@ -40,7 +40,7 @@ export function boundaryError(value: unknown): string | null {
   return Math.abs(area) <= 1e-12 ? 'Draw a boundary with a nonzero area.' : null;
 }
 
-function pointInRing(point: Position, vertices: SearchBoundary, includeEdge = true): boolean {
+export function pointInRing(point: Position, vertices: readonly Position[], includeEdge = true): boolean {
   let inside = false;
   for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
     const a = vertices[j]!, b = vertices[i]!;
@@ -55,8 +55,8 @@ export const pointInBoundary = (point: Position, vertices: SearchBoundary) => po
 
 /** Preserve islands and holes; all polygon edges qualify, including hole edges. */
 export const pointInArea = (point: Position, area: Boundary) => area.coordinates.some(polygon =>
-  pointInRing(point, polygon[0] as SearchBoundary) &&
-  !polygon.slice(1).some(hole => pointInRing(point, hole as SearchBoundary, false)));
+  pointInRing(point, polygon[0] as Position[]) &&
+  !polygon.slice(1).some(hole => pointInRing(point, hole as Position[], false)));
 
 /** Save only the driving area within prepared search scope, never widen an empty intersection. */
 export function restrictDriveArea(area: Boundary, sections: { boundary: Boundary }[], boundary?: SearchBoundary): Boundary {
