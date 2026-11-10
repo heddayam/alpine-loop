@@ -36,9 +36,11 @@ point inside or on the boundary. Hikes may extend outside the drawn boundary;
 the prepared highway partitions still apply. Crossed or unsupported boundaries
 are rejected; a valid area with no eligible starts completes with no results.
 The boundary is saved with the job and restored by View results or Copy settings.
-All search-area outlines start hidden. The **Show search area** checkbox toggles
-named regions, drawings and saved driving intersections without changing search
-scope. Drawing mode always shows its editing boundary and prepared coverage.
+Selecting or changing an area, finishing a drawing, copying settings or opening
+saved results automatically checks **Show search area**. You can uncheck it to
+hide the outline; mileage, elevation and other route-limit edits preserve that
+choice. The checkbox changes visibility without changing search scope. Drawing
+mode always shows its editing boundary and prepared coverage.
 **Redraw** replaces the polygon; the adjacent clear button removes the
 starting-point restriction and returns to the full selected regions. Panning and zooming
 only change the view. Drawing uses available prepared coverage and does not
@@ -82,9 +84,10 @@ to the selected region would incorrectly exclude approach roads and detours.
 Calculation failures fail the job without broadening its search. Empty
 intersections complete with no hikes. Saved driving boundaries are clipped to
 the selected prepared area and restored without another provider call. The map
-keeps the driving outline hidden by default. Checking **Show search area** on the
-saved results map reveals the existing thin boundary with its saved minute limit;
-unchecking it clears the outline again. Editing search settings hides the outline.
+automatically shows the existing thin driving boundary and its saved minute limit
+when saved results open. **Show search area** can hide it again. Changing the
+search area or driving settings turns visibility back on; other route-limit edits
+preserve the checkbox state.
 The outline covers only the effective search area: driving reach intersected with
 the selected region or drawing. Excluded region edges and the separate drawn
 outline remain hidden, with no fill. Visibility never changes filtering or makes

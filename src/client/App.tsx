@@ -95,7 +95,7 @@ export function App() {
   const [choosingDriveOrigin, setChoosingDriveOrigin] = useState(false);
   const [driveOriginReturn, setDriveOriginReturn] = useState(0);
   const [showSearchArea, setShowSearchArea] = useState(true);
-  const [showAreaOutline, setShowAreaOutline] = useState(false);
+  const [showAreaOutline, setShowAreaOutline] = useState(true);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
   const [camera, setCamera] = useState<{
     bounds: Bounds;
@@ -236,7 +236,7 @@ export function App() {
     setPendingJob(null);
     clearSelection();
     setViewedJob(undefined);
-    setShowAreaOutline(false);
+    setShowAreaOutline(true);
     setResultsCollapsed(true);
     setLocations([]);
     routeCache.current.clear();
@@ -271,7 +271,7 @@ export function App() {
       if (controller.signal.aborted) return;
       routeCache.current.clear();
       setViewedJob(fullJob);
-      setShowAreaOutline(false);
+      setShowAreaOutline(true);
       setDraft(draftForQuery(fullJob.query, unitsRef.current));
       setResultsCollapsed(false);
       setLocations(positions);
@@ -399,6 +399,7 @@ export function App() {
     setPendingJob(null);
     const query = job.query;
     setDraft(draftForQuery(query, units));
+    setShowAreaOutline(true);
     setShowSearchArea(true);
     setJobsOpen(false);
     setError("");
@@ -442,7 +443,10 @@ export function App() {
   const changeDraft = (next: SearchDraft) => {
     if (busy || downloading || choosingDownload) return;
     setDraft(next);
-    setShowAreaOutline(false);
+    if (next.sections !== draft.sections || next.boundary !== draft.boundary ||
+      next.driveTime?.enabled !== draft.driveTime?.enabled ||
+      next.driveTime?.minutes !== draft.driveTime?.minutes ||
+      next.driveTime?.origin !== draft.driveTime?.origin) setShowAreaOutline(true);
     if (!next.driveTime?.enabled) setChoosingDriveOrigin(false);
     setError("");
     setShowSearchArea(true);
