@@ -6,16 +6,17 @@ HTTP ports on the VM; SSH is restricted to the deployment computer's public IP.
 
 ## Current release and development workflow
 
-Last verified live code on November 6, 2026 (Pacific time):
-`9074d9b82eafef7fdf23e2f8fbd7e6e1298055a5` (Developer-only access-point overlay).
+Last verified live code on November 10, 2026 (Pacific time):
+`516c48283d297c32d88926ee491a1f98f80d737d` (Automatic search-area outline visibility).
 The VM is `alpine-loop-01` in resource group `alpine-loop-prod`, West US 2.
-Its release directory is `/srv/alpine-loop/releases/9074d9b82eaf`, selected by
+Its release directory is `/srv/alpine-loop/releases/516c48283d29`, selected by
 `/srv/alpine-loop/current`. Confirm the symlink and running app image before a
 new deployment; this record is not a live probe.
 
 The hosting implementation, retained app features and simplified access-point
 preparation are integrated into `main`. Use main as the normal base for new
-`codex/` work branches. The old `codex/cloudflare-azure` branch remains historical.
+`codex/` work branches. The former hosting branch is retired; its integrated
+source remains in main's history.
 
 The November 6 (Pacific time) data release rebuilt all nine sections with
 simple developed-land, parking-contact and supporting-network rules, while
@@ -177,13 +178,26 @@ jobs and resume queued jobs rather than publishing partial results.
 
 ## Deployment verification
 
+The November 10 release `516c48283d29` automatically checks **Show search
+area** when areas are selected, drawn, changed, copied or reopened. Manual hiding
+survives unrelated route-limit edits. Build, typecheck and 20 focused checks pass.
+Local browser checks cover region/driving edits, drawing/clear, saved-result URLs
+and copied settings. The public browser verified automatic outlines, manual
+hiding, drawing and saved-result reload, with no extra searches or JavaScript
+errors. The developer access-point overlay remains disabled.
+
+The release used Azure Run Command without changing the SSH access rule. The
+verified release symlink and healthy image identify `516c48283d29`; both
+public HTTPS hostnames pass health checks, all nine sections remain installed,
+and the prior public GPX is byte-for-byte identical.
+
 The follow-up `9074d9b82eaf` release makes access-point inspection a local
 developer tool. `ALPINE_DEV_ACCESS_POINTS=1` enables it locally; hosted mode
 always disables its layer, toggle and API, even with the flag set. Build,
 typecheck and 30 focused app/hosted checks pass. Local browsers verified both
 flag states. The public browser shows no overlay/control, makes zero access-point
-requests and has no JavaScript errors; the developer API returns 404. The running
-image and release symlink match this revision, health passes, and the prior public
+requests and has no JavaScript errors; the developer API returns 404. At verification, its
+image and release symlink matched that revision, health passed, and the prior public
 GPX remains byte-for-byte identical.
 
 The earlier November 6, 2026 release built successfully on Azure and passed public HTTPS
@@ -235,3 +249,13 @@ References: [Azure VM pricing](https://azure.microsoft.com/pricing/details/virtu
 [Azure Backup pricing](https://azure.microsoft.com/pricing/details/backup/),
 [Azure credits](https://learn.microsoft.com/azure/cost-management-billing/manage/mca-check-azure-credits-balance),
 [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/).
+
+## Branch cleanup, November 10, 2026
+
+Main is the only remaining local and remote branch after review. Eleven local
+branches, nine remote branches and three clean detached task worktrees were
+removed. No applicable unmerged or ongoing work was found: squashed changes are
+already in main, and superseded experiments were not restored. Exact unmerged
+branch/worktree heads are preserved under `archive/branch-cleanup-2026-11-10/`;
+the retired pack-tools fix retains its existing October 5 archive tag. Existing
+archive tags were preserved.

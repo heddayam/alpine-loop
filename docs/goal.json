@@ -19,7 +19,7 @@
     "date": "2026-10-08",
     "delivery": "Hosted delivery is now live at https://alpineloop.org through Cloudflare Tunnel and a persistent Azure VM; this supersedes the earlier hosting deferral.",
     "development": "Default to local development and running-app verification. Git pushes do not deploy; release when the user requests a live update or the active task includes production deployment.",
-    "lastVerifiedRelease": "9074d9b82eafef7fdf23e2f8fbd7e6e1298055a5",
+    "lastVerifiedRelease": "516c48283d297c32d88926ee491a1f98f80d737d",
     "productionSourceBranch": "main",
     "reference": "docs/hosting.md records the last verified production release, storage and manual release process. Main contains the integrated hosted implementation. Inspect actual Git and VM state before releasing."
   },
@@ -690,6 +690,7 @@
   "searchAreaOutlineDecision": {
     "date": "2026-11-06",
     "decision": "Automatically check Show search area whenever an area is selected, drawn, changed, copied or restored. Respect manual hiding while mileage/elevation/other route limits change. Returning to an active area from results also shows it.",
-    "implementation": "One existing visibility state, reset on area transitions instead of every draft edit. No extra provider calls or changes to search scope."
+    "implementation": "One existing visibility state, reset on area transitions instead of every draft edit. No extra provider calls or changes to search scope.",
+    "validation": "Deployed 516c48283d297c32d88926ee491a1f98f80d737d and verified through the public browser. Build/typecheck and 20 focused checks pass; region/driving edits, drawing completion/clear, saved URL/reload and local copied settings show outlines automatically. Manual hiding survives other route-limit edits. No extra searches, JavaScript errors or developer overlay."
   }
 }
