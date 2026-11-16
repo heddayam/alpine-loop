@@ -6,10 +6,10 @@ HTTP ports on the VM; SSH is restricted to the deployment computer's public IP.
 
 ## Current release and development workflow
 
-Last verified live code on November 10, 2026 (Pacific time):
-`516c48283d297c32d88926ee491a1f98f80d737d` (Automatic search-area outline visibility).
+Last verified live code on November 16, 2026 (Pacific time):
+`9286ba2d4b503bca4be7a29703307b20fdb7c90a` (Car-reachable starts, gate entrances and lot labels).
 The VM is `alpine-loop-01` in resource group `alpine-loop-prod`, West US 2.
-Its release directory is `/srv/alpine-loop/releases/516c48283d29`, selected by
+Its release directory is `/srv/alpine-loop/releases/9286ba2d4b50`, selected by
 `/srv/alpine-loop/current`. Confirm the symlink and running app image before a
 new deployment; this record is not a live probe.
 
@@ -18,13 +18,14 @@ preparation are integrated into `main`. Use main as the normal base for new
 `codex/` work branches. The former hosting branch is retired; its integrated
 source remains in main's history.
 
-The November 6 (Pacific time) data release rebuilt all nine sections with
-simple developed-land, parking-contact and supporting-network rules, while
-preserving distinct eligible entrances. All 551 mapped trailheads remain. Local
-verification is recorded in
-[`benchmarks/release-verification-2026-11-07.json`](../benchmarks/release-verification-2026-11-07.json).
-The pinned data release is `data-v2-2026-11-07-access`, with catalog SHA-256
-`4d2ef9bd95383ff619a43a24d4a5a9ab13da901813c08b78c45e500ffa0821df`.
+The November 16 (Pacific time) data release rebuilt all nine sections with
+car reachability, gate and closure entrances, parking-lot labels and paved-walkway
+evidence rules, on top of the November 6 developed-land and supporting-network
+rules. 10,161 starts remain, including all 551 mapped trailheads; parking starts
+rise from 515 to 1,434. Local verification is recorded in
+[`benchmarks/release-verification-2026-11-16.json`](../benchmarks/release-verification-2026-11-16.json).
+The pinned data release is `data-v2-2026-11-16-car-access`, with catalog SHA-256
+`ff28157459ae85c6008b47f8f98178f1de666a78f1a4fae9ff62d9ada588b2a5`.
 Source integration alone does not deploy the site.
 
 | Action | What changes |
@@ -177,6 +178,16 @@ container's SQLite WAL through the host filesystem. Restarts interrupt active
 jobs and resume queued jobs rather than publishing partial results.
 
 ## Deployment verification
+
+The November 16 release `9286ba2d4b50` installs the car-access data release and
+publishes job failures only after their unpublished files are removed. It used
+Azure Run Command without changing the SSH access rule. Both public HTTPS
+hostnames pass health checks, and all nine sections are installed with 10,161
+starts. A public Mitchell Canyon search completed with 15 hikes, two from the
+newly recognised visitor center lot. GPX, two-browser privacy and foreign-origin
+rejection pass, the developer access-point API returns 404, and the public page
+loads without the overlay or JavaScript errors. Build, typecheck, 209 vitest,
+13 node and the Python preparation checks pass.
 
 The November 10 release `516c48283d29` automatically checks **Show search
 area** when areas are selected, drawn, changed, copied or reopened. Manual hiding
