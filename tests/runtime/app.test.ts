@@ -10,7 +10,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import type { SectionGeometry } from '../../src/data-format.js';
 import { ROUTES_PER_PAGE, type JobResults, type JobSnapshot, type RouteView } from '../../src/model.js';
 import { createNetworkFixture, query } from './network-fixture.js';
 

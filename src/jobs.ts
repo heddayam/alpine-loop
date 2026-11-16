@@ -187,9 +187,9 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
       });
       active!.worker = worker;
     } catch (error) {
+      await discard(job.id, find(job.id));
       const current = find(job.id);
       if (current.status === 'running') restore(current, closed ? 'interrupted' : 'failed', error instanceof Error ? error.message : 'Could not start this job.');
-      await discard(job.id, current);
       if (active?.id === job.id) active = undefined;
       currentProgress = undefined; return;
     }
@@ -242,11 +242,12 @@ export async function createJobs(dataDirectory: string, directory: string, drivi
         }
       } catch (error) { failure = error instanceof Error ? error.message : 'Could not save this job.'; }
     }
+    // Remove unpublished files before a failure becomes visible.
+    await discard(job.id, find(job.id));
     current = find(job.id);
     if (current.status === 'running') {
       restore(current, closed ? 'interrupted' : 'failed', failure ?? 'The worker ended before all results were saved.');
     }
-    await discard(job.id, current);
     if (active?.id === job.id) active = undefined;
     currentProgress = undefined;
   }

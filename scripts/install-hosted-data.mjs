@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { openSections } from '../dist/server/sections.js';
 
 // Hosted visitors search immediately; only the operator installs prepared data.
@@ -21,6 +22,6 @@ export async function installHostedData(directory, signal) {
   }
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   await installHostedData(resolve(process.env.ALPINE_DATA ?? '.local-data/mountains'), new AbortController().signal);
 }

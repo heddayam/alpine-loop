@@ -1,0 +1,313 @@
+{
+  "verifiedAtUtc": "2026-11-16T23:30:57Z",
+  "scope": "Car reachability, gate and closure entrances, parking-lot labelling and paved-walkway evidence rules applied to all nine published sections.",
+  "dataRelease": {
+    "tag": "data-v2-2026-11-16-car-access",
+    "catalogUrl": "https://github.com/heddayam/alpine-loop/releases/download/data-v2-2026-11-16-car-access/catalog.json",
+    "catalogSha256": "ff28157459ae85c6008b47f8f98178f1de666a78f1a4fae9ff62d9ada588b2a5",
+    "previousTag": "data-v2-2026-11-07-access"
+  },
+  "preparation": {
+    "cascades": {
+      "status": "verified",
+      "elapsedSeconds": 911
+    },
+    "olympics": {
+      "status": "verified",
+      "elapsedSeconds": 129
+    },
+    "santa-cruz": {
+      "status": "verified",
+      "elapsedSeconds": 324
+    },
+    "diablo": {
+      "status": "verified",
+      "elapsedSeconds": 460
+    },
+    "sonoma-marin": {
+      "status": "verified",
+      "elapsedSeconds": 244
+    }
+  },
+  "independentGeometryAudit": "Every region passed the independent graph, geometry, hash and boundary audit with no compiler imports.",
+  "startComparison": {
+    "sections": [
+      {
+        "name": "Mount St. Helens & Mount Adams",
+        "before": 1086,
+        "after": 1112,
+        "removed": 62,
+        "added": 88,
+        "relabelledParking": 130,
+        "kindsBefore": {
+          "road-contact": 956,
+          "trailhead": 52,
+          "parking": 78
+        },
+        "kindsAfter": {
+          "road-contact": 841,
+          "parking": 219,
+          "trailhead": 52
+        },
+        "mappedTrailheadsRetained": 52
+      },
+      {
+        "name": "Mount Rainier & Central Cascades",
+        "before": 1334,
+        "after": 1258,
+        "removed": 110,
+        "added": 34,
+        "relabelledParking": 122,
+        "kindsBefore": {
+          "road-contact": 1159,
+          "trailhead": 117,
+          "parking": 58
+        },
+        "kindsAfter": {
+          "road-contact": 961,
+          "parking": 180,
+          "trailhead": 117
+        },
+        "mappedTrailheadsRetained": 117
+      },
+      {
+        "name": "Alpine Lakes",
+        "before": 1596,
+        "after": 1508,
+        "removed": 172,
+        "added": 84,
+        "relabelledParking": 96,
+        "kindsBefore": {
+          "road-contact": 1453,
+          "trailhead": 69,
+          "parking": 74
+        },
+        "kindsAfter": {
+          "road-contact": 1266,
+          "trailhead": 69,
+          "parking": 173
+        },
+        "mappedTrailheadsRetained": 69
+      },
+      {
+        "name": "Glacier Peak & Mountain Loop",
+        "before": 1406,
+        "after": 1398,
+        "removed": 76,
+        "added": 68,
+        "relabelledParking": 87,
+        "kindsBefore": {
+          "road-contact": 1223,
+          "trailhead": 123,
+          "parking": 60
+        },
+        "kindsAfter": {
+          "road-contact": 1127,
+          "trailhead": 123,
+          "parking": 148
+        },
+        "mappedTrailheadsRetained": 123
+      },
+      {
+        "name": "Mount Baker & North Cascades",
+        "before": 1183,
+        "after": 1119,
+        "removed": 87,
+        "added": 23,
+        "relabelledParking": 73,
+        "kindsBefore": {
+          "road-contact": 1078,
+          "trailhead": 60,
+          "parking": 45
+        },
+        "kindsAfter": {
+          "road-contact": 940,
+          "trailhead": 60,
+          "parking": 119
+        },
+        "mappedTrailheadsRetained": 60
+      },
+      {
+        "name": "Olympic Mountains",
+        "before": 616,
+        "after": 603,
+        "removed": 27,
+        "added": 14,
+        "relabelledParking": 52,
+        "kindsBefore": {
+          "road-contact": 504,
+          "trailhead": 85,
+          "parking": 27
+        },
+        "kindsAfter": {
+          "parking": 81,
+          "road-contact": 437,
+          "trailhead": 85
+        },
+        "mappedTrailheadsRetained": 85
+      },
+      {
+        "name": "Santa Cruz Mountains",
+        "before": 1362,
+        "after": 1224,
+        "removed": 225,
+        "added": 87,
+        "relabelledParking": 145,
+        "kindsBefore": {
+          "road-contact": 1302,
+          "parking": 50,
+          "trailhead": 10
+        },
+        "kindsAfter": {
+          "parking": 219,
+          "road-contact": 995,
+          "trailhead": 10
+        },
+        "mappedTrailheadsRetained": 10
+      },
+      {
+        "name": "Diablo Range & East Bay",
+        "before": 1219,
+        "after": 1162,
+        "removed": 167,
+        "added": 110,
+        "relabelledParking": 104,
+        "kindsBefore": {
+          "road-contact": 1133,
+          "parking": 65,
+          "trailhead": 21
+        },
+        "kindsAfter": {
+          "road-contact": 956,
+          "parking": 185,
+          "trailhead": 21
+        },
+        "mappedTrailheadsRetained": 21
+      },
+      {
+        "name": "Sonoma–Marin Coast",
+        "before": 756,
+        "after": 777,
+        "removed": 62,
+        "added": 83,
+        "relabelledParking": 41,
+        "kindsBefore": {
+          "road-contact": 684,
+          "trailhead": 14,
+          "parking": 58
+        },
+        "kindsAfter": {
+          "road-contact": 653,
+          "parking": 110,
+          "trailhead": 14
+        },
+        "mappedTrailheadsRetained": 14
+      }
+    ],
+    "beforeStarts": 10558,
+    "afterStarts": 10161,
+    "mappedTrailheadsRetained": 551,
+    "frozenQualifyingWitnesses": {
+      "checked": 7,
+      "notRetained": []
+    }
+  },
+  "realSearches": [
+    {
+      "name": "santa-cruz",
+      "section": "mountain-42814af5174a7f8180d23819",
+      "start": "Sequoia Area",
+      "completedStarts": 1,
+      "allStarts": 1,
+      "hikes": 81,
+      "checkedRoutes": 81,
+      "elapsedMs": 26355,
+      "first": {
+        "id": "8d05770987a9ac90e71334bb9c8bf71f",
+        "name": [
+          "Bay Tree Trail",
+          "Crystal Springs Trail",
+          "Dean Trail",
+          "Chinquapin Trail"
+        ],
+        "distance": 9550.614412019699,
+        "gain": 471.08032565093583
+      },
+      "checks": [
+        "completed real search",
+        "independent directed source-walk correctness",
+        "full saved geometry matches source drawings",
+        "exact constraints and road distance",
+        "GPX",
+        "reopen with retained results"
+      ],
+      "roadLimitMeters": 1600,
+      "note": "Newly labelled parking start."
+    },
+    {
+      "name": "cascades",
+      "section": "mountain-5c1e9cc334aad932014d9f98",
+      "start": "Blanchard Forest Upper Trailhead",
+      "completedStarts": 1,
+      "allStarts": 1,
+      "hikes": 4,
+      "checkedRoutes": 4,
+      "elapsedMs": 17860,
+      "first": {
+        "id": "3a8b9da3f45017fbd0f02200ee2bc079",
+        "name": [
+          "Lily Lizard Trail",
+          "Samish Bay Connector",
+          "Rick Rolled",
+          "Larry Reed Trail",
+          "Lily Max Connector",
+          "Chuckanut Trail / Larry Reed Trail",
+          "Lily Lake Trail"
+        ],
+        "distance": 11402.198239084499,
+        "gain": 602.3088656066554
+      },
+      "checks": [
+        "completed real search",
+        "independent directed source-walk correctness",
+        "full saved geometry matches source drawings",
+        "exact constraints and road distance",
+        "GPX",
+        "reopen with retained results"
+      ],
+      "roadLimitMeters": 804.672,
+      "note": "Newly labelled parking start."
+    },
+    {
+      "name": "cascades",
+      "section": "mountain-5c1e9cc334aad932014d9f98",
+      "start": "Trail entrance",
+      "completedStarts": 1,
+      "allStarts": 1,
+      "hikes": 2,
+      "checkedRoutes": 2,
+      "elapsedMs": 30815,
+      "first": {
+        "id": "8db8f216d7f40a4c6549a996d0fc1a22",
+        "name": [],
+        "distance": 10156.876349182008,
+        "gain": 492.24219509308114
+      },
+      "checks": [
+        "completed real search",
+        "independent directed source-walk correctness",
+        "full saved geometry matches source drawings",
+        "exact constraints and road distance",
+        "GPX",
+        "reopen with retained results"
+      ],
+      "roadLimitMeters": 5000,
+      "note": "New gate start; no hikes at the default 805 m road limit, two at 5 km because the closed road counts as road."
+    }
+  ],
+  "knownLimitations": [
+    "Santa Cruz gate osm-entrance:1230294015 lies 3.4 km of closed road from Sandy Point Lookout Trail and gives no hikes even with a 5 km road limit.",
+    "The 30 m lot label promotes some town-edge lots, for example 'Lot 6' and 'Car Park 2' in Santa Cruz."
+  ],
+  "offlineChecks": "Python preparation tests, build, typecheck and vitest suite."
+}

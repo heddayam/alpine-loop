@@ -154,20 +154,37 @@ def topology(ways, pois, tags_by_node, positions, footprint):
     # Use resolved physical roles: an explicit sidewalk wins over a duplicate
     # generic path, and a prohibited segment cannot establish a trail contact.
     trail_nodes = {node for segment in usable if segment["kind"] == "trail" for node in segment["ends"]}
-    for way in ways.values():
-        if way["tags"].get("highway") not in ROADS or not routable(way):
-            continue
-        # Walking a closed road is different from arriving by car. Foot tags
-        # cannot restore vehicle access; more-specific vehicle tags can.
-        if all(permission(way["tags"], side, VEHICLE_MODES) is None
-               for side in ("forward", "backward")):
-            continue
+    # Walking a closed road is different from arriving by car. Foot tags
+    # cannot restore vehicle access; more-specific vehicle tags can.
+    roads = [way for way in ways.values() if way["tags"].get("highway") in ROADS and routable(way)]
+    drivable = [way for way in roads if any(permission(way["tags"], side, VEHICLE_MODES) is not None
+                                            for side in ("forward", "backward"))]
+    open_ids = {way["id"] for way in drivable}
+    closed = [way for way in roads if way["id"] not in open_ids]
+    closures = defaultdict(list)
+    for way in closed:
+        for node in way["nodes"]:
+            closures[node].append("w" + way["id"])
+    car, gates = car_reach(drivable, closed, tags_by_node, positions, footprint)
+    for way in drivable:
         for node in way["nodes"]:
             key = "n" + node
-            if key in trail_nodes and key not in frontiers and crossing(tags_by_node.get(node, {})) is not None:
+            # A road behind a mapped barrier or closure is not somewhere to arrive by car.
+            if key in trail_nodes and key not in frontiers and car.get(node) != "closed" \
+                    and crossing(tags_by_node.get(node, {})) is not None:
                 entrances.setdefault(key, {"id": "osm-entrance:" + node, "name": "Trail entrance", "access": "unknown", "sources": []})
                 entrances[key]["sources"].append("w" + way["id"])
-    unresolved = []
+    # The barrier or closure a car stops at is where the walk begins, provided
+    # trails lie beyond it. Walking there still counts as road for hike limits.
+    beyond = gated_trail_lengths(usable, points, car)
+    for node in sorted(gates | closures.keys()):
+        key = "n" + node
+        if car.get(node) != "open" or key in entrances or key in frontiers or beyond.get(key, 0) < NETWORK_METERS \
+                or crossing(tags_by_node.get(node, {})) is None:
+            continue
+        entrances[key] = {"id": "osm-entrance:" + node, "name": "Trail entrance", "access": "unknown",
+                          "sources": ["n" + node] if node in gates else closures[node]}
+    unresolved, lots = [], []
     for poi in pois:
         walking = permission(poi["tags"])
         arrival = permission(poi["tags"], modes=VEHICLE_MODES) if poi["kind"] == "parking" else "public"
@@ -175,6 +192,8 @@ def topology(ways, pois, tags_by_node, positions, footprint):
         # Parking, like a road contact, must meet a trail; a mapped trailhead is its own evidence.
         reach = adjacent if poi["kind"] == "trailhead" else trail_nodes
         connections = ["n" + node for node in poi["nodes"] if "n" + node in reach and "n" + node not in frontiers]
+        if access is not None and poi["kind"] == "parking":
+            lots.append((poi, access, connections))
         if access is None or not connections:
             unresolved.append({"id": poi["id"], "kind": poi["kind"], "name": poi["tags"].get("name"),
                                "reason": "restricted vehicle access" if arrival is None else "restricted walking access" if walking is None
@@ -194,10 +213,26 @@ def topology(ways, pois, tags_by_node, positions, footprint):
     # mapped trailhead, the touched trail must join a network of at least
     # NETWORK_METERS of supporting network. Tracks without explicit paved surface
     # evidence join networks here only; they still count as road for hike limits.
+    # Paved walkways lead to trails without themselves being hiking evidence.
     network = connected_lengths(usable, points, ways)
     for node in [node for node, entry in entrances.items() if entry.get("rank") != 2 and network.get(node, 0) < NETWORK_METERS]:
         counts["isolatedEntrances"] = counts.get("isolatedEntrances", 0) + 1
         del entrances[node]
+    # A lot whose own nodes reach no eligible entrance labels the entrances
+    # mapped beside it. It never creates a start or invents a connection.
+    labelled = set()
+    for poi, access, connections in lots:
+        if any(node in entrances for node in connections):
+            continue
+        for node in beside(poi.get("shape", []), entrances, points):
+            entry = entrances[node]
+            if entry.get("rank", 0) < 1:
+                entry.update(name=poi["tags"].get("name") or "Mapped parking access", rank=1)
+            evidence = "public" if "public" in (entry.get("access"), access) else "unknown"
+            entry["access"] = combine(evidence, crossing(tags_by_node.get(node[1:], {})))
+            entry["sources"].append(poi["id"])
+            labelled.add(poi["id"])
+    unresolved = [item for item in unresolved if item["id"] not in labelled]
     anchors = set(entrances) | (frontiers & adjacent.keys())
     anchors.update(node for node, edges in adjacent.items() if len(edges) != 2 or tags_by_node.get(node[1:], {}).get("barrier"))
     def oriented(index, start):
@@ -241,6 +276,107 @@ def topology(ways, pois, tags_by_node, positions, footprint):
 
 
 NETWORK_METERS = 500
+BESIDE_METERS = 30
+PUBLIC_ROADS = ROADS - {"track", "service"}
+# Physical barriers stop cars. A gate is assumed open unless tagged closed or locked.
+CAR_BARRIERS = {"bollard", "block", "chain", "jersey_barrier", "log", "debris", "rope", "cycle_barrier",
+                "motorcycle_barrier", "kissing_gate", "stile", "horse_stile", "turnstile", "full-height_turnstile",
+                "swing_gate", "fence", "wall", "planter"}
+
+
+def stops_cars(tags):
+    if not tags.get("barrier"):
+        return False
+    explicit = next((tags[key] for key in VEHICLE_MODES if key in tags), None)
+    if explicit in PUBLIC:
+        return False
+    return explicit in DENIED or tags.get("locked") == "yes" or tags["barrier"] in CAR_BARRIERS
+
+
+def car_reach(drivable, closed, tags_by_node, positions, footprint):
+    """Label drivable nodes by car reachability, ignoring one-way restrictions.
+
+    "open" reaches a public road or leaves the section. "closed" reaches one
+    only through a car-stopping barrier or vehicle-closed road. A fragment that
+    reaches nothing either way is "unknown": a mapping gap, not a closure.
+    Returns the labels and the car-stopping barrier nodes; a barrier takes its
+    best neighbouring label.
+    """
+    footprint = as_footprint(footprint)
+    roads, extended, seeds = defaultdict(set), defaultdict(set), set()
+    for ways, graphs in ((drivable, (roads, extended)), (closed, (extended,))):
+        for way in ways:
+            nodes = way["nodes"]
+            for a, b in zip(nodes, nodes[1:]):
+                for graph in graphs:
+                    graph[a].add(b)
+                    graph[b].add(a)
+            public = way["tags"].get("highway") in PUBLIC_ROADS
+            seeds.update(node for node in nodes if public or not footprint.covers(positions[node]))
+    gates = {node for node in roads if stops_cars(tags_by_node.get(node, {}))}
+    def reach(graph, blocked):
+        found = {node for node in seeds if node in graph and node not in blocked}
+        pending = list(found)
+        while pending:
+            for other in graph[pending.pop()]:
+                if other not in found and other not in blocked:
+                    found.add(other)
+                    pending.append(other)
+        return found
+    driving, walking = reach(roads, gates), reach(extended, set())
+    labels = {node: "open" if node in driving else "closed" if node in walking else "unknown" for node in roads}
+    for node in gates:
+        if any(other in driving for other in roads[node]):
+            labels[node] = "open"
+    return labels, gates
+
+
+def gated_trail_lengths(usable, points, car):
+    """Trail length reachable on foot without driving: trails plus every connector
+    a car cannot use end to end. Only trail length counts."""
+    parent = {}
+    def root(node):
+        parent.setdefault(node, node)
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+    beyond = [segment for segment in usable if segment["kind"] == "trail"
+              or not all(car.get(node[1:]) == "open" for node in segment["ends"])]
+    for segment in beyond:
+        parent[root(segment["ends"][0])] = root(segment["ends"][1])
+    totals = defaultdict(float)
+    for segment in beyond:
+        if segment["kind"] == "trail":
+            totals[root(segment["ends"][0])] += distance(*(points[node] for node in segment["ends"]))
+    return {node: totals[root(node)] for node in parent}
+
+
+def beside(parts, entrances, points):
+    """Entrances within BESIDE_METERS of a mapped lot outline or point."""
+    if not parts:
+        return []
+    from shapely import LineString, Point, Polygon, union_all
+    latitude = parts[0][0][1]
+    scale = (111320 * math.cos(math.radians(latitude)), 110540)
+    project = lambda point: (point[0] * scale[0], point[1] * scale[1])
+    shapes = []
+    for part in parts:
+        coordinates = [project(point) for point in part]
+        if len(coordinates) >= 4 and coordinates[0] == coordinates[-1]:
+            shapes.append(Polygon(coordinates).buffer(0))
+        else:
+            shapes.append(LineString(coordinates) if len(coordinates) > 1 else Point(coordinates[0]))
+    lot = union_all(shapes)
+    west, south, east, north = lot.bounds
+    margin = BESIDE_METERS * 1.1
+    found = []
+    for node in entrances:
+        x, y = project(points[node])
+        if west - margin <= x <= east + margin and south - margin <= y <= north + margin \
+                and lot.distance(Point(x, y)) <= BESIDE_METERS:
+            found.append(node)
+    return sorted(found)
 PAVED_SURFACES = {"paved", "asphalt", "concrete", "concrete:lanes", "concrete:plates",
                   "paving_stones", "sett", "cobblestone"}
 
@@ -248,8 +384,10 @@ PAVED_SURFACES = {"paved", "asphalt", "concrete", "concrete:lanes", "concrete:pl
 def connected_lengths(usable, points, ways):
     """Supporting component length: trails and tracks without known paving.
 
-    Unknown track surfaces remain eligible. This is coarse network evidence,
-    not a claim that the component can be walked in both directions.
+    Unknown surfaces remain eligible. A paved walkway still joins what it
+    touches, so a sidewalk-like approach keeps its entrance to real trails, but
+    its own length is town walking and does not count. This is coarse network
+    evidence, not a claim that the component can be walked in both directions.
     """
     parent = {}
     def root(node):
@@ -258,14 +396,16 @@ def connected_lengths(usable, points, ways):
             parent[node] = parent[parent[node]]
             node = parent[node]
         return node
+    def unpaved(segment):
+        return all(ways[source["way"]]["tags"].get("surface") not in PAVED_SURFACES for source in segment["source"])
     walking = [segment for segment in usable if segment["kind"] == "trail"
-               or (any(ways[source["way"]]["tags"].get("highway") == "track" for source in segment["source"])
-                   and all(ways[source["way"]]["tags"].get("surface") not in PAVED_SURFACES for source in segment["source"]))]
+               or (any(ways[source["way"]]["tags"].get("highway") == "track" for source in segment["source"]) and unpaved(segment))]
     for segment in walking:
         parent[root(segment["ends"][0])] = root(segment["ends"][1])
     totals = defaultdict(float)
     for segment in walking:
-        totals[root(segment["ends"][0])] += distance(*(points[node] for node in segment["ends"]))
+        if unpaved(segment):
+            totals[root(segment["ends"][0])] += distance(*(points[node] for node in segment["ends"]))
     return {node: totals[root(node)] for node in parent}
 
 

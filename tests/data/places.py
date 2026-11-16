@@ -101,6 +101,79 @@ class StartEntrances(unittest.TestCase):
                 self.assertTrue(fire, 'Paved tracks stay walkable; they only cease supporting a hiking entrance')
                 self.assertTrue(all(corridor['kind'] == 'connector' for corridor in fire))
 
+    def test_paved_walkways_join_trails_without_being_hiking_evidence(self):
+        # One street starts a ~660 m concrete walkway to another street. A second
+        # street starts ~110 m of concrete that continues onto a 1.1 km dirt trail.
+        points = {'s1': (0, 0), 'c1': (0, .002), 'c2': (0, .004), 'c3': (0, .006), 'x': (0, .007),
+                  's2': (.004, 0), 'b': (.004, .001), 'f': (.004, .011)}
+        ways = {'street': {'id': 'street', 'nodes': ['s1', 's2'], 'tags': {'highway': 'residential'}},
+                'cut': {'id': 'cut', 'nodes': ['s1', 'c1', 'c2', 'c3'], 'tags': {'highway': 'footway', 'surface': 'concrete'}},
+                'other': {'id': 'other', 'nodes': ['c3', 'x'], 'tags': {'highway': 'residential'}},
+                'approach': {'id': 'approach', 'nodes': ['s2', 'b'], 'tags': {'highway': 'footway', 'surface': 'concrete'}},
+                'trail': {'id': 'trail', 'nodes': ['b', 'f'], 'tags': {'highway': 'path'}}}
+        corridors, _, entrances, audit = topology(ways, [], {}, points, [-.01, -.01, .02, .02])
+        self.assertEqual(set(entrances), {'ns2'}, 'Over 500 m of concrete between streets is not a hike entrance')
+        self.assertEqual(audit['counts']['isolatedEntrances'], 2)
+        paved = [corridor for corridor in corridors
+                 if any(source['way'] in ('cut', 'approach') for member in corridor['source'] for source in member['source'])]
+        self.assertTrue(paved and all(corridor['kind'] == 'trail' for corridor in paved),
+                        'Paved walkways stay walkable and keep their role; only entrance evidence changes')
+        ways['trail']['tags']['surface'] = 'asphalt'
+        self.assertEqual(set(topology(ways, [], {}, points, [-.01, -.01, .02, .02])[2]), set())
+
+
+    def test_cars_stop_at_barriers_and_closures(self):
+        # A street meets a track; ~110 m along it a barrier precedes a 1.1 km trail.
+        points = {'r1': (-.002, 0), 'r2': (0, 0), 'g': (.001, 0), 't': (.002, 0), 'f': (.002, .01)}
+        ways = {'street': {'id': 'street', 'nodes': ['r1', 'r2'], 'tags': {'highway': 'residential'}},
+                'track': {'id': 'track', 'nodes': ['r2', 'g', 't'], 'tags': {'highway': 'track'}},
+                'trail': {'id': 'trail', 'nodes': ['t', 'f'], 'tags': {'highway': 'path'}}}
+        cases = {'no barrier': (None, {'nt'}), 'untagged gate': ({'barrier': 'gate'}, {'nt'}),
+                 'bollard': ({'barrier': 'bollard'}, {'ng'}), 'locked gate': ({'barrier': 'gate', 'locked': 'yes'}, {'ng'}),
+                 'closed gate': ({'barrier': 'gate', 'motor_vehicle': 'no'}, {'ng'}),
+                 'open bollard': ({'barrier': 'bollard', 'motor_vehicle': 'yes'}, {'nt'}),
+                 'no walking': ({'barrier': 'gate', 'access': 'no'}, set())}
+        for name, (gate, expected) in cases.items():
+            with self.subTest(name):
+                node_tags = {'g': gate} if gate else {}
+                _, _, entrances, _ = topology(ways, [], node_tags, points, [-.01, -.01, .02, .02])
+                self.assertEqual(set(entrances), expected)
+        # A vehicle-closed road is walked from where cars must stop, only when trails lie beyond.
+        ways['track']['tags'] = {'highway': 'track', 'motor_vehicle': 'no'}
+        self.assertEqual(set(topology(ways, [], {}, points, [-.01, -.01, .02, .02])[2]), {'nr2'})
+        points['f'] = (.002, .003)
+        self.assertEqual(set(topology(ways, [], {}, points, [-.01, -.01, .02, .02])[2]), set(),
+                         'A closed road with only 330 m of trail beyond it is not an entrance')
+
+    def test_unconnected_road_fragment_is_a_mapping_gap_not_a_closure(self):
+        points = {'s1': (0, -.001), 's2': (0, 0), 'f': (0, .01)}
+        ways = {'lane': {'id': 'lane', 'nodes': ['s1', 's2'], 'tags': {'highway': 'service'}},
+                'trail': {'id': 'trail', 'nodes': ['s2', 'f'], 'tags': {'highway': 'path'}}}
+        self.assertEqual(set(topology(ways, [], {}, points, [-.01, -.01, .02, .02])[2]), {'ns2'})
+
+    def test_lot_beside_a_road_contact_labels_it_parking(self):
+        # Road contacts at x=0 and x=.002; a lot outline ~16 m from the first shares no node.
+        points = {'r1': (-.001, 0), 'a': (0, 0), 'b': (.002, 0), 'r2': (.003, 0), 'f': (0, .01), 'h': (.002, .01)}
+        ways = {'street': {'id': 'street', 'nodes': ['r1', 'a', 'b', 'r2'], 'tags': {'highway': 'residential'}},
+                'one': {'id': 'one', 'nodes': ['a', 'f'], 'tags': {'highway': 'path'}},
+                'two': {'id': 'two', 'nodes': ['b', 'h'], 'tags': {'highway': 'path'}}}
+        ring = [(-.0005, -.0001), (-.0001, -.0001), (-.0001, -.0005), (-.0005, -.0005), (-.0005, -.0001)]
+        lot = {'id': 'w9', 'kind': 'parking', 'nodes': ['l1', 'l2', 'l3', 'l4', 'l1'], 'shape': [ring],
+               'tags': {'amenity': 'parking', 'name': 'Canyon Lot', 'access': 'yes'}}
+        _, _, entrances, audit = topology(ways, [lot], {}, points, [-.01, -.01, .02, .02])
+        self.assertEqual((entrances['na']['rank'], entrances['na']['name'], entrances['na']['access']), (1, 'Canyon Lot', 'public'))
+        self.assertNotIn('rank', entrances['nb'], 'A lot over 200 m away does not label a road contact')
+        self.assertEqual(audit['unresolvedPois'], [])
+        # The lot's own node meets only a 55 m walkway, which cannot be an entrance;
+        # the lot still labels the eligible entrance beside it.
+        points.update(l1=(-.0005, -.0001), s=(-.0005, -.0006))
+        ways['stub'] = {'id': 'stub', 'nodes': ['l1', 's'], 'tags': {'highway': 'footway'}}
+        _, _, entrances, _ = topology(ways, [lot], {}, points, [-.01, -.01, .02, .02])
+        self.assertNotIn('nl1', entrances)
+        self.assertEqual(entrances['na']['name'], 'Canyon Lot')
+        lot['tags']['access'] = 'private'
+        _, _, entrances, audit = topology(ways, [lot], {}, points, [-.01, -.01, .02, .02])
+        self.assertNotIn('rank', entrances['na'], 'A private lot is not arrival evidence')
 
 if __name__ == '__main__':
     unittest.main()

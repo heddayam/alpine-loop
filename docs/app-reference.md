@@ -181,7 +181,11 @@ search scope.
 Starts are decided once, during preparation. Mapped trailheads supply their own
 entrance evidence. Other starts must be parking lots or roads touching a trail
 in a supporting component with at least 500 m of trail and tracks without known
-paving. Tracks still count as road walking in routes. Walkways mostly inside
+paving. Paved walkways connect that component without counting toward it.
+Road starts must be reachable by car without passing a mapped closure or
+car-stopping barrier; where cars must stop with trails beyond, the gate or
+closed-road junction is the start. Starts within 30 m of a mapped lot are
+labelled parking. Tracks still count as road walking in routes. Walkways mostly inside
 mapped developed land count as road. Every distinct eligible entrance remains
 available: proximity alone does not make starts interchangeable under access,
 walking-direction or drawn-area constraints. There is no separate eligibility

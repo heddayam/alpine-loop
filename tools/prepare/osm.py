@@ -111,14 +111,15 @@ def read_source(opl, footprint):
             ways[identity[1:]] = way
             positions.update(zip(refs, points))
             if poi_kind(tags):
-                pois.append({"id": identity, "nodes": refs, "tags": tags, "kind": poi_kind(tags)})
+                pois.append({"id": identity, "nodes": refs, "tags": tags, "kind": poi_kind(tags), "shape": [points]})
         elif identity.startswith("r"):
             members = [part.split("@", 1)[0] for part in fields.get("M", "").split(",") if part]
             relations[identity[1:]] = {"members": members, "tags": tags}
         elif tags and footprint.covers((float(fields["x"]), float(fields["y"]))):
             tagged_nodes[identity[1:]] = tags
             if poi_kind(tags):
-                pois.append({"id": identity, "nodes": [identity[1:]], "tags": tags, "kind": poi_kind(tags)})
+                point = (float(fields["x"]), float(fields["y"]))
+                pois.append({"id": identity, "nodes": [identity[1:]], "tags": tags, "kind": poi_kind(tags), "shape": [[point]]})
     def members(relation_id, seen=None):
         if seen is None:
             seen = set()
@@ -134,9 +135,11 @@ def read_source(opl, footprint):
         return result
     for identity, relation in relations.items():
         if poi_kind(relation["tags"]):
-            refs = [node for way in members(identity) for node in ways.get(way, {}).get("nodes", [])]
+            parts = [ways[way]["nodes"] for way in members(identity) if way in ways]
+            refs = [node for part in parts for node in part]
             if refs:
-                pois.append({"id": "r" + identity, "nodes": refs, "tags": relation["tags"], "kind": poi_kind(relation["tags"])})
+                pois.append({"id": "r" + identity, "nodes": refs, "tags": relation["tags"], "kind": poi_kind(relation["tags"]),
+                             "shape": [[positions[node] for node in part] for part in parts]})
     needed = {node for way in ways.values() if routable(way) for node in way["nodes"]}
     if (opl.parent / "developed.geojsonseq").is_file():
         mark_developed_walkways(ways, positions, opl.parent / "developed.geojsonseq", footprint)

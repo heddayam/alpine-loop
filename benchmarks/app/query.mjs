@@ -43,7 +43,7 @@ function observe(snapshot) {
   }
 }
 async function reconnect() {
-  const at = elapsed(), history = await api('GET', '/api/jobs');
+  const at = elapsed(), history = (await api('GET', '/api/jobs/history')).jobs;
   const current = history.find(job => job.id === id);
   result.reconnect = { atMs: at, latencyMs: elapsed() - at, sameJob: current?.id === id,
     sameQuery: JSON.stringify(current?.query) === JSON.stringify(result.effectiveQuery), status: current?.status };

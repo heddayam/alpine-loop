@@ -135,8 +135,9 @@ Prepared starts carry explicit `trailhead`, `parking`, or `road-contact` metadat
 from mapped entrance evidence. A trailhead outranks co-located parking; names
 never infer a kind. A road contact or parking lot must touch a trail, and that
 trail must join a supporting component containing at least 500 m of trail and
-tracks without explicit paved-surface evidence. Unknown track surfaces remain
-eligible. This is coarse network evidence, not a directed walking-distance
+tracks without explicit paved-surface evidence. Unknown surfaces remain
+eligible. A paved walkway still joins the trails it leads to, but its own
+length does not count. This is coarse network evidence, not a directed walking-distance
 guarantee; tracks still count as road for hike limits.
 This removes town stairways, street-to-street paths and lots that touch only
 roads, including where land use is unmapped. Mapped trailheads are their own
@@ -152,7 +153,20 @@ arrival remains unknown. Independent eligible roads or parking at the same node
 can still establish a start. Named trailheads retain their mapped source evidence.
 Vehicle-closed roads remain in the walking graph when foot access allows them;
 any approach walked along them counts against the route's road/distance limits.
-This is mapped arrival evidence, without a driving reachability or parking service.
+
+A road contact must also be reachable by car. Ignoring one-way rules, its road
+must connect to a non-track, non-service public road, or leave the section,
+without passing a vehicle-closed road or a car-stopping barrier (bollards,
+blocks, chains, stiles and similar; gates only when locked or tagged closed to
+vehicles). A road fragment connected to nothing at all is treated as a mapping
+gap and kept. Where cars must stop, at such a barrier or where an open road
+meets a vehicle-closed one, that point becomes a road-contact start when it is
+walkable and at least 500 m of trail lies beyond it without driving.
+
+A parking lot whose own nodes reach no eligible start labels every start within
+30 m of its mapped outline or point as parking, using its name and access. It never
+creates a start or a connection. This is mapped arrival evidence, without a
+driving-time or parking service.
 
 DEMs are sampled bilinearly at every retained vertex and at intervals of at most
 25 m. All positive/negative changes contribute to gain/loss without suppression.
@@ -200,4 +214,4 @@ To produce a downloadable release, pass `--base-url https://your-data-host/relea
 to `build`, then publish its catalog and `sections/` directory together. Pin the
 catalog URL and SHA-256 in `scripts/data-release.json`; launch fetches that small
 catalog and the app downloads complete sections on request. Local builds omit
-the URL and use their complete files directly. Public publication is pending.
+the URL and use their complete files directly.

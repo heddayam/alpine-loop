@@ -148,13 +148,6 @@ h4 {
 .text-button:hover {
   background: transparent;
 }
-.close-button {
-  border: 0;
-  padding: 0 3px;
-  font-size: 19px;
-  line-height: 1;
-  background: transparent;
-}
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -1416,7 +1409,6 @@ dialog::backdrop {
 .area-range { margin: 4px 0; }
 .area-range > header h5 { margin: 0; font-size: 11px; font-weight: 600; color: var(--muted); }
 .area-range .area-row { padding-left: 16px; }
-.catalog-download { margin-top: 8px; }
 .area-row {
   padding: 5px 4px;
 }
