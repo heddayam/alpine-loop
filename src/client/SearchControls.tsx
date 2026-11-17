@@ -4,7 +4,7 @@ import { validHighPointRange } from "../grade.js";
 import { DEFAULT_ROAD_LIMITS, type GradeLimits, type SearchBoundary, type SearchQuery } from "../model.js";
 import { GradeLimitsControl, type GradeDraft } from "./GradeLimits.js";
 import { SteppedNumber } from "./SteppedNumber.js";
-import { RegionPicker } from "./RegionPicker.js";
+import { RegionPicker, areaLabel } from "./RegionPicker.js";
 import { DriveTimeControl, type DriveTimeDraft } from "./DriveTimeControl.js";
 import { useAnchoredPopover } from "./useAnchoredPopover.js";
 import { hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
@@ -324,6 +324,15 @@ function Maximum({
   );
 }
 
+const amount = (text: string) => {
+  const value = Number(text);
+  return text.trim() && Number.isFinite(value) ? value.toLocaleString() : "";
+};
+const rangeText = ([low, high]: [string, string], unit: string) => {
+  const [min, max] = [amount(low), amount(high)];
+  return min && max ? `${min}–${max} ${unit}` : min ? `≥${min} ${unit}` : max ? `≤${max} ${unit}` : "";
+};
+
 export function SearchControls({
   dataset,
   savedSections,
@@ -338,6 +347,8 @@ export function SearchControls({
   driveOriginReturn = 0,
   onChooseDriveOrigin,
   onClearResults,
+  open = true,
+  onToggleOpen,
 }: {
   dataset: CatalogView;
   savedSections?: { id: string; name: string }[];
@@ -352,6 +363,9 @@ export function SearchControls({
   driveOriginReturn?: number;
   onChooseDriveOrigin: () => void;
   onClearResults?: () => void;
+  /** Narrow screens show a one-line summary until the fields are opened. */
+  open?: boolean;
+  onToggleOpen?: () => void;
 }) {
   const drawButton = useRef<HTMLButtonElement>(null);
   const options = useAnchoredPopover(disabled);
@@ -364,13 +378,38 @@ export function SearchControls({
     draft.sections.every((id) =>
       dataset.sections.some((section) => section.id === id),
     );
+  const fieldsId = useId();
+  const area = areaLabel(dataset, draft.sections, savedSections, draft.boundary, !!draft.driveTime?.enabled);
+  const limits = [
+    rangeText(draft.distance, display.distanceLabel),
+    rangeText(draft.gain, display.elevationLabel) && `${rangeText(draft.gain, display.elevationLabel)} gain`,
+    rangeText(draft.highPoint, display.elevationLabel) && `${rangeText(draft.highPoint, display.elevationLabel)} high point`,
+  ].filter(Boolean).join(", ");
   return (
     <form
-      className="planner"
+      className={`planner${open ? " is-open" : ""}`}
       aria-label="Search constraints"
       onSubmit={onSubmit}
     >
-      <fieldset className="planner-fields" disabled={disabled}>
+      <div className="planner-summary">
+        {/* The Edit button is the accessible toggle; the text is a larger tap target for it. */}
+        <span className="planner-summary-text" onClick={onToggleOpen}>
+          <strong>{area}{draft.driveTime?.enabled && `, within ${draft.driveTime.minutes} min drive`}</strong>
+          <span>{limits}</span>
+        </span>
+        {onClearResults && <button type="button" className="planner-summary-clear" onClick={onClearResults}
+          title="Clear the map and results. This search stays in Jobs.">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+            <path d="m3 3 6 6m0-6-6 6" strokeLinecap="round" />
+          </svg>
+          Clear
+        </button>}
+        <button type="button" className="planner-summary-action" aria-expanded={open} aria-controls={fieldsId}
+          aria-label={open ? "Close search settings" : "Edit search settings"} onClick={onToggleOpen}>
+          {open ? "Done" : "Edit"}
+        </button>
+      </div>
+      <fieldset id={fieldsId} className="planner-fields" disabled={disabled}>
         <div className="region-field">
           <span className="field-label">Search area</span>
           <div className="search-area-controls">
@@ -456,7 +495,7 @@ export function SearchControls({
                   onChange={event => update({ approachEnabled: event.target.checked })} />
                 Limit approach distance
               </label>
-              <button type="button" className="options-info" aria-label="About approach limits" aria-describedby={`${optionsId}-approach-info`}>
+              <button type="button" className="options-info" onClick={event => event.currentTarget.focus()} aria-label="About approach limits" aria-describedby={`${optionsId}-approach-info`}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
                   <circle cx="7" cy="7" r="5.5" /><path d="M7 6.5v4M7 3.5v.5" strokeLinecap="round" />
                 </svg>
@@ -477,7 +516,7 @@ export function SearchControls({
                   onChange={event => update({ roadsEnabled: event.target.checked })} />
                 Limit road walking
               </label>
-              <button type="button" className="options-info" aria-label="About road walking limits" aria-describedby={`${optionsId}-roads-info`}>
+              <button type="button" className="options-info" onClick={event => event.currentTarget.focus()} aria-label="About road walking limits" aria-describedby={`${optionsId}-roads-info`}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
                   <circle cx="7" cy="7" r="5.5" /><path d="M7 6.5v4M7 3.5v.5" strokeLinecap="round" />
                 </svg>

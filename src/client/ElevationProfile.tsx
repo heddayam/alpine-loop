@@ -4,6 +4,7 @@ import type { HikeRoute, Position } from "../model.js";
 import { distanceText, elevationText, unitsFor, type UnitSystem } from "./units.js";
 
 import { elevationSamples, elevationPosition, elevationGrade, elevationSelection } from "../grade.js";
+
 export { elevationSamples, elevationPosition, elevationGrade } from "../grade.js";
 
 const LEFT = 58;
@@ -153,10 +154,11 @@ export const ElevationProfile = memo(function ElevationProfile({
   const elevation = position?.[2];
   const rawGrade = selection ? selection.grade : cursor === null ? null : elevationGrade(samples, cursor);
   const grade = rawGrade === null ? null : Math.round(rawGrade);
+  const press = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches ? "Tap" : "Click";
   const readout = selection
     ? `${distanceText(selection.distance, units, 2)} ${display.distanceLabel}, ${selection.gain === null ? "elevation unavailable" : `↑${elevationText(selection.gain, units)} ↓${elevationText(selection.loss!, units)} ${display.elevationLabel}, ${grade! > 0 ? "+" : ""}${grade}% avg`}`
-    : anchor !== null ? "Click to finish"
-    : cursor === null ? "Click to measure"
+    : anchor !== null ? `${press} to finish`
+    : cursor === null ? `${press} to measure`
     : `${distance(cursor)} ${display.distanceLabel}${Number.isFinite(elevation) ? `, ${elevationText(elevation!, units)} ${display.elevationLabel}` : ""}${grade === null ? "" : `, ${grade > 0 ? "+" : ""}${grade}% grade`}`;
   const move = (distance: number | null, range = pending.current.range, anchor = pending.current.anchor) => {
     pending.current = { ...pending.current, cursor: distance === null ? null : Math.max(0, Math.min(total, distance)), range, anchor };

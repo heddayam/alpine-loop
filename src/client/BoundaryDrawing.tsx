@@ -101,12 +101,13 @@ export function BoundaryDrawing({ map, onFinish, onCancel }: {
     (map.getSource("boundary-draft") as GeoJSONSource).setData({ type: "FeatureCollection", features });
   }, [map, points, cursor]);
 
+  const touch = window.matchMedia("(pointer: coarse)").matches;
   return (
     <div className="boundary-toolbar" aria-label="Draw search boundary">
       <strong>Draw boundary</strong>
-      <p role="status">{!map ? "Opening map…" : points.length < 3
-        ? "Click the map to add points."
-        : "Click Finish or the first point to close."}</p>
+      <p role="status">{!map ? "Opening map…" : touch
+        ? points.length < 3 ? "Tap to add points" : "Tap the first point or Finish"
+        : points.length < 3 ? "Click the map to add points." : "Click Finish or the first point to close."}</p>
       {error && <p className="boundary-error" role="alert">{error}</p>}
       <div className="boundary-actions">
         <button

@@ -132,7 +132,7 @@ describe("saved-job interface boundaries", () => {
     expect(renderJob("completed")).toContain("View results");
     expect(action(renderJob("completed"), "View results")).not.toContain('disabled=""');
     expect(action(renderJob("completed", {}, {}, { canManage: false }), "Delete")).toContain('disabled=""');
-    expect(renderJob("completed")).toContain('<td class="job-number">0</td>');
+    expect(renderJob("completed")).toContain('<td class="job-number job-hikes">0<span class="job-inline-unit"> hikes</span></td>');
     const multipleRegions = { ...job("completed"), query: { ...job("completed").query, sections: ["one", "two"] } };
     expect(jobTitle(multipleRegions, id => id === "one" ? "Olympics" : "Cascades")).toContain("Olympics, Cascades;");
     expect(jobTitle(multipleRegions, id => id)).not.toContain("[object Object]");
@@ -154,12 +154,12 @@ describe("saved-job interface boundaries", () => {
       totalRegions: 5,
       completedRegions: ["first"],
     });
-    expect(renderJob("running")).not.toContain('<td class="job-number">0</td>');
-    expect(renderJob("running", { foundHikes: 0 })).toContain('<td class="job-number">0</td>');
+    expect(renderJob("running")).not.toContain('<td class="job-number job-hikes">0<span class="job-inline-unit"> hikes</span></td>');
+    expect(renderJob("running", { foundHikes: 0 })).toContain('<td class="job-number job-hikes">0<span class="job-inline-unit"> hikes</span></td>');
     const live = renderJob("running", { foundHikes: 37 });
-    expect(live).toContain('<td class="job-number">37</td>');
+    expect(live).toContain('<td class="job-number job-hikes">37<span class="job-inline-unit"> hikes</span></td>');
     expect(live).not.toContain("View results");
-    expect(renderJob("failed", { foundHikes: 37 })).not.toContain('<td class="job-number">37</td>');
+    expect(renderJob("failed", { foundHikes: 37 })).not.toContain('<td class="job-number job-hikes">37<span class="job-inline-unit"> hikes</span></td>');
     expect(measured.match(/Region 2 of 5, 25%/g)).toHaveLength(1);
     expect(measured).not.toContain("regions finished");
     expect(renderJob("running", { stage: "saving", completedRegions: ["cascades"] })).toContain("Saving results");

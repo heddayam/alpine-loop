@@ -15,7 +15,7 @@ import {
   type UnitSystem,
 } from "./units.js";
 
-type HikeSort = "distance" | "gain" | "highPoint" | "stem" | "roadDistance";
+type HikeSort = "distance" | "gain" | "highPoint" | "stem";
 export function compareHikes(a: RouteLocation, b: RouteLocation, sort: HikeSort, descending = false) {
   const first = sort === "stem" ? stemDistance(a) : a[sort];
   const second = sort === "stem" ? stemDistance(b) : b[sort];
@@ -96,14 +96,12 @@ export function RouteDock({
       >
         <strong>{routeName(route)}</strong>
         <span className="row-metrics">
-          <span>{distanceText(route.distance, units)} <small>{display.distanceLabel}</small></span>
-          <span title="Elevation gain">{elevationText(route.gain, units)} <small>{display.elevationLabel} gain</small></span>
-          <span title={route.highPoint == null ? "High point unavailable because elevation data is incomplete" : "Highest elevation above sea level"}>
-            {route.highPoint == null ? <>— <small>high point</small></> : <>{elevationText(route.highPoint, units)} <small>{display.elevationLabel} high point</small></>}
+          <span>{distanceText(route.distance, units)}</span>
+          <span>{elevationText(route.gain, units)}</span>
+          <span title={route.highPoint == null ? "High point unavailable because elevation data is incomplete" : undefined}>
+            {route.highPoint == null ? "—" : elevationText(route.highPoint, units)}
           </span>
-          <span title="One-way approach walked again on the return">
-            {distanceText(stemDistance(route), units)} <small>{display.distanceLabel} approach</small>
-          </span>
+          <span>{distanceText(stemDistance(route), units)}</span>
         </span>
       </button>
       {pinned && <button type="button" className="star-route row-star" aria-pressed="true"
@@ -147,54 +145,45 @@ export function RouteDock({
                 : `${total.toLocaleString()} routes`}
           </span>
         </div>
-        <p className="saved-request">
-          {distanceText(job.query.distance[0], units)}–{distanceText(job.query.distance[1], units)} {display.distanceLabel}, {elevationText(job.query.gain[0], units)}–{elevationText(job.query.gain[1], units)} {display.elevationLabel} gain
-          {job.query.highPoint && <>, {highPointText(job.query.highPoint, units)} high point</>}
-        </p>
+        <div className="results-scope">
+          <p className="saved-request">
+            {distanceText(job.query.distance[0], units)}–{distanceText(job.query.distance[1], units)} {display.distanceLabel}, {elevationText(job.query.gain[0], units)}–{elevationText(job.query.gain[1], units)} {display.elevationLabel} gain
+            {job.query.highPoint && <>, {highPointText(job.query.highPoint, units)} high point</>}
+          </p>
+          <div className="view-toggle" role="group" aria-label="Result scope">
+            <button
+              type="button"
+              aria-pressed={scope === "view"}
+              title="Hikes with a starting point in the map view"
+              onClick={() => onScope("view")}
+            >
+              In view
+            </button>
+            <button
+              type="button"
+              aria-pressed={scope === "all"}
+              title="All hikes in this search"
+              onClick={() => onScope("all")}
+            >
+              All
+            </button>
+          </div>
+        </div>
       </header>
-      <div className="results-toolbar">
-        <div className="view-toggle" role="group" aria-label="Result scope">
-          <span className="results-show">Show:</span>
-          <button
-            type="button"
-            aria-pressed={scope === "view"}
-            title="Hikes with a starting point in the map view"
-            onClick={() => onScope("view")}
-          >
-            In view
+      {/* Column labels appear once; every row lines its numbers up beneath them. */}
+      <div className="results-columns" role="group" aria-label="Sort by column">
+        {([
+          ["distance", "Distance", display.distanceLabel, "Total hike distance"],
+          ["gain", "Gain", display.elevationLabel, "Elevation gain"],
+          ["highPoint", "High point", display.elevationLabel, "Highest elevation above sea level"],
+          ["stem", "Approach", display.distanceLabel, "One-way approach walked again on the return"],
+        ] as const).map(([key, label, unit, hint]) => (
+          <button key={key} type="button" title={hint} aria-pressed={sort === key}
+            aria-label={`Sort by ${label.toLowerCase()}${sort === key ? `, ${descending ? "highest" : "lowest"} first; reverse order` : ""}`}
+            onClick={() => sort === key ? setDescending(current => !current) : setSort(key)}>
+            <span>{label} <small>{unit}</small>{sort === key && <span aria-hidden="true"> {descending ? "↓" : "↑"}</span>}</span>
           </button>
-          <button
-            type="button"
-            aria-pressed={scope === "all"}
-            title="All hikes in this search"
-            onClick={() => onScope("all")}
-          >
-            All
-          </button>
-        </div>
-        <div className="results-sort">
-          <select
-            id="result-sort"
-            aria-label="Sort hikes"
-            value={sort}
-            onChange={(event) => setSort(event.target.value as typeof sort)}
-          >
-            <option value="distance">Distance</option>
-            <option value="gain">Elev. Gain</option>
-            <option value="highPoint">High Point</option>
-            <option value="stem">Approach</option>
-            <option value="roadDistance">Road</option>
-          </select>
-          <button
-            type="button"
-            className="sort-direction"
-            aria-label={`Sort ${descending ? "highest" : "lowest"} first; reverse order`}
-            title={`${descending ? "Highest" : "Lowest"} first; reverse order`}
-            onClick={() => setDescending((current) => !current)}
-          >
-            {descending ? "↓" : "↑"}
-          </button>
-        </div>
+        ))}
       </div>
       <div className="results-list">
         {!!starred.length && (
@@ -205,13 +194,13 @@ export function RouteDock({
               Starred <span className="starred-count">{starred.length}</span>
             </button>
             <div id="starred-routes" className="starred-list" hidden={starsCollapsed}>
-              <FixedList items={starred} rowHeight={70}>
+              <FixedList items={starred} rowHeight={52}>
                 {(route, index) => row(route, index, starred.length, true)}
               </FixedList>
             </div>
           </section>
         )}
-        <FixedList items={sorted} rowHeight={70}>
+        <FixedList items={sorted} rowHeight={52}>
           {(route, index) => row(route, index, sorted.length)}
         </FixedList>
         {!routes.length && (

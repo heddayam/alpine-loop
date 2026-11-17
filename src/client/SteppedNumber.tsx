@@ -39,6 +39,8 @@ export function SteppedNumber({
         id={id}
         aria-label={label}
         type="number"
+        inputMode="decimal"
+        enterKeyHint="done"
         min={min ?? undefined}
         placeholder={placeholder}
         max={max}
@@ -46,6 +48,10 @@ export function SteppedNumber({
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        // On touch screens, typing replaces the value instead of editing around a hidden caret.
+        onFocus={(event) => {
+          if (window.matchMedia("(pointer: coarse)").matches) event.currentTarget.select();
+        }}
         onKeyDown={(event) => {
           if (event.key === "ArrowUp" || event.key === "ArrowDown") {
             event.preventDefault();

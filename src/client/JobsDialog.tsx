@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { JobRegion, JobSnapshot } from "../model.js";
 import { DEFAULT_ROAD_LIMITS } from "../model.js";
+import { useNarrow } from "./useNarrow.js";
 import { distanceText, elevationText, highPointText, hasApproachLimit, hasRoadLimit, stemLimit, unitsFor, type UnitSystem } from "./units.js";
 
 export const activeJob = (job: JobSnapshot) =>
@@ -139,6 +140,8 @@ export function JobsDialog({
   onNewer?: () => void;
 }) {
   const display = unitsFor(units);
+  // Phones open results by tapping the row; secondary actions live in the details.
+  const narrow = useNarrow();
   const maximumDistance = (meters: number) => `≤${Number(distanceText(meters, units, 3))} ${display.distanceLabel}`;
   const dialog = useRef<HTMLDialogElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -269,7 +272,8 @@ export function JobsDialog({
                   aria-busy={busy || undefined}
                   onClick={(event) => {
                     if (event.target instanceof Element && event.target.closest("button, a, input, select, textarea")) return;
-                    setExpanded(isExpanded ? null : job.id);
+                    if (narrow && hasSavedResults(job) && !busy) onView(job);
+                    else setExpanded(isExpanded ? null : job.id);
                   }}
                 >
                   <td className="job-expand-cell">
@@ -287,15 +291,15 @@ export function JobsDialog({
                     {job.query.driveTime && <span className="job-muted">{job.query.driveTime.minutes} min driving area</span>}
 
                   </th>
-                  <td className="job-number">{Number(distanceText(job.query.distance[0], units))}–{Number(distanceText(job.query.distance[1], units))}</td>
-                  <td className="job-number">{elevationText(job.query.gain[0], units)}–{elevationText(job.query.gain[1], units)}</td>
-                  <td className="job-number job-limit">
+                  <td className="job-number job-distance">{Number(distanceText(job.query.distance[0], units))}–{Number(distanceText(job.query.distance[1], units))}<span className="job-inline-unit"> {display.distanceLabel}</span></td>
+                  <td className="job-number job-gain">{elevationText(job.query.gain[0], units)}–{elevationText(job.query.gain[1], units)}<span className="job-inline-unit"> {display.elevationLabel} gain</span></td>
+                  <td className="job-number job-limit job-approach">
                     {hasApproachLimit(job.query) ? <>
                     <span>{Number(distanceText(stemLimit(job.query), units, 3))} {display.distanceLabel}</span>
                     <span className="job-muted">{job.query.repetition !== undefined ? `${Number((job.query.repetition * 100).toFixed(1))}%` : "—"}</span>
                     </> : <span className="job-muted">Off</span>}
                   </td>
-                  <td className="job-number job-limit">
+                  <td className="job-number job-limit job-roads">
                     {hasRoadLimit(job.query) ? <>
                     <span>{Number(distanceText(roads.distance, units, 3))} {display.distanceLabel}</span>
                     {roads.fraction < 1 && <span className="job-muted">{Number((roads.fraction * 100).toFixed(1))}%</span>}
@@ -312,16 +316,17 @@ export function JobsDialog({
                     </span>}
                     </div>
                   </td>
-                  <td className="job-number">
+                  <td className="job-number job-hikes">
                     {hasSavedResults(job) ? job.groupCount?.toLocaleString() ?? "—" : job.status === "running" && job.progress.foundHikes !== undefined ? job.progress.foundHikes.toLocaleString() : <span className="job-muted">—</span>}
+                    <span className="job-inline-unit"> hikes</span>
                   </td>
-                  <td className="job-number">{job.status === "queued" ? "—" : elapsed(job.progress.elapsedMs)}</td>
+                  <td className="job-number job-duration">{job.status === "queued" ? "—" : elapsed(job.progress.elapsedMs)}</td>
 
-                  <td><time className="job-created" dateTime={job.createdAt} title={new Date(job.createdAt).toLocaleString()}>
+                  <td className="job-created-cell"><time className="job-created" dateTime={job.createdAt} title={new Date(job.createdAt).toLocaleString()}>
                     {new Date(job.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                     {", "}{new Date(job.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
                   </time></td>
-                  <td className="job-group-start"><div className="job-actions">
+                  <td className="job-group-start job-actions-cell"><div className="job-actions">
                     <button type="button" className={activeJob(job) ? "job-cancel" : "job-results"}
                       disabled={busy || (activeJob(job) ? job.canManage === false : !hasSavedResults(job))}
                       onClick={() => activeJob(job) ? onAction(job, "cancel") : onView(job)}>
@@ -359,8 +364,16 @@ export function JobsDialog({
                         {job.reason && <p className="job-error">{job.reason}</p>}
                         {job.status === "interrupted" && <p>Server stopped. Copy settings to try again.</p>}
                         {["cancelled", "failed", "interrupted"].includes(job.status) && <p>Unfinished results were discarded.</p>}
+                        {job.status !== "queued" && <p className="job-muted">Duration {elapsed(job.progress.elapsedMs)}</p>}
                         <p className="job-muted">Size {storage(job.storageBytes)}</p>
                         <p className="job-muted">Job <code>{job.id}</code></p>
+                      </div>
+                      <div className="job-detail-actions">
+                        {activeJob(job) && <button type="button" disabled={busy || job.canManage === false}
+                          onClick={() => onAction(job, "cancel")}>Cancel search</button>}
+                        <button type="button" disabled={busy} onClick={() => onCopy(job)}>Copy settings</button>
+                        <button type="button" className="job-detail-delete" disabled={busy || activeJob(job) || job.canManage === false}
+                          onClick={() => setConfirmDelete(job.id)}>Delete</button>
                       </div>
                     </div>
                   </td>

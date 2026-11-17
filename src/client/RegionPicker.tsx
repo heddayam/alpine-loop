@@ -3,6 +3,20 @@ import type { CatalogView } from "../data-format.js";
 import type { SearchBoundary } from "../model.js";
 import { CatalogAreas } from "./CatalogAreas.js";
 
+export const areaLabel = (
+  dataset: CatalogView,
+  value: string[],
+  savedSections: { id: string; name: string }[] = [],
+  boundary?: SearchBoundary,
+  allowAny = false,
+) =>
+  boundary ? "Drawn area" : value.length === 1
+    ? (dataset.sections.find((section) => section.id === value[0])?.name ??
+        savedSections.find((section) => section.id === value[0])?.name ?? value[0]!)
+    : value.length
+      ? `${value.length} regions selected`
+      : allowAny ? "Any supported area" : "Select regions";
+
 export function RegionPicker({
   dataset,
   value,
@@ -26,13 +40,7 @@ export function RegionPicker({
   const unknown = value.filter(
     (selected) => !dataset.sections.some((section) => section.id === selected),
   );
-  const selection =
-    boundary ? "Drawn area" : value.length === 1
-      ? (dataset.sections.find((section) => section.id === value[0])?.name ??
-          savedSections.find((section) => section.id === value[0])?.name ?? value[0]!)
-      : value.length
-        ? `${value.length} regions selected`
-        : allowAny ? "Any supported area" : "Select regions";
+  const selection = areaLabel(dataset, value, savedSections, boundary, allowAny);
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
       if (

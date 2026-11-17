@@ -35,18 +35,19 @@ describe("personal route pins", () => {
       .toEqual(["negative", "zero", "high-a", "high-b", "unknown-a", "unknown-b"]);
     expect([...routes].sort((a, b) => compareHikes(a, b, "highPoint", true)).map(route => route.id))
       .toEqual(["high-a", "high-b", "zero", "negative", "unknown-a", "unknown-b"]);
-    expect(render([ordinary])).toContain('<option value="highPoint">High Point</option>');
+    expect(render([ordinary])).toContain('aria-label="Sort by high point"');
   });
   it("shows all four summary metrics for regular and starred results, with unknown peaks labeled", () => {
     const html = render([ordinary]);
     for (const id of ["pinned", "ordinary"]) {
       const row = html.split(`id="hike-${id}"`)[1]!.split("</button>")[0]!;
-      expect(row).toContain("mi</small>");
-      expect(row).toContain("ft gain</small>");
-      expect(row).toContain("3,281");
-      expect(row).toContain("ft high point</small>");
-      expect(row).toContain("mi approach</small>");
+      const metrics = row.split('class="row-metrics">')[1]!;
+      expect(metrics.match(/<span/g)).toHaveLength(4);
+      expect(metrics).toContain("3,281");
     }
+    const columns = html.split('class="results-columns"')[1]!.split("</div>")[0]!;
+    for (const label of ["Distance <small>mi", "Gain <small>ft", "High point <small>ft", "Approach <small>mi"])
+      expect(columns).toContain(label);
     expect(render([{ ...ordinary, highPoint: null }])).toContain("High point unavailable because elevation data is incomplete");
   });
   it("keeps out-of-scope stars first and never duplicates them in the ordinary list", () => {

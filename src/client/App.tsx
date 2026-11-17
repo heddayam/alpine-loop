@@ -38,6 +38,7 @@ import { RouteCache } from "./RouteCache.js";
 import { RouteDock } from "./RouteDock.js";
 import { RouteCard } from "./RouteCard.js";
 import { CollapseTab } from "./CollapseTab.js";
+import { useNarrow } from "./useNarrow.js";
 import { useRouteStars } from "./useRouteStars.js";
 import {
   SearchControls,
@@ -96,6 +97,9 @@ export function App() {
   const [showSearchArea, setShowSearchArea] = useState(true);
   const [showAreaOutline, setShowAreaOutline] = useState(true);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
+  const narrow = useNarrow();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [coordinatesOpen, setCoordinatesOpen] = useState(false);
   const [camera, setCamera] = useState<{
     bounds: Bounds;
     revision: number;
@@ -158,6 +162,18 @@ export function App() {
           : null,
     [geometry, activeId, selected],
   );
+  // Map editing needs the whole screen on phones; return to the open search form afterward.
+  const editingMap = drawingBoundary || choosingDriveOrigin;
+  const reopenFilters = useRef(false);
+  useEffect(() => {
+    if (editingMap) {
+      reopenFilters.current = filtersOpen;
+      setFiltersOpen(false);
+    } else if (reopenFilters.current) {
+      reopenFilters.current = false;
+      setFiltersOpen(true);
+    }
+  }, [editingMap]);
   useEffect(
     () => profileCursor.set(null),
     [selectedId, resultsCollapsed, viewedJob?.id],
@@ -194,7 +210,10 @@ export function App() {
       padding,
       bottomPadding,
     }));
-  const frameHikes = (bounds: Bounds, bottomPadding?: number) => {
+  /** On phones the open results sheet covers the lower 46% of the map. */
+  const sheetPadding = () =>
+    narrow ? (browserPanel.current?.getBoundingClientRect().height ?? 0) * 0.46 + 24 : undefined;
+  const frameHikes = (bounds: Bounds, bottomPadding = viewedJob && !resultsCollapsed ? sheetPadding() : undefined) => {
     // Leave nearby terrain visible without making the margin depend on screen size.
     const longitudeMargin = (bounds[2] - bounds[0]) * 0.15;
     const latitudeMargin = (bounds[3] - bounds[1]) * 0.15;
@@ -281,7 +300,7 @@ export function App() {
       setJobsOpen(false);
       localURL(job.id);
       const map = savedMap(fullJob) ?? dataset;
-      if (map) moveTo(map.bounds);
+      if (map) moveTo(map.bounds, 40, sheetPadding());
     } catch (failure) {
       if (!controller.signal.aborted)
         setJobActionError(
@@ -718,12 +737,22 @@ export function App() {
     );
   return (
     <div className="app-shell">
-      <header className="app-header">
+      <header className={`app-header${coordinatesOpen ? " is-coordinates-open" : ""}`}>
         <h1>Alpine Loop</h1>
         <CoordinateSearch disabled={!camera} onLocate={center => {
           setCamera(current => current ? { bounds: current.bounds, revision: current.revision + 1, center } : current);
           setResultScope("view");
+          setCoordinatesOpen(false);
         }} />
+        <button type="button" className="coordinates-toggle" aria-label="Go to coordinates"
+          aria-expanded={coordinatesOpen} onClick={() => {
+            setCoordinatesOpen(value => !value);
+            requestAnimationFrame(() => document.querySelector<HTMLInputElement>(".coordinate-search input")?.focus());
+          }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3.5 3.5" strokeLinecap="round" />
+          </svg>
+        </button>
         <nav aria-label="App">
           <button
             id="open-search-jobs"
@@ -769,10 +798,15 @@ export function App() {
               setShowSearchArea(true);
               setChoosingDriveOrigin(true);
             }}
-            onSubmit={(event) => void launch(event)}
+            open={filtersOpen}
+            onToggleOpen={() => setFiltersOpen(value => !value)}
+            onSubmit={(event) => {
+              if (narrow) setFiltersOpen(false);
+              void launch(event);
+            }}
             onClearResults={viewedJob ? () => {
               closeResults();
-              requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".search-button")?.focus());
+              requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(narrow && !filtersOpen ? ".planner-summary-action" : ".search-button")?.focus());
             } : undefined}
             onDrawBoundary={() => {
               setChoosingDriveOrigin(false);
@@ -802,7 +836,8 @@ export function App() {
         )}
       </div>
       <main
-        className={`workspace${resultsCollapsed || !viewedJob ? " is-results-collapsed" : ""}`}
+        className={`workspace${resultsCollapsed || !viewedJob ? " is-results-collapsed" : ""}${selectedId && !drawingBoundary ? " has-route" : ""}${editingMap ? " is-editing-map" : ""}`}
+        onPointerDown={() => { if (narrow && filtersOpen) setFiltersOpen(false); }}
       >
         {viewedJob && (
           <RouteDock
@@ -830,12 +865,14 @@ export function App() {
         {viewedJob && (
           <CollapseTab
             id="results-toggle"
-            edge="side"
+            edge={narrow ? "top" : "side"}
             controls="results-panel"
             label="results panel"
             collapsed={resultsCollapsed}
             onToggle={() => setResultsCollapsed((value) => !value)}
-          />
+          >
+            {narrow && resultsCollapsed && <span>Show {locations.length.toLocaleString()} routes</span>}
+          </CollapseTab>
         )}
         <section ref={browserPanel} className="browser-panel" aria-label="Browse hikes">
           {mapDataset && camera ? (

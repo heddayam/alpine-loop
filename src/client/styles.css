@@ -434,7 +434,7 @@ h4 {
   align-items: flex-start;
   gap: 8px;
 }
-.map-context.is-editing { top: auto; bottom: 10px; }
+.map-context.is-editing { top: auto; bottom: 42px; }
 .search-area-control {
   display: flex;
   align-items: center;
@@ -524,7 +524,7 @@ label.area-row:hover {
   white-space: nowrap;
 }
 .workspace {
-  --dock-width: 280px;
+  --dock-width: 312px;
   display: grid;
   grid-template-columns: var(--dock-width) minmax(0, 1fr);
   flex: 1;
@@ -633,27 +633,27 @@ label.area-row:hover {
   color: var(--muted);
   margin-top: 3px;
 }
-.results-toolbar {
+.results-scope {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 2px 8px 7px;
-  font-size: 11px;
-  border-bottom: 1px solid var(--line);
+  gap: 10px;
+  margin-top: 3px;
 }
+.results-header > .results-scope { align-items: flex-end; }
+.results-scope .saved-request { margin: 0; min-width: 0; }
 .view-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
-.results-show { color: var(--muted); }
 .view-toggle button {
-  padding: 3px 0;
+  padding: 0 0 3px;
   font-size: 11px;
   border: 0;
   background: transparent;
+  white-space: nowrap;
 }
 .view-toggle [aria-pressed="true"] {
   color: var(--action);
@@ -663,37 +663,11 @@ label.area-row:hover {
   text-decoration-thickness: 2px;
 }
 .view-toggle button:hover { color: var(--action); background: transparent; }
-.results-sort {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-}
-.results-sort select {
-  width: auto;
-  padding: 2px 0;
-  font-size: 11px;
-  border: 0;
-  background: transparent;
-}
-.results-toolbar button:focus-visible,
+.view-toggle button:focus-visible,
 .results-areas-trigger:focus-visible {
   outline: 2px solid var(--action);
   outline-offset: 2px;
 }
-.results-sort select:focus-visible {
-  outline: none;
-}
-.sort-direction {
-  min-width: 18px;
-  padding: 3px 0;
-  border: 0;
-  background: transparent;
-  font-size: 15px;
-  color: var(--action);
-  white-space: nowrap;
-}
-.sort-direction:hover { background: transparent; }
 .results-list {
   display: flex;
   flex-direction: column;
@@ -773,19 +747,42 @@ label.area-row:hover {
   text-overflow: ellipsis;
   font-weight: 500;
 }
+/* Result stats share one column grid with the header strip so numbers scan vertically. */
+.results-columns,
 .row-metrics {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 8px;
-  margin-top: 5px;
-  font: 14px var(--mono);
+  /* Sized so each header fits its label, unit and sort arrow. */
+  grid-template-columns: 67fr 64fr 79fr 70fr;
+  column-gap: 4px;
+}
+.results-columns {
+  flex-shrink: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.results-columns button {
+  min-width: 0;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+}
+.results-columns button:hover { background: transparent; color: var(--ink); }
+.results-columns button:focus-visible { outline: 2px solid var(--action); outline-offset: -2px; }
+.results-columns small { font-size: inherit; opacity: 0.75; }
+.results-columns [aria-pressed="true"] { color: var(--action); }
+.results-columns [aria-pressed="true"] > span { box-shadow: 0 2px var(--action); padding-bottom: 2px; }
+.row-metrics {
+  margin-top: 4px;
+  font: 13px var(--mono);
   font-variant-numeric: tabular-nums;
 }
 .row-metrics > span { white-space: nowrap; }
-.row-metrics small {
-  font: 10px var(--sans);
-  color: var(--muted);
-}
 .empty-state {
   color: var(--muted);
   font-size: 12px;
@@ -1161,6 +1158,12 @@ label.area-row:hover {
   overflow: hidden;
   clip-path: inset(50%);
 }
+.map-provider {
+  position: absolute;
+  z-index: 500;
+  bottom: 8px;
+  left: 10px;
+}
 .map-provider img {
   display: block;
   height: 24px;
@@ -1295,11 +1298,17 @@ label.area-row:hover {
   font-size: 11px;
   color: var(--muted);
 }
+/* The status footer is always a single row; long text truncates instead of wrapping. */
+.workspace-status { overflow: hidden; white-space: nowrap; }
+.workspace-status > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.workspace-status > :last-child { flex-shrink: 0; max-width: 100%; }
+.scope-note { flex: 1 1 auto; }
 .activity-status {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+.activity-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 progress {
   appearance: none;
   display: block;
@@ -1552,33 +1561,103 @@ dialog::backdrop {
 @media (max-width: 1168px) {
   .jobs-table { min-width: 1120px; }
 }
-@media (max-width: 640px) {
-  .jobs-modal { width: calc(100vw - 16px); max-width: calc(100vw - 16px); height: min(680px, calc(100dvh - 32px)); max-height: calc(100dvh - 32px); }
-  .jobs-heading { padding: 10px 12px; gap: 8px; }
+.job-inline-unit { display: none; }
+.job-detail-actions { display: none; }
+/* Phones: a uniform list. Tap a row to open results; the details button holds the other actions. */
+@media (max-width: 760px) {
+  .jobs-heading { padding: 10px 8px 10px 14px; gap: 8px; }
+  .jobs-heading h2 { font-size: 16px; }
   .jobs-count { font-size: 12px; margin-left: 6px; }
   .jobs-list { scrollbar-gutter: auto; }
-  .jobs-table { display: block; min-width: 0; }
-  .jobs-table > colgroup { display: none; }
-  .jobs-table > :is(thead, tbody) { display: block; }
-  .jobs-table > :is(thead, tbody) > tr { display: grid; grid-template-columns: 26px minmax(0, 1fr) 78px 34px 94px; }
-  .jobs-table > :is(thead, tbody) > tr:not(.job-detail-row) > :is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(6), :nth-child(9), :nth-child(10)) { display: none; }
-  .jobs-table > :is(thead, tbody) > tr > :is(th, td) { display: flex; align-items: center; min-width: 0; height: auto; padding: 8px 5px; }
-  .jobs-table > thead > tr > th { height: 32px; padding-block: 4px; }
-  .jobs-table .job-number { justify-content: flex-end; }
-  .jobs-table .job-status { font-size: 11px; gap: 4px; }
-  .jobs-table .job-expand-cell { padding-left: 2px; }
-  .job-area-line { flex-direction: column; align-items: flex-start; gap: 2px; }
-  .job-area-line > span:first-child { white-space: normal; overflow-wrap: anywhere; }
-  .job-status-progress { white-space: normal; }
-  .job-actions { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  .job-secondary-actions { grid-column: 1; justify-content: center; gap: 10px; }
-  .jobs-modal .job-icon-button { width: 32px; height: 32px; }
-  .jobs-modal .job-expand { width: 24px; }
-  .jobs-modal :is(.job-results, .job-cancel) { min-height: 32px; padding-inline: 4px; }
-  .jobs-table .job-detail-row { display: block; }
+  .jobs-table,
+  .jobs-table > tbody { display: block; min-width: 0; }
+  .jobs-table > colgroup,
+  .jobs-table > thead { display: none; }
+  .jobs-table > tbody > tr.job-row {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: center;
+    align-items: baseline;
+    column-gap: 0;
+    row-gap: 4px;
+    height: 64px;
+    overflow: hidden;
+    padding: 0 52px 0 14px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .jobs-table > tbody > tr.job-row:active { background: var(--surface); }
+  .jobs-table > tbody > tr.job-row:hover { background: transparent; }
+  .jobs-table > tbody > tr.job-row.expanded { background: #f5f7f8; border-bottom-color: transparent; }
+  .jobs-table :where(tr.job-row > th, tr.job-row > td) { display: block; }
+  .jobs-table > tbody > tr.job-row > :is(th, td) {
+    height: auto;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .jobs-table > tbody > tr.job-row::before { content: ""; order: 3; flex: 0 0 100%; height: 0; }
+
+  /* Line 1: area, then the date at the right. */
+  .jobs-table .job-area { order: 1; flex: 1 1 0; min-width: 0; margin-right: 12px; font-size: 15px; font-weight: 500; }
+  .job-area-line { display: block; }
+  .job-area-line > span:first-child { display: block; overflow: hidden; text-overflow: ellipsis; }
+  .jobs-table .job-area :is(.job-area-count, .job-muted) { display: none; }
+  .jobs-table .job-created-cell { order: 2; flex: none; }
+  .jobs-table .job-created { font-size: 12px; }
+
+  /* Line 2: status, then the key limits; completed jobs show only their dot. */
+  .jobs-table .job-status-cell { order: 4; flex: none; margin-right: 8px; }
+  .job-status-line { flex-direction: row; align-items: baseline; gap: 6px; min-height: 0; line-height: 1.3; }
+  .jobs-table .job-status { font-size: 13px; }
+  .jobs-table .status-completed { font-size: 0; gap: 0; }
+  .job-status-dot { align-self: center; }
+  .job-status-progress { font-size: 13px; }
+  .jobs-table :is(.job-distance, .job-gain, .job-hikes) {
+    flex: none;
+    color: var(--muted);
+    font: 13px/1.3 var(--sans);
+  }
+  .jobs-table .job-distance { order: 5; }
+  .jobs-table .job-gain { order: 6; }
+  .jobs-table .job-hikes { order: 7; }
+  .jobs-table :is(.job-distance, .job-gain):not(:last-child)::after { content: ",\00a0"; }
+  .jobs-table .job-gain:has(~ .job-hikes .job-muted)::after { content: ""; }
+  .jobs-table .job-hikes:has(.job-muted) { display: none; }
+  .job-inline-unit { display: inline; }
+  .jobs-table :is(.job-approach, .job-roads, .job-duration) { display: none; }
+
+  /* Row actions: the row itself opens results; keep the buttons for assistive technology. */
+  .jobs-table .job-actions-cell {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .jobs-table .job-expand-cell {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+  }
+  .jobs-modal .job-expand { width: 40px; height: 40px; padding: 0; color: var(--ink); }
+  .jobs-modal .job-expand svg { display: none; }
+  .jobs-modal .job-expand::before { content: "\22EF"; font-size: 20px; line-height: 1; }
+  .jobs-modal .job-expand[aria-expanded="true"] { background: var(--control-hover); }
+
+  .jobs-table .job-detail-row { display: block; border-bottom: 1px solid var(--line); background: #f5f7f8; }
   .jobs-table .job-detail-row[hidden] { display: none; }
-  .jobs-table .job-detail-row > td { display: block; padding: 12px 14px; }
-  .job-detail-content { grid-template-columns: minmax(0, 1fr); gap: 12px; overflow-wrap: anywhere; }
+  .jobs-table .job-detail-row > td { display: block; height: auto; padding: 0 14px 14px; border: 0; background: transparent; }
+  .job-detail-content { grid-template-columns: minmax(0, 1fr); gap: 10px; overflow-wrap: anywhere; font-size: 13px; }
+  .job-criteria-table { width: 100%; min-width: 0; background: #fff; }
+  .job-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .job-detail-actions button { flex: 1; min-height: 40px; font-size: 14px; background: #fff; }
+  .job-detail-actions .job-detail-delete:enabled { color: #a12842; }
+  .jobs-pagination { padding: 10px 14px; }
+  .jobs-pagination button { min-height: 40px; font-size: 13px; }
 }
 
 .numeric-field[data-unit="%"] .stepped-number { width: 80px; }
@@ -1734,3 +1813,504 @@ dialog::backdrop {
 .grade-definition { margin-top: 9px; color: var(--muted); font-size: 11px; text-align: right; }
 .grade-guide { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 4px; }
 .grade-guide > span { white-space: nowrap; }
+.planner-summary,
+.coordinates-toggle {
+  display: none;
+}
+
+/* Phones: the map fills the screen; search, results and hike details are sheets over it. */
+@media (max-width: 760px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+  .app-header nav button,
+  .coordinates-toggle {
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+  .coordinates-toggle {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    padding: 0;
+    border-color: #7d9caa;
+    background: transparent;
+  }
+  .coordinates-toggle:hover,
+  .coordinates-toggle[aria-expanded="true"] { background: #3d6d86; }
+  .coordinate-search {
+    display: none;
+    grid-column: 1 / -1;
+  }
+  .is-coordinates-open .coordinate-search { display: block; }
+  .coordinate-search input {
+    width: 100%;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  .query-bar { position: relative; }
+  .planner { padding: 0; }
+  .planner-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 50px;
+    padding: 7px 12px;
+  }
+  .planner-summary-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+  }
+  .planner-summary-text > * {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .planner-summary-text strong { font-size: 14px; font-weight: 600; }
+  .planner-summary-text span { color: var(--muted); font-size: 12px; }
+  .planner-summary-action,
+  .planner-summary-clear {
+    flex: none;
+    min-height: 34px;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  .planner-summary-clear {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding-inline: 6px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
+  }
+  .planner-summary-clear:hover { background: transparent; color: var(--ink); }
+  .search-actions .clear-results { display: none; }
+  .planner:not(.is-open) .planner-fields { display: none; }
+  /* The open form reads like a settings list: one white row per decision. */
+  .planner.is-open .planner-fields {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    max-height: calc(100dvh - 100px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    flex-wrap: nowrap;
+    gap: 0;
+    padding: 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--control-border);
+    background: var(--surface);
+    box-shadow: 0 8px 24px #152e4026;
+  }
+  .planner-fields > :not(.search-actions) {
+    flex: none;
+    max-width: none;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    background: #fff;
+  }
+  .planner .field-label { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+  .planner .field-unit { font-weight: 400; }
+
+  .search-area-controls { position: relative; flex-wrap: wrap; gap: 8px; }
+  .search-area-controls .region-picker { flex: 1 0 100%; }
+  .area-choice-separator { display: none; }
+  /* Equal percentage bases keep Draw and drive time the same width despite different borders. */
+  .search-area-controls .area-action,
+  .search-area-controls .drive-control { flex: 1 1 40%; min-width: 0; }
+  .area-action,
+  .region-summary { min-height: 44px; font-size: 15px; }
+  .search-area-controls .drive-trigger { width: 100%; min-height: 44px; justify-content: center; background: #fff; }
+  .search-area-controls .drive-trigger.drive-enabled { background: var(--control-hover); }
+  .search-area-controls .drive-trigger button { font-size: 15px; }
+  .search-area-controls .drive-control { position: static; }
+  .search-area-controls .drive-popover { left: 0 !important; right: 0; width: auto; max-width: none; top: calc(100% + 6px); }
+  .drive-origin-actions button { min-height: 40px; padding-inline: 12px; font-size: 14px; }
+  .region-summary { padding: 6px 12px; }
+  .clear-area { flex: none; width: 44px; }
+  .region-dropdown { width: 100%; max-width: none; padding: 4px 8px; }
+  .region-option { min-height: 48px; padding: 8px 4px; font-size: 15px; }
+  .region-option input[type="checkbox"],
+  .area-row input[type="checkbox"] { width: 22px; height: 22px; }
+
+  /* Ranges: label on the left, Min and Max fields on the right, typed with the number keypad. */
+  .numeric-field[data-unit] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .numeric-field legend {
+    float: left;
+    flex: 1 0 auto;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    line-height: 1.3;
+  }
+  /* Fields size to their numbers: they shrink on small phones and stop growing on wider screens. */
+  .range-pair { flex: 0 1 248px; min-width: 0; gap: 8px; }
+  .range-pair > *,
+  .numeric-field .stepped-number,
+  .numeric-field[data-unit] > .stepped-number { flex: 1; width: auto; min-width: 0; }
+  .number-steppers { display: none; }
+  .planner input[type="number"],
+  .drive-duration input {
+    height: 44px;
+    font-size: 16px;
+  }
+  .planner .stepped-number input { padding-left: 40px; padding-right: 10px; }
+  .input-bound { left: 10px; font-size: 12px; }
+  .planner input[type="number"]:focus {
+    border-color: var(--action);
+    box-shadow: inset 0 0 0 1px var(--action);
+  }
+
+  /* Switches for on/off limits. */
+  .grade-trigger input[type="checkbox"],
+  .option-heading input[type="checkbox"] {
+    appearance: none;
+    position: relative;
+    flex: none;
+    width: 44px;
+    height: 26px;
+    margin: 0;
+    border: 0;
+    border-radius: 13px;
+    background: #c3cbd1;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .grade-trigger input[type="checkbox"]::before,
+  .option-heading input[type="checkbox"]::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px #0003;
+    transition: transform 0.15s;
+  }
+  .grade-trigger input[type="checkbox"]:checked,
+  .option-heading input[type="checkbox"]:checked { background: var(--action); }
+  .grade-trigger input[type="checkbox"]:checked::before,
+  .option-heading input[type="checkbox"]:checked::before { transform: translateX(18px); }
+  @media (prefers-reduced-motion: reduce) {
+    .grade-trigger input, .grade-trigger input::before,
+    .option-heading input, .option-heading input::before { transition: none; }
+  }
+
+  /* Grade limits and More options: full-width rows that expand in place. */
+  .grade-limits,
+  .search-options { width: 100%; }
+  .grade-trigger,
+  .grade-trigger:not(.enabled),
+  .grade-trigger.enabled {
+    flex-direction: row-reverse;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+  }
+  .grade-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .grade-trigger button {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    min-height: 44px;
+    padding: 0;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+  }
+  .options-trigger,
+  .options-trigger[aria-expanded="true"] {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 14px;
+  }
+  .options-popover,
+  .grade-popover {
+    position: static;
+    width: auto;
+    max-width: none;
+    margin-top: 4px;
+    padding: 4px 0 6px;
+    border: 0;
+    box-shadow: none;
+  }
+  /* Label text, then its info button, then the switch at the far right. */
+  .option-title { min-height: 32px; margin: 6px 0 10px; gap: 2px; font-size: 14px; font-weight: 600; }
+  .option-heading { display: contents; }
+  .option-heading input[type="checkbox"] { order: 2; margin-left: auto; }
+  .options-info { order: 1; min-width: 32px; min-height: 32px; justify-content: center; }
+  .options-fields { flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .options-fields .numeric-field { display: flex; align-items: center; gap: 10px; }
+  .options-fields .field-label { flex: 1 1 auto; margin: 0; font-size: 13px; font-weight: 400; white-space: normal; }
+  .options-fields .numeric-field[data-unit] .stepped-number { flex: 0 1 120px; width: auto; }
+  .grade-grid {
+    max-width: 420px;
+    grid-template-columns: 68px repeat(3, minmax(0, 1fr));
+    gap: 8px 6px;
+    align-items: center;
+  }
+  .grade-column { font-size: 12px; white-space: normal; line-height: 1.25; }
+  .grade-direction { font-size: 14px; }
+  .grade-grid .stepped-number input { padding-left: 8px; }
+  .grade-definition { text-align: left; font-size: 12px; }
+  .grade-guide { flex-wrap: wrap; justify-content: flex-start; gap: 4px 12px; }
+
+  .search-actions {
+    position: sticky;
+    bottom: 0;
+    gap: 8px;
+    margin-top: auto;
+    padding: 12px;
+    background: var(--surface);
+  }
+  .search-button { flex: 1; min-height: 48px; font-size: 16px; }
+  .query-bar .error-banner { padding: 8px 12px; }
+
+  .workspace {
+    --sheet-height: 46%;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .browser-panel { grid-column: 1; }
+  .results-panel {
+    position: absolute;
+    z-index: 640;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--sheet-height);
+    border-right: 0;
+    border-top: 1px solid var(--control-border);
+    box-shadow: 0 -6px 20px #152e4022;
+  }
+  /* The search bar above already names the area and limits; the header keeps count and scope. */
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-inline: 12px;
+    padding-bottom: 10px;
+  }
+  .results-header h2,
+  .results-header .saved-request { display: none; }
+  .results-header .result-count { font-size: 14px; color: var(--ink); }
+  .results-scope { margin: 0; }
+  .hike-list .hike-select { padding-inline: 12px; }
+  .results-columns { padding-inline: 12px; }
+  .results-columns button { padding-block: 8px; font-size: 12px; }
+  .row-metrics { font-size: 14px; }
+  /* Handles sit inside the sheets so nothing above them covers the map credits. */
+  /* A full-width strip at the top of each sheet; the whole strip is the tap target. */
+  #results-toggle,
+  .map-route-card .collapse-tab--top {
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 28px;
+    transform: none;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+  }
+  #results-toggle:hover,
+  .map-route-card .collapse-tab--top:hover { background: var(--surface); }
+  :is(#results-toggle, .map-route-card .collapse-tab--top) svg { width: 22px; height: 22px; }
+  :is(#results-toggle, .map-route-card .collapse-tab--top) path { stroke-width: 2; }
+  #results-toggle {
+    top: auto;
+    bottom: calc(var(--sheet-height) - 28px);
+  }
+  .map-route-card .collapse-tab--top { top: 0; bottom: auto; }
+  .results-header { padding-top: 26px; }
+  .is-results-collapsed #results-toggle {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+    width: auto;
+    height: 44px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    border-width: 1px 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--action);
+    background: #fff;
+    box-shadow: 0 -4px 14px #152e401a;
+  }
+  .workspace:is(.has-route, .is-editing-map) .results-panel,
+  .workspace:is(.has-route, .is-editing-map) #results-toggle { display: none; }
+  .map-route-card {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+    width: auto;
+    max-height: 62%;
+    border-width: 1px 0 0;
+  }
+  .route-card-content { padding: 26px 12px 10px; }
+
+  /* Pinch zooms; the logo and credit line stay above whichever sheet is open. */
+  .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group { display: none; }
+  .workspace:has(#results-toggle) .map-provider,
+  .workspace:has(#results-toggle) .maplibregl-ctrl-bottom-right { bottom: 44px; }
+  .workspace:has(#results-toggle):not(.is-results-collapsed, .has-route) .map-provider,
+  .workspace:has(#results-toggle):not(.is-results-collapsed, .has-route) .maplibregl-ctrl-bottom-right {
+    bottom: calc(var(--sheet-height) + 4px);
+  }
+  /* Maptoolkit's license requires the logo and credit line to stay visible above every panel. */
+  .workspace.has-route:has(#results-toggle) .map-provider,
+  .workspace.has-route:has(#results-toggle) .maplibregl-ctrl-bottom-right { bottom: calc(62% + 4px); }
+  .map-context { top: 10px; left: 10px; }
+  .search-area-control { display: none; }
+  .workspace-status { padding: 4px 12px; }
+  .scope-note { display: none; }
+
+  .jobs-modal,
+  .settings-modal,
+  .download-modal,
+  .delete-job-modal {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100dvh;
+    margin: auto 0 0;
+    border-width: 1px 0 0;
+  }
+  .jobs-modal { height: 92dvh; }
+  .dialog-heading,
+  .jobs-heading { padding: 8px 12px; }
+  .dialog-body { padding: 16px 12px; }
+}
+
+/* Phones: results and hike details controls sized and shaped for touch. */
+@media (max-width: 760px) {
+  .view-toggle { gap: 0; }
+  .view-toggle button,
+  .view-toggle button:hover {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--control-border);
+    background: #fff;
+    color: var(--ink);
+    font-size: 13px;
+    text-decoration: none;
+  }
+  .view-toggle button + button { border-left: 0; }
+  .view-toggle [aria-pressed="true"],
+  .view-toggle [aria-pressed="true"]:hover {
+    border-color: var(--action);
+    background: var(--action);
+    color: #fff;
+    text-decoration: none;
+  }
+  .results-areas-trigger:focus .results-areas { display: block; }
+  .starred-toggle { min-height: 40px; padding-inline: 12px; font-size: 13px; }
+  .hike-list .row-star { width: 40px; height: 40px; top: -4px; right: 0; }
+
+  .close-route-card,
+  .star-route:not(.row-star) { width: 40px; height: 40px; }
+  .route-card-tools { gap: 2px; margin-right: -8px; }
+  .gpx-download { font-size: 13px; padding: 8px 4px; }
+  .route-card-top h2 { font-size: 16px; }
+  .detail-metrics th,
+  .detail-metrics td { height: 34px; font-size: 13px; }
+  .trail-names button,
+  .trail-list-toggle { padding-block: 8px; font-size: 13px; }
+  .profile-reverse { width: 36px; height: 36px; }
+  /* Map editing is a mode strip attached under the search bar: cancel left, actions right. */
+  .boundary-toolbar {
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 4px;
+    min-height: 48px;
+    padding: 0 8px 0 0;
+    border: 0;
+    border-bottom: 1px solid var(--control-border);
+    box-shadow: none;
+    font-size: 14px;
+  }
+  .boundary-toolbar > strong { display: none; }
+  .boundary-toolbar > p { flex: 1; min-width: 0; margin: 0 0 0 4px; line-height: 1.3; }
+  .boundary-toolbar .boundary-error { flex-basis: 100%; order: 4; margin: 0 0 8px 48px; }
+  .boundary-actions { display: contents; }
+  .boundary-actions button { order: 2; min-height: 36px; padding-inline: 14px; font-size: 14px; }
+  .boundary-actions button:not(.primary, .text-button) {
+    padding-inline: 10px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--action);
+  }
+  .boundary-actions .primary { order: 3; }
+  .boundary-toolbar .text-button {
+    order: -1;
+    align-self: stretch;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    min-height: 48px;
+    margin: 0;
+    padding: 0;
+    border-right: 1px solid var(--line);
+    font-size: 0;
+    text-decoration: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath d='m2 2 10 10M12 2 2 12' stroke='%23606970' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+  }
+  .boundary-toolbar .text-button:hover { background-color: var(--control-hover); }
+  .boundary-toolbar .text-button > span { font-size: 0; }
+}
+
+/* Touch screens have no keyboard, so keyboard shortcut hints are noise. */
+@media (pointer: coarse) {
+  kbd { display: none; }
+}
+
+/* Very small phones: range fields drop below their label rather than squeezing. */
+@media (max-width: 359px) {
+  .numeric-field[data-unit] { flex-wrap: wrap; row-gap: 8px; }
+  .range-pair { flex-basis: 100%; }
+}

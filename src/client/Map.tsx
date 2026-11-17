@@ -232,7 +232,7 @@ export function HikeMap({
               "&bbox={bbox-epsg-3857}&width=256&height=256&time=2025-01-01",
           ],
           attribution:
-            'Tree canopy: <a href="https://www.mrlc.gov/data-services-page">USFS / NLCD 2025</a>',
+            '<a href="https://www.mrlc.gov/data-services-page" title="Tree canopy: USFS / NLCD 2025">USFS NLCD</a>',
         });
         instance.addLayer(
           {
@@ -288,7 +288,7 @@ export function HikeMap({
       instance.addSource("sections", {
         type: "geojson",
         data: empty,
-        attribution: 'Driving area: <a href="https://www.esri.com/">Powered by Esri</a>',
+        attribution: '<a href="https://www.esri.com/" title="Driving area">Esri</a>',
       });
       instance.addSource("route", { type: "geojson", data: empty });
       instance.addSource("profile-selection", { type: "geojson", data: empty });
@@ -641,6 +641,8 @@ export function HikeMap({
       map.jumpTo({ center: camera.center, zoom: 12 });
       return;
     }
+    // Panels may have just opened beside or over the map; measure its current size first.
+    map.resize();
     map.fitBounds(camera.bounds, {
       padding: { top: padding, right: padding, bottom: camera.bottomPadding ?? padding, left: padding },
       maxZoom: 17,
@@ -665,7 +667,8 @@ export function HikeMap({
       )}
       {drawingBoundary && <BoundaryDrawing map={map} onFinish={onFinishBoundary} onCancel={onCancelBoundary} />}
       {choosingDriveOrigin && <div className="boundary-toolbar" aria-label="Choose driving origin">
-        <p role="status">Choose where you’ll drive from. Click the map, or press Enter to use the center.</p>
+        <p role="status">Choose where you’ll drive from. {window.matchMedia("(pointer: coarse)").matches
+          ? "Tap the map." : "Click the map, or press Enter to use the center."}</p>
         <button type="button" className="text-button" onClick={onCancelDriveOrigin}>Cancel <kbd>Esc</kbd></button>
       </div>}
       {mapError && (
@@ -688,19 +691,19 @@ export function HikeMap({
           </label>
           {showAreaOutline && driveArea && <span>Within {driveMinutes} min drive</span>}
         </div>}
-        <a
-          className="map-provider"
-          href="https://www.maptoolkit.org/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img
-            src="https://www.maptoolkit.org/assets/maptoolkit-attribution.png"
-            alt="Maptoolkit"
-            height={24}
-          />
-        </a>
       </div>
+      <a
+        className="map-provider"
+        href="https://www.maptoolkit.org/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img
+          src="https://www.maptoolkit.org/assets/maptoolkit-attribution.png"
+          alt="Maptoolkit"
+          height={24}
+        />
+      </a>
     </section>
   );
 }
