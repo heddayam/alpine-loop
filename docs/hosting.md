@@ -7,9 +7,9 @@ HTTP ports on the VM; SSH is restricted to the deployment computer's public IP.
 ## Current release and development workflow
 
 Last verified live code on November 16, 2026 (Pacific time):
-`9286ba2d4b503bca4be7a29703307b20fdb7c90a` (Car-reachable starts, gate entrances and lot labels).
+`08c62f5b346240af9ecfcc0547b4cf84d84091bb` (Phone layout and results list rework).
 The VM is `alpine-loop-01` in resource group `alpine-loop-prod`, West US 2.
-Its release directory is `/srv/alpine-loop/releases/9286ba2d4b50`, selected by
+Its release directory is `/srv/alpine-loop/releases/08c62f5b3462`, selected by
 `/srv/alpine-loop/current`. Confirm the symlink and running app image before a
 new deployment; this record is not a live probe.
 
@@ -178,6 +178,16 @@ container's SQLite WAL through the host filesystem. Restarts interrupt active
 jobs and resume queued jobs rather than publishing partial results.
 
 ## Deployment verification
+
+The November 16 release `08c62f5b3462` reworks the phone layout (summary bar,
+search sheet, results and route sheets, flush drawing strip, card-style jobs) and
+replaces the results sort menu with sortable column headers on all screen sizes.
+It used Azure Run Command without changing the SSH access rule; the release
+symlink and healthy app image identify `08c62f5b3462`. Both public HTTPS hostnames
+pass health checks, the developer access-point API returns 404, and the public
+page loads the new phone and desktop layouts with full map attribution and the
+phone search sheet opening and closing, without JavaScript errors. Build,
+typecheck, 209 vitest and 13 node checks pass. Data release is unchanged.
 
 The November 16 release `9286ba2d4b50` installs the car-access data release and
 publishes job failures only after their unpublished files are removed. It used
